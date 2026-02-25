@@ -1,0 +1,69 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #F8F9FA;
+  --surface: #FFFFFF;
+  --accent: #0D9488;
+  --accent-light: #14B8A6;
+  --accent-emerald: #059669;
+  --accent-hover: #0F766E;
+  --accent-muted: #CCFBF1;
+  --accent-muted-soft: #F0FDFA;
+  /* Premium gradient: emerald → teal */
+  --gradient-primary: linear-gradient(135deg, #059669 0%, #0D9488 50%, #14B8A6 100%);
+  --gradient-glow: 0 0 20px rgba(13, 148, 136, 0.25);
+  --shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-glow-accent: 0 0 24px rgba(13, 148, 136, 0.2);
+}
+
+body {
+  background: var(--background);
+  color: #1a1a1a;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Premium typography: spacious headers */
+h1, h2, .heading-premium {
+  letter-spacing: 0.02em;
+}
+
+/* Glassmorphism surfaces */
+.glass {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.glass-subtle {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* Teal/Emerald accent for checkboxes and progress */
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--accent);
+}
+
+/* Soft surfaces: replace hard borders with shadow */
+.card-soft {
+  box-shadow: var(--shadow-soft);
+}
+
+.card-soft-hover:hover {
+  box-shadow: var(--shadow-card);
+}
+
+/* Subtle glow for active/done states */
+.glow-accent {
+  box-shadow: var(--shadow-glow-accent);
+}
+
+/* RTL-aware utilities */
+[dir="rtl"] .rtl-mirror {
+  transform: scaleX(-1);
+}
