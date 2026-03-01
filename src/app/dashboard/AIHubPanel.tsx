@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocale } from "@/contexts/LocaleContext";
 import { useBoard } from "@/contexts/BoardContext";
@@ -25,9 +26,11 @@ import {
   ChevronDown,
   ChevronUp,
   Globe,
+  ShoppingBag,
 } from "lucide-react";
 import { GPSClockModal } from "@/components/tools/GPSClockModal";
 import { AIScannerModal } from "@/components/tools/AIScannerModal";
+import { ShoppingAgentModal } from "@/components/tools/ShoppingAgentModal";
 import { useChat, useInternalMessages } from "@/contexts/ChatEngineContext";
 import type { AIMessage } from "@/contexts/ChatEngineContext";
 import type { EventCardPayload } from "@/lib/chat-engine";
@@ -46,12 +49,13 @@ type SpeechRecognitionInstance = {
 
 type PlusMenuItem = {
   icon: typeof Upload;
-  labelKey: "hub.fileUpload" | "hub.fileConvert" | "hub.createEvent" | "hub.createPoll" | "hub.aiScanner";
-  action?: "scanner" | "poll" | "event" | "task" | "converter";
+  labelKey: "hub.fileUpload" | "hub.fileConvert" | "hub.createEvent" | "hub.createPoll" | "hub.aiScanner" | "hub.shoppingAgent";
+  action?: "scanner" | "poll" | "event" | "task" | "converter" | "shopping";
 };
 
 const PLUS_MENU_ITEMS: PlusMenuItem[] = [
   { icon: ScanLine, labelKey: "hub.aiScanner", action: "scanner" },
+  { icon: ShoppingBag, labelKey: "hub.shoppingAgent", action: "shopping" },
   { icon: Upload, labelKey: "hub.fileUpload", action: "task" },
   { icon: FileCode2, labelKey: "hub.fileConvert", action: "converter" },
   { icon: CalendarPlus, labelKey: "hub.createEvent", action: "event" },
@@ -144,7 +148,7 @@ function InlinePollForm({
           <button
             type="button"
             onClick={addOption}
-            className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-teal-600 hover:bg-teal-50 border border-dashed border-teal-200"
+            className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-[#008080] hover:bg-[#008080]/10 border border-dashed border-[#008080]/30"
           >
             <PlusCircle className="w-4 h-4" />
             {locale === "he" ? "הוסף אפשרות" : "Add option"}
@@ -155,7 +159,7 @@ function InlinePollForm({
         <button
           type="button"
           onClick={handleCreate}
-          className="flex-1 rounded-xl px-4 py-2.5 text-sm font-medium bg-gradient-to-r from-teal-500 to-teal-600 text-white"
+          className="flex-1 rounded-xl px-4 py-2.5 text-sm font-medium bg-gradient-to-r from-[#008080] to-[#006666] text-white"
         >
           {locale === "he" ? "צור סקר" : "Create"}
         </button>
@@ -165,7 +169,7 @@ function InlinePollForm({
             <button
               type="button"
               onClick={() => setShowContactPicker(true)}
-              className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100 w-fit"
+              className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium bg-[#008080]/10 text-[#006666] border border-[#008080]/30 hover:bg-[#008080]/20 w-fit"
             >
               <Share2 className="w-4 h-4" />
               {locale === "he" ? "העבר למשתמש/מזהה" : "Forward to User/ID"}
@@ -179,7 +183,7 @@ function InlinePollForm({
           <div className="max-h-32 overflow-y-auto space-y-1">
             {contacts.map((c) => (
               <label key={c.id} className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-gray-100 cursor-pointer">
-                <input type="checkbox" checked={selectedIds.has(c.id)} onChange={() => toggleContact(c.id)} className="rounded border-gray-300 text-teal-600" />
+                <input type="checkbox" checked={selectedIds.has(c.id)} onChange={() => toggleContact(c.id)} className="rounded border-gray-300 text-[#008080]" />
                 <span className="text-sm text-gray-800">{c.name || c.email}</span>
                 {c.userId && <span className="text-xs text-gray-500 font-mono">{c.userId}</span>}
               </label>
@@ -189,7 +193,7 @@ function InlinePollForm({
             <button type="button" onClick={() => setShowContactPicker(false)} className="flex-1 py-2 rounded-lg text-sm font-medium bg-gray-200 text-gray-700">
               {locale === "he" ? "ביטול" : "Cancel"}
             </button>
-            <button type="button" onClick={handleSendToContacts} disabled={selectedIds.size === 0} className="flex-1 py-2 rounded-lg text-sm font-medium bg-teal-500 text-white disabled:opacity-50">
+            <button type="button" onClick={handleSendToContacts} disabled={selectedIds.size === 0} className="flex-1 py-2 rounded-lg text-sm font-medium bg-[#008080] text-white disabled:opacity-50">
               {locale === "he" ? "שלח" : "Send"}
             </button>
           </div>
@@ -232,7 +236,7 @@ function InlineFormBubble({
       <button
         type="button"
         onClick={() => onSubmit({ title, detail })}
-        className="rounded-xl px-3 py-2 text-sm font-medium bg-gradient-to-r from-teal-500 to-teal-600 text-white"
+        className="rounded-xl px-3 py-2 text-sm font-medium bg-gradient-to-r from-[#008080] to-[#006666] text-white"
       >
         Submit
       </button>
@@ -281,7 +285,7 @@ function InlineEventForm({
           <ImageIcon className="w-3.5 h-3.5" />
           {locale === "he" ? "תמונה" : "Image"}
         </label>
-        <label className="flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 p-4 cursor-pointer hover:border-teal-300">
+        <label className="flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 p-4 cursor-pointer hover:border-[#008080]/40">
           <input type="file" accept="image/*" onChange={onFile} className="hidden" />
           {imageDataUrl ? (
             <img src={imageDataUrl} alt="" className="h-16 w-16 rounded-lg object-cover" />
@@ -330,7 +334,7 @@ function InlineEventForm({
           <button
             type="button"
             onClick={() => setEventMode("location")}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-colors ${eventMode === "location" ? "bg-white shadow-sm text-teal-700 border border-gray-200" : "text-gray-600 hover:text-gray-900"}`}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-colors ${eventMode === "location" ? "bg-white shadow-sm text-[#006666] border border-gray-200" : "text-gray-600 hover:text-gray-900"}`}
           >
             <MapPin className="w-4 h-4" />
             {locale === "he" ? "מיקום" : "Location"}
@@ -338,7 +342,7 @@ function InlineEventForm({
           <button
             type="button"
             onClick={() => setEventMode("online")}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-colors ${eventMode === "online" ? "bg-white shadow-sm text-teal-700 border border-gray-200" : "text-gray-600 hover:text-gray-900"}`}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-colors ${eventMode === "online" ? "bg-white shadow-sm text-[#006666] border border-gray-200" : "text-gray-600 hover:text-gray-900"}`}
           >
             <Globe className="w-4 h-4" />
             {locale === "he" ? "אונליין" : "Online"}
@@ -372,7 +376,7 @@ function InlineEventForm({
                   type="checkbox"
                   checked={selectedGuestIds.includes(c.id)}
                   onChange={() => toggleGuest(c.id)}
-                  className="rounded border-gray-300 text-teal-600"
+                  className="rounded border-gray-300 text-[#008080]"
                 />
                 <span className="text-sm text-gray-800">{c.name || c.email}</span>
               </label>
@@ -393,7 +397,7 @@ function InlineEventForm({
             isOnline: eventMode === "online",
           })
         }
-        className="w-full rounded-xl px-4 py-2.5 text-sm font-medium bg-gradient-to-r from-teal-500 to-teal-600 text-white"
+        className="w-full rounded-xl px-4 py-2.5 text-sm font-medium bg-gradient-to-r from-[#008080] to-[#006666] text-white"
       >
         {locale === "he" ? "צור אירוע" : "Create event"}
       </button>
@@ -460,7 +464,7 @@ function InlineConverterForm({
         <label className="text-xs font-medium text-gray-500 block mb-1">
           {locale === "he" ? "העלאת קובץ" : "Upload file"}
         </label>
-        <label className="flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 p-4 cursor-pointer hover:border-teal-300">
+        <label className="flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 p-4 cursor-pointer hover:border-[#008080]/40">
           <input type="file" accept=".pdf,.doc,.docx,image/*" onChange={onFileChange} className="hidden" />
           <Upload className="w-5 h-5 text-gray-500" />
           <span className="text-sm text-gray-600">{file ? file.name : (locale === "he" ? "בחר קובץ" : "Select file")}</span>
@@ -481,15 +485,15 @@ function InlineConverterForm({
         </select>
       </div>
       {converting && (
-        <p className="text-sm text-teal-600 text-center py-1">{locale === "he" ? "ממיר…" : "Converting…"}</p>
+        <p className="text-sm text-[#008080] text-center py-1">{locale === "he" ? "ממיר…" : "Converting…"}</p>
       )}
       {done && downloadUrl && (
-        <div className="rounded-xl bg-teal-50 p-3 flex flex-col gap-2">
+        <div className="rounded-xl bg-[#008080]/10 p-3 flex flex-col gap-2">
           <p className="text-sm text-gray-700">{locale === "he" ? "ההמרה הושלמה" : "Conversion complete"}</p>
           <button
             type="button"
             onClick={handleDownload}
-            className="rounded-xl px-4 py-2 text-sm font-medium bg-teal-600 text-white"
+            className="rounded-xl px-4 py-2 text-sm font-medium bg-[#006666] text-white"
           >
             {locale === "he" ? "הורד" : "Download"}
           </button>
@@ -500,7 +504,7 @@ function InlineConverterForm({
           type="button"
           onClick={handleConvert}
           disabled={!file}
-          className="w-full rounded-xl px-4 py-2.5 text-sm font-medium bg-gradient-to-r from-teal-500 to-teal-600 text-white disabled:opacity-50"
+          className="w-full rounded-xl px-4 py-2.5 text-sm font-medium bg-gradient-to-r from-[#008080] to-[#006666] text-white disabled:opacity-50"
         >
           {locale === "he" ? "המר" : "Convert"}
         </button>
@@ -533,7 +537,7 @@ function EventSummaryCard({
         className="w-full p-4 flex items-center justify-between gap-2 text-left hover:bg-gray-50/50 transition-colors"
       >
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-semibold text-teal-600 uppercase tracking-wider">Event</p>
+          <p className="text-xs font-semibold text-[#008080] uppercase tracking-wider">Event</p>
           <p className="text-sm font-medium text-gray-900 truncate">{title || content}</p>
           <p className="text-xs text-gray-500 mt-0.5">{when}</p>
           {where && <p className="text-xs text-gray-500">{where}</p>}
@@ -564,20 +568,29 @@ function EventSummaryCard({
   );
 }
 
-export type HubToolAction = "scanner" | "poll" | "event" | "task" | "converter" | "camera" | "voice";
+export type HubToolAction = "scanner" | "poll" | "event" | "task" | "converter" | "camera" | "voice" | "shopping";
 
 export type AIHubPanelHandle = { openTool: (action: HubToolAction) => void };
 
-const AIHubPanelInner = forwardRef<AIHubPanelHandle, { locale: "en" | "he" }>(function AIHubPanelInner({ locale }, ref) {
+const ACTION_GRID_ITEMS: { key: string; labelEn: string; labelHe: string; icon: typeof MessageSquare; href?: string }[] = [
+  { key: "notebook", labelEn: "Notebook", labelHe: "מחברת", icon: MessageSquare },
+  { key: "finance", labelEn: "Finance", labelHe: "כספים", icon: ShoppingBag },
+  { key: "tasks", labelEn: "Tasks", labelHe: "משימות", icon: BarChart3 },
+  { key: "profile", labelEn: "Profile", labelHe: "פרופיל", icon: Globe },
+];
+
+const AIHubPanelInner = forwardRef<AIHubPanelHandle, { locale: "en" | "he"; panelIndex?: number }>(function AIHubPanelInner({ locale, panelIndex = 0 }, ref) {
   const { addReceivedTask, addEvent } = useBoard();
   const { contacts } = useContacts();
   const { messages, sendMessage, addFormMessage, addCard } = useChat();
   const { sendText } = useInternalMessages();
+  const [chatViewActive, setChatViewActive] = useState(false);
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
   const [chatsDrawerOpen, setChatsDrawerOpen] = useState(false);
   const [gpsOpen, setGpsOpen] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [shoppingOpen, setShoppingOpen] = useState(false);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [listening, setListening] = useState(false);
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
@@ -586,6 +599,7 @@ const AIHubPanelInner = forwardRef<AIHubPanelHandle, { locale: "en" | "he" }>(fu
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
 
   const previousChats: { id: string; title: string }[] = [];
+  const showGridFirst = !chatViewActive && panelIndex === 1;
 
   const handleSend = () => {
     const text = input.trim();
@@ -628,6 +642,7 @@ const AIHubPanelInner = forwardRef<AIHubPanelHandle, { locale: "en" | "he" }>(fu
     setPlusMenuOpen(false);
     if (action === "camera" || action === "voice") return; // Handled by switching to chat panel where camera/mic live
     if (action === "scanner") setScannerOpen(true);
+    if (action === "shopping") setShoppingOpen(true);
     if (action === "poll") addFormMessage("poll");
     if (action === "event") addFormMessage("event");
     if (action === "task") addFormMessage("task");
@@ -636,8 +651,53 @@ const AIHubPanelInner = forwardRef<AIHubPanelHandle, { locale: "en" | "he" }>(fu
 
   useImperativeHandle(ref, () => ({ openTool: handlePlusAction }), [handlePlusAction]);
 
+  if (showGridFirst) {
+    return (
+      <div className="flex flex-col h-full min-h-0 rounded-md overflow-hidden bg-white/95 border border-[#008080]/20">
+        <h2 className="flex-shrink-0 text-lg font-semibold text-gray-900 px-4 py-3 border-b border-[#008080]/20">
+          {t(locale, "dashboard.toolsHub")}
+        </h2>
+        <div className="flex-1 flex flex-col items-center justify-center p-6">
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="grid grid-cols-2 gap-3 w-full max-w-[280px] mb-6"
+          >
+            {ACTION_GRID_ITEMS.map(({ key, labelEn, labelHe, icon: Icon }, idx) => (
+              <motion.div
+                key={key}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: idx * 0.05 }}
+              >
+                <Link
+                  href={key === "finance" ? "/dashboard/finances" : key === "profile" ? "/profile" : "/dashboard"}
+                  className="flex flex-col items-center justify-center gap-2 rounded-md border border-[#008080]/30 bg-white py-5 px-4 text-gray-700 hover:bg-[#008080]/5 hover:border-[#008080]/50 transition-colors"
+                >
+                  <Icon className="w-6 h-6 text-[#008080]" />
+                  <span className="text-sm font-medium">{locale === "he" ? labelHe : labelEn}</span>
+                </Link>
+              </motion.div>
+            ))}
+          </motion.div>
+          <motion.button
+            type="button"
+            onClick={() => setChatViewActive(true)}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="w-full max-w-[280px] py-4 rounded-md bg-[#008080] text-white font-semibold text-base shadow-md hover:bg-[#006666] transition-colors flex items-center justify-center gap-2"
+          >
+            <MessageSquare className="w-5 h-5" />
+            {locale === "he" ? "צ'אט עם Ollin" : "Chat with Ollin"}
+          </motion.button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col h-full min-h-0 rounded-3xl overflow-hidden bg-white/90 backdrop-blur-sm shadow-soft-md border-0">
+    <div className="flex flex-col h-full min-h-0 rounded-md overflow-hidden bg-white/90 backdrop-blur-sm shadow-soft-md border border-[#008080]/20">
       <div className="flex-shrink-0 flex items-center gap-2 px-4 py-3 border-b border-gray-100">
         <button
           type="button"
@@ -695,11 +755,11 @@ const AIHubPanelInner = forwardRef<AIHubPanelHandle, { locale: "en" | "he" }>(fu
                   <div
                     className={`rounded-2xl px-4 py-2 text-sm max-w-[85%] ${
                       msg.role === "user"
-                        ? "bg-gradient-to-br from-teal-500 to-teal-600 text-white ml-auto shadow-sm"
+                        ? "bg-gradient-to-br from-[#008080] to-[#006666] text-white ml-auto shadow-sm"
                         : "bg-gray-100 border border-gray-200 text-gray-800"
                     }`}
                   >
-                    {msg.content}
+                    {typeof msg.content === "string" ? msg.content : String(msg.content ?? "")}
                   </div>
                 ) : "type" in msg && msg.type === "card" ? (
                   msg.cardType === "event" ? (
@@ -713,13 +773,13 @@ const AIHubPanelInner = forwardRef<AIHubPanelHandle, { locale: "en" | "he" }>(fu
                     />
                   ) : (
                     <div className="rounded-2xl bg-white border border-gray-100 shadow-soft p-4 max-w-[85%] space-y-2">
-                      <p className="text-xs font-semibold text-teal-600 uppercase tracking-wider">Poll</p>
-                      <p className="text-sm font-medium text-gray-900">{msg.content}</p>
-                      {"body" in msg.payload && msg.payload.body && <p className="text-sm text-gray-600">{msg.payload.body}</p>}
+                      <p className="text-xs font-semibold text-[#008080] uppercase tracking-wider">Poll</p>
+                      <p className="text-sm font-medium text-gray-900">{typeof msg.content === "string" ? msg.content : ""}</p>
+                      {"body" in msg.payload && msg.payload.body && <p className="text-sm text-gray-600">{typeof msg.payload.body === "string" ? msg.payload.body : ""}</p>}
                       <button
                         type="button"
                         onClick={() => setSharePollMessageId(msg.id)}
-                        className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-teal-600 bg-teal-50 hover:bg-teal-100 border border-teal-200 transition-colors"
+                        className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-[#008080] bg-[#008080]/10 hover:bg-[#008080]/20 border border-[#008080]/30 transition-colors"
                       >
                         <Share2 className="w-4 h-4" />
                         {locale === "he" ? "שתף עם אנשי קשר" : "Share with Contacts"}
@@ -823,7 +883,7 @@ const AIHubPanelInner = forwardRef<AIHubPanelHandle, { locale: "en" | "he" }>(fu
             <motion.button
               type="button"
               onClick={() => setPlusMenuOpen((o) => !o)}
-              className="w-11 h-11 rounded-xl bg-teal-500 text-white flex items-center justify-center hover:bg-teal-600 transition-colors"
+              className="w-11 h-11 rounded-xl bg-[#008080] text-white flex items-center justify-center hover:bg-[#006666] transition-colors"
               whileTap={{ scale: 0.98 }}
               aria-label="Add"
             >
@@ -846,7 +906,7 @@ const AIHubPanelInner = forwardRef<AIHubPanelHandle, { locale: "en" | "he" }>(fu
                         onClick={() => handlePlusAction(action)}
                         className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-100 rounded-lg"
                       >
-                        <Icon className="w-4 h-4 text-teal-600" />
+                        <Icon className="w-4 h-4 text-[#008080]" />
                         {t(locale, labelKey)}
                       </button>
                     ))}
@@ -861,7 +921,7 @@ const AIHubPanelInner = forwardRef<AIHubPanelHandle, { locale: "en" | "he" }>(fu
             className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
             whileTap={{ scale: 0.98 }}
           >
-            <Clock className="w-4 h-4 text-teal-600" />
+            <Clock className="w-4 h-4 text-[#008080]" />
             <span className="hidden sm:inline">{t(locale, "dashboard.gpsClock")}</span>
           </motion.button>
           <input
@@ -871,7 +931,7 @@ const AIHubPanelInner = forwardRef<AIHubPanelHandle, { locale: "en" | "he" }>(fu
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
             placeholder="Ask or type a message…"
-            className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-500 focus:ring-2 focus:ring-teal-500/20 focus:bg-white min-h-[48px]"
+            className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-500 focus:ring-2 focus:ring-[#008080]/20 focus:bg-white min-h-[48px]"
           />
           <button
             type="button"
@@ -884,7 +944,7 @@ const AIHubPanelInner = forwardRef<AIHubPanelHandle, { locale: "en" | "he" }>(fu
           <motion.button
             type="button"
             onClick={handleSend}
-            className="rounded-xl px-4 py-3 text-sm font-medium bg-gradient-to-br from-teal-500 to-teal-600 text-white inline-flex items-center justify-center min-h-[48px]"
+            className="rounded-xl px-4 py-3 text-sm font-medium bg-gradient-to-br from-[#008080] to-[#006666] text-white inline-flex items-center justify-center min-h-[48px]"
             whileTap={{ scale: 0.98 }}
           >
             <Send className="w-5 h-5" />
@@ -894,6 +954,7 @@ const AIHubPanelInner = forwardRef<AIHubPanelHandle, { locale: "en" | "he" }>(fu
 
       {gpsOpen && <GPSClockModal onClose={() => setGpsOpen(false)} />}
       {scannerOpen && <AIScannerModal onClose={() => setScannerOpen(false)} />}
+      {shoppingOpen && <ShoppingAgentModal onClose={() => setShoppingOpen(false)} />}
 
       {/* Share poll with contacts modal */}
       {sharePollMessageId && (() => {
@@ -926,7 +987,7 @@ const AIHubPanelInner = forwardRef<AIHubPanelHandle, { locale: "en" | "he" }>(fu
                 ) : (
                   contacts.map((c) => (
                     <label key={c.id} className="flex items-center gap-2 py-2 px-2 rounded-lg hover:bg-gray-50 cursor-pointer">
-                      <input type="checkbox" className="rounded border-gray-300 text-teal-600" />
+                      <input type="checkbox" className="rounded border-gray-300 text-[#008080]" />
                       <span className="text-sm text-gray-800">{c.name || c.email}</span>
                     </label>
                   ))
@@ -952,7 +1013,7 @@ const AIHubPanelInner = forwardRef<AIHubPanelHandle, { locale: "en" | "he" }>(fu
                     }
                     setSharePollMessageId(null);
                   }}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-teal-500 text-white hover:bg-teal-600"
+                  className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[#008080] text-white hover:bg-[#006666]"
                 >
                   {locale === "he" ? "שתף" : "Share"}
                 </button>

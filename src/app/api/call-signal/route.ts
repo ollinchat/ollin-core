@@ -23,24 +23,28 @@ type AcceptedPayload = {
 const pending = new Map<string, IncomingPayload | AcceptedPayload>();
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const userId = searchParams.get("userId")?.trim();
-  if (!userId) return NextResponse.json({ event: null });
-  const event = pending.get(userId) ?? null;
-  pending.delete(userId);
-  return NextResponse.json({ event });
+  try {
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get("userId")?.trim();
+    if (!userId) return NextResponse.json({ event: null }, { status: 200 });
+    const event = pending.get(userId) ?? null;
+    pending.delete(userId);
+    return NextResponse.json({ event }, { status: 200 });
+  } catch {
+    return NextResponse.json({ event: null }, { status: 200 });
+  }
 }
 
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as {
-      type: string;
+      type?: string;
       fromUserId?: string;
       fromName?: string;
       toUserId?: string;
       isVideo?: boolean;
     };
-    if (body.type === "incoming" && body.toUserId) {
+    if (body?.type === "incoming" && body.toUserId) {
       pending.set(body.toUserId, {
         type: "incoming",
         fromUserId: body.fromUserId ?? "",
@@ -49,9 +53,11 @@ export async function POST(request: Request) {
         isVideo: body.isVideo ?? false,
       });
     }
-    if (body.type === "accepted" && body.toUserId) {
+    if (body?.type === "accepted" && body.toUserId) {
       pending.set(body.toUserId, { type: "accepted", toUserId: body.toUserId });
     }
-  } catch (_) {}
-  return NextResponse.json({ ok: true });
+  } catch {
+    // Invalid JSON or missing body: respond with ok so client doesn't retry
+  }
+  return NextResponse.json({ ok: true }, { status: 200 });
 }

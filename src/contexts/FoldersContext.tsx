@@ -30,6 +30,9 @@ function saveFolders(items: FolderItem[]) {
 
 export const SCANNED_DOCS_FOLDER_ID = "scanned-docs";
 
+/** System folder IDs (Strategic Board): pinned, locked — never pass to removeFolder/renameFolder. */
+const SYSTEM_FOLDER_IDS = new Set(["notes", "calls", "archive"]);
+
 type FoldersContextType = {
   userFolders: FolderItem[];
   createFolder: (name: string) => void;
@@ -62,7 +65,7 @@ export function FoldersProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const removeFolder = useCallback((id: string) => {
-    if (id === SCANNED_DOCS_FOLDER_ID) return;
+    if (id === SCANNED_DOCS_FOLDER_ID || SYSTEM_FOLDER_IDS.has(id)) return;
     setUserFolders((prev) => {
       const next = prev.filter((f) => f.id !== id);
       saveFolders(next);
@@ -72,7 +75,7 @@ export function FoldersProvider({ children }: { children: React.ReactNode }) {
 
   const renameFolder = useCallback((id: string, newName: string) => {
     const trimmed = newName.trim();
-    if (!trimmed || id === SCANNED_DOCS_FOLDER_ID) return;
+    if (!trimmed || id === SCANNED_DOCS_FOLDER_ID || SYSTEM_FOLDER_IDS.has(id)) return;
     setUserFolders((prev) => {
       const next = prev.map((f) => (f.id === id ? { ...f, name: trimmed } : f));
       saveFolders(next);

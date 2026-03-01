@@ -268,7 +268,7 @@ export function GPSClockModal({ onClose }: Props) {
             className={`w-full flex items-center justify-center gap-3 rounded-2xl px-6 py-4 text-base font-semibold shadow-md transition-shadow ${
               isClockedIn
                 ? "bg-red-500 text-white hover:bg-red-600"
-                : "bg-emerald-500 text-white hover:bg-emerald-600"
+                : "bg-accent text-white hover:bg-accent-hover"
             }`}
             animate={
               isClockedIn
@@ -368,91 +368,84 @@ export function GPSClockModal({ onClose }: Props) {
             )}
           </div>
 
-          {/* Log list with editable notes */}
+          {/* Unified daily shift cards: one card per day with check-in, check-out, and note in one block */}
           <div>
             <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
               {t(locale, "tools.lastEntries")}
             </h3>
             {dayRows.length === 0 ? (
-              <p className="text-sm text-gray-500 py-8 text-center rounded-2xl bg-gray-50 border border-gray-100">
+              <p className="text-sm text-gray-500 py-8 text-center rounded-3xl bg-gray-50 border border-gray-100">
                 No entries yet
               </p>
             ) : (
-              <div className="rounded-2xl border border-gray-200 overflow-hidden">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="bg-gray-50 border-b border-gray-200">
-                      <th className="px-3 py-2.5 font-semibold text-gray-700">{locale === "he" ? "תאריך" : "Date"}</th>
-                      <th className="px-3 py-2.5 font-semibold text-gray-700">{locale === "he" ? "כניסה" : "Clock In"}</th>
-                      <th className="px-3 py-2.5 font-semibold text-gray-700">{locale === "he" ? "יציאה" : "Clock Out"}</th>
-                      <th className="px-3 py-2.5 font-semibold text-gray-700">{locale === "he" ? "סה״כ" : "Total"}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {dayRows.map(([day, dayEntries]) => {
-                      const sorted = [...dayEntries].sort((a, b) => a.timestamp - b.timestamp);
-                      const inEntry = sorted.find((e) => e.type === "in");
-                      const outEntry = sorted.find((e) => e.type === "out");
-                      const inTime = inEntry ? new Date(inEntry.timestamp).toLocaleTimeString(locale === "he" ? "he-IL" : "en-US", { timeStyle: "short" }) : "—";
-                      const outTime = outEntry ? new Date(outEntry.timestamp).toLocaleTimeString(locale === "he" ? "he-IL" : "en-US", { timeStyle: "short" }) : "—";
-                      const totalMs = inEntry && outEntry ? outEntry.timestamp - inEntry.timestamp : 0;
-                      const totalHours = totalMs > 0 ? (totalMs / (1000 * 60 * 60)).toFixed(1) : "—";
-                      return (
-                        <tr key={day} className="border-b border-gray-100 last:border-0">
-                          <td className="px-3 py-2.5 font-medium text-gray-800 tabular-nums">{day}</td>
-                          <td className="px-3 py-2.5 text-emerald-700 tabular-nums">{inTime}</td>
-                          <td className="px-3 py-2.5 text-gray-600 tabular-nums">{outTime}</td>
-                          <td className="px-3 py-2.5 text-gray-700 tabular-nums font-medium">{totalHours}{totalHours !== "—" ? "h" : ""}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-                <div className="border-t border-gray-200 px-4 py-3 bg-gray-50/50">
-                  <details className="group" open>
-                    <summary className="text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer list-none flex items-center gap-1">
-                      <span className="inline-block transition-transform group-open:rotate-90">▶</span>
-                      <span>{locale === "he" ? "הערות (Note)" : "Note per entry"}</span>
-                    </summary>
-                    <ul className="space-y-2 mt-2">
-                      {dayRows.flatMap(([day, dayEntries]) =>
-                        [...dayEntries].sort((a, b) => a.timestamp - b.timestamp).map((e) => (
-                          <li key={e.id} className="flex items-center gap-2 text-sm">
-                            <span className="text-gray-500 w-10 shrink-0">{e.type === "in" ? "In" : "Out"}</span>
-                            <span className="text-gray-500 text-xs w-16 shrink-0">{day}</span>
-                            {editingNoteId === e.id ? (
-                              <>
-                                <input
-                                  type="text"
-                                  value={editingNoteValue}
-                                  onChange={(ev) => setEditingNoteValue(ev.target.value)}
-                                  onKeyDown={(ev) => ev.key === "Enter" && saveEditNote()}
-                                  className="flex-1 rounded-lg border border-gray-200 px-2 py-1.5 text-gray-900"
-                                  autoFocus
-                                />
-                                <button type="button" onClick={saveEditNote} className="p-1.5 rounded-lg bg-teal-500 text-white">
-                                  <Check className="w-4 h-4" />
-                                </button>
-                              </>
-                            ) : (
-                              <>
-                                <span className="flex-1 text-gray-700 min-w-0 break-words">{e.note || "—"}</span>
+              <div className="space-y-4">
+                {dayRows.map(([day, dayEntries]) => {
+                  const sorted = [...dayEntries].sort((a, b) => a.timestamp - b.timestamp);
+                  const inEntry = sorted.find((e) => e.type === "in");
+                  const outEntry = sorted.find((e) => e.type === "out");
+                  const inTime = inEntry ? new Date(inEntry.timestamp).toLocaleTimeString(locale === "he" ? "he-IL" : "en-US", { timeStyle: "short" }) : "—";
+                  const outTime = outEntry ? new Date(outEntry.timestamp).toLocaleTimeString(locale === "he" ? "he-IL" : "en-US", { timeStyle: "short" }) : "—";
+                  const totalMs = inEntry && outEntry ? outEntry.timestamp - inEntry.timestamp : 0;
+                  const totalHours = totalMs > 0 ? (totalMs / (1000 * 60 * 60)).toFixed(1) : "—";
+                  const note = (inEntry?.note || outEntry?.note || "").trim() || null;
+                  const noteEntry = outEntry ?? inEntry ?? null;
+                  return (
+                    <div
+                      key={day}
+                      className="rounded-3xl border border-gray-200 bg-white p-4 shadow-soft overflow-hidden"
+                    >
+                      <div className="flex items-center justify-between gap-2 mb-3">
+                        <span className="font-semibold text-gray-900 tabular-nums">{day}</span>
+                        <span className="text-sm font-medium text-gray-600 tabular-nums">
+                          {totalHours !== "—" ? `${totalHours}h` : "—"}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                        <div>
+                          <span className="text-gray-500 block text-xs">{locale === "he" ? "כניסה" : "Check-in"}</span>
+                          <span className="text-accent font-medium tabular-nums">{inTime}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 block text-xs">{locale === "he" ? "יציאה" : "Check-out"}</span>
+                          <span className="text-gray-700 tabular-nums">{outTime}</span>
+                        </div>
+                      </div>
+                      {(note || noteEntry) && (
+                        <div className="mt-3 pt-3 border-t border-gray-100">
+                          {editingNoteId === noteEntry?.id ? (
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={editingNoteValue}
+                                onChange={(ev) => setEditingNoteValue(ev.target.value)}
+                                onKeyDown={(ev) => ev.key === "Enter" && saveEditNote()}
+                                className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900"
+                                autoFocus
+                              />
+                              <button type="button" onClick={saveEditNote} className="p-2 rounded-xl bg-accent text-white shrink-0">
+                                <Check className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-start gap-2">
+                              <p className="text-sm text-gray-600 flex-1 min-w-0">{note || "—"}</p>
+                              {noteEntry && (
                                 <button
                                   type="button"
-                                  onClick={() => startEditNote(e)}
-                                  className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                                  onClick={() => startEditNote(noteEntry)}
+                                  className="p-1.5 rounded-xl text-gray-400 hover:bg-gray-100 hover:text-gray-600 shrink-0"
                                   aria-label="Edit note"
                                 >
                                   <Pencil className="w-4 h-4" />
                                 </button>
-                              </>
-                            )}
-                          </li>
-                        ))
+                              )}
+                            </div>
+                          )}
+                        </div>
                       )}
-                    </ul>
-                  </details>
-                </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

@@ -11,9 +11,13 @@ import { CallsProvider } from "@/contexts/CallsContext";
 import { ChatEngineProvider } from "@/contexts/ChatEngineContext";
 import { ContactsProvider } from "@/contexts/ContactsContext";
 import { FinanceProvider } from "@/contexts/FinanceContext";
+import { BillsProvider } from "@/contexts/BillsContext";
 import { FoldersProvider } from "@/contexts/FoldersContext";
+import { NotesProvider } from "@/contexts/NotesContext";
+import { ChecklistsProvider } from "@/contexts/ChecklistsContext";
 import { LiveCallProvider } from "@/contexts/LiveCallContext";
 import { SetDir } from "@/components/SetDir";
+import { ArchitectProvider } from "@/contexts/ArchitectContext";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -60,14 +64,22 @@ export default function RootLayout({
                   <ContactsProvider>
                     <LiveCallProvider>
                       <FinanceProvider>
-                        <ChatEngineProvider>
-                          <FoldersProvider>
-                            <TimeClockProvider>
-                              <SetDir />
-                              {children}
-                            </TimeClockProvider>
-                          </FoldersProvider>
-                        </ChatEngineProvider>
+                        <BillsProvider>
+                          <ChecklistsProvider>
+                            <ChatEngineProvider>
+                              <ArchitectProvider>
+                                <FoldersProvider>
+                                  <NotesProvider>
+                                    <TimeClockProvider>
+                                      <SetDir />
+                                      {children}
+                                    </TimeClockProvider>
+                                  </NotesProvider>
+                                </FoldersProvider>
+                              </ArchitectProvider>
+                            </ChatEngineProvider>
+                          </ChecklistsProvider>
+                        </BillsProvider>
                       </FinanceProvider>
                     </LiveCallProvider>
                   </ContactsProvider>

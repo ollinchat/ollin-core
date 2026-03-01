@@ -30,6 +30,7 @@ import {
 import { useProfile } from "@/contexts/ProfileContext";
 import { useBoard } from "@/contexts/BoardContext";
 import { useFinance } from "@/contexts/FinanceContext";
+import { useChecklists } from "@/contexts/ChecklistsContext";
 
 // Re-export for consumers
 export type { AIMessage, InternalMessageRecord, InternalMessagePart };
@@ -44,9 +45,17 @@ type AISlice = {
   clearMessages: () => void;
 };
 
+export type ConversationMeta = {
+  contactId: string;
+  lastMessage: string;
+  lastTime: number;
+};
+
 type InternalSlice = {
   messages: InternalMessageRecord[];
   getConversation: (contactId: string) => InternalMessageRecord[];
+  getConversationsWithMeta: (currentUserId: string) => ConversationMeta[];
+  deleteConversation: (contactId: string, currentUserId?: string) => void;
   sendText: (contactId: string, text: string, currentUserId?: string) => void;
   sendVoice: (contactId: string, blob: Blob, currentUserId?: string) => void;
   sendFile: (contactId: string, file: File, currentUserId?: string) => void;
@@ -81,6 +90,7 @@ export function ChatEngineProvider({ children }: { children: React.ReactNode }) 
   const { profile } = useProfile();
   const board = useBoard();
   const finance = useFinance();
+  const checklists = useChecklists();
   const [aiMessages, setAiMessages] = useState<AIMessage[]>([]);
   const [internalMessages, setInternalMessages] = useState<InternalMessageRecord[]>([]);
   const [lastTaskIntent, setLastTaskIntent] = useState(false);
@@ -88,7 +98,44 @@ export function ChatEngineProvider({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     setAiMessages(loadAIMessages());
-    setInternalMessages(loadInternalMessages());
+    let list = loadInternalMessages();
+    if (list.length === 0 && typeof window !== "undefined" && !localStorage.getItem("ollin_internal_messages_seeded")) {
+      const now = Date.now();
+      const demoMessages: InternalMessageRecord[] = [];
+      const contactIds = ["demo-1", "demo-2", "demo-3", "demo-4", "demo-5", "demo-6"];
+      const snippets = [
+        "Sounds good, let's meet tomorrow at 10.",
+        "I've sent the report. Can you review?",
+        "Thanks for the update!",
+        "The design looks great. Ready for dev.",
+        "Can we push the deadline to Friday?",
+        "Meeting notes from today are in the drive.",
+      ];
+      contactIds.forEach((contactId, i) => {
+        const cid = conversationId("me", contactId);
+        const fromThem = {
+          id: `dm-${i}-1`,
+          conversationId: cid,
+          senderId: contactId,
+          parts: [{ type: "text" as const, content: snippets[i] }],
+          createdAt: now - (contactIds.length - i) * 120000,
+          status: "read" as const,
+        };
+        const fromMe = {
+          id: `dm-${i}-2`,
+          conversationId: cid,
+          senderId: "me",
+          parts: [{ type: "text" as const, content: i % 2 === 0 ? "Sure, see you then." : "On it." }],
+          createdAt: now - (contactIds.length - i) * 120000 + 60000,
+          status: "read" as const,
+        };
+        demoMessages.push(fromThem, fromMe);
+      });
+      saveInternalMessages(demoMessages);
+      localStorage.setItem("ollin_internal_messages_seeded", "1");
+      list = demoMessages;
+    }
+    setInternalMessages(list);
   }, []);
 
   const sendMessage = useCallback((content: string) => {
@@ -138,19 +185,9 @@ export function ChatEngineProvider({ children }: { children: React.ReactNode }) 
     }
 
     if (isHandledIntent(content)) {
-      const handled = parseHandledIntent(content);
-      if (handled?.invoiceNumber) {
-        const inv = finance.invoices.find(
-          (i) => i.status === "active" && (i.number === handled.invoiceNumber || i.number.endsWith(handled.invoiceNumber!) || i.number.includes(handled.invoiceNumber!))
-        );
-        if (inv) {
-          finance.cancelInvoice(inv.id);
-          clearedLabel = `Invoice #${inv.number}`;
-        }
-      }
       if (!clearedLabel) {
         const activeInv = finance.invoices.find((i) => i.status === "active");
-        if (activeInv && (handled?.hint === "payment" || handled?.hint === "invoice")) {
+        if (activeInv) {
           finance.cancelInvoice(activeInv.id);
           clearedLabel = `Invoice #${activeInv.number}`;
         }
@@ -295,19 +332,8 @@ export function ChatEngineProvider({ children }: { children: React.ReactNode }) 
 
     // Analyze Board and Finances on every message for proactive, world-class partner replies
     setTimeout(() => {
-      const boardSummary = buildBoardSummary({
-        givenTotal: board.given.length,
-        givenPending: board.given.filter((t) => !t.done).length,
-        receivedTotal: board.received.length,
-        receivedPending: board.received.filter((t) => !t.done).length,
-        eventsCount: board.events.length,
-        meetingsCount: board.meetings.length,
-      });
-      const financeSummary = buildFinanceSummary({
-        quotesCount: finance.quotes.length,
-        invoicesCount: finance.invoices.length,
-        clientsCount: finance.clients.length,
-      });
+      const boardSummary = buildBoardSummary();
+      const financeSummary = buildFinanceSummary();
       const givenPending = board.given.filter((t) => !t.done).length;
       const receivedPending = board.received.filter((t) => !t.done).length;
       const pendingGiven = board.given.filter((t) => !t.done);
@@ -319,6 +345,32 @@ export function ChatEngineProvider({ children }: { children: React.ReactNode }) 
       const activeInvoices = finance.invoices.filter((i) => i.status === "active");
       const unpaidInvoiceCount = activeInvoices.length;
       const firstUnpaidInvoiceNumber = activeInvoices[0]?.number;
+      const checklistBrief = profile?.userId
+        ? checklists.getChecklistBrief(profile.userId)
+        : undefined;
+      const today = new Date().toISOString().slice(0, 10);
+      const overdueList = finance.overdueInvoices || [];
+      const overdueBrief =
+        overdueList.length > 0
+          ? overdueList
+              .slice(0, 2)
+              .map((inv) => {
+                const due = inv.dueDate || today;
+                const days = Math.floor((new Date(today).getTime() - new Date(due).getTime()) / 86400000);
+                return `Invoice #${inv.number} for '${inv.clientName}' is ${days} day${days !== 1 ? "s" : ""} overdue.`;
+              })
+              .join(" ") + " Should I send a reminder or mark as handled?"
+          : undefined;
+      const quotesWaiting = finance.quotes.filter((q) => (q.status as string) !== "canceled").length;
+      const financeProactiveBrief =
+        quotesWaiting > 0 || overdueList.length > 0
+          ? [
+              quotesWaiting > 0 ? `We have ${quotesWaiting} Price Quote${quotesWaiting !== 1 ? "s" : ""} waiting for approval` : null,
+              overdueList.length > 0 ? `${overdueList.length} Overdue Invoice${overdueList.length !== 1 ? "s" : ""}` : null,
+            ]
+              .filter(Boolean)
+              .join(" and ") + ". Want me to send a reminder to the clients?"
+          : undefined;
       const ctx = {
         userName: profile?.name?.split(/\s+/)[0] || "Emil",
         boardSummary,
@@ -333,8 +385,11 @@ export function ChatEngineProvider({ children }: { children: React.ReactNode }) 
         suggestedTaskTitle,
         pendingTaskTitles: pendingTaskTitles.length > 0 ? pendingTaskTitles : undefined,
         offerFollowUp: !!(markedTaskTitle || clearedLabel),
+        checklistBrief,
+        overdueBrief,
+        financeProactiveBrief,
       };
-      const reply = generateReply(content, historyWithUser, lang, profile?.userId, ctx);
+      const reply = generateReply(content, ctx);
       const assistantMsg: AIMessage = { id: crypto.randomUUID(), role: "assistant", content: reply };
       setAiMessages((prev) => {
         const next = [...prev, assistantMsg];
@@ -342,7 +397,7 @@ export function ChatEngineProvider({ children }: { children: React.ReactNode }) 
         return next;
       });
     }, 400);
-  }, [profile?.userId, profile?.name, board, finance]);
+  }, [profile?.userId, profile?.name, board, finance, checklists]);
 
   const addFormMessage = useCallback((formType: "poll" | "event" | "task" | "converter") => {
     const formMsg: AIMessage = { id: crypto.randomUUID(), type: "form", formType };
@@ -379,6 +434,39 @@ export function ChatEngineProvider({ children }: { children: React.ReactNode }) 
     },
     [internalMessages]
   );
+
+  const getConversationsWithMeta = useCallback(
+    (currentUserId: string) => {
+      const byCid = new Map<string, { last: string; time: number }>();
+      for (const m of internalMessages) {
+        const parts = m.conversationId.split("--");
+        const otherId = parts.find((p) => p !== currentUserId);
+        if (!otherId) continue;
+        const text = m.parts.find((p) => p.type === "text")?.content ?? (m.parts[0]?.type === "voice" ? "🎤" : "📎");
+        const existing = byCid.get(m.conversationId);
+        if (!existing || m.createdAt > existing.time) {
+          byCid.set(m.conversationId, { last: text, time: m.createdAt });
+        }
+      }
+      return Array.from(byCid.entries())
+        .map(([cid, { last, time }]) => {
+          const parts = cid.split("--");
+          const contactId = parts.find((p) => p !== currentUserId) ?? parts[0];
+          return { contactId, lastMessage: last, lastTime: time };
+        })
+        .sort((a, b) => b.lastTime - a.lastTime);
+    },
+    [internalMessages]
+  );
+
+  const deleteConversation = useCallback((contactId: string, currentUserId = "me") => {
+    const cid = conversationId(currentUserId, contactId);
+    setInternalMessages((prev) => {
+      const next = prev.filter((m) => m.conversationId !== cid);
+      saveInternalMessages(next);
+      return next;
+    });
+  }, []);
 
   const sendText = useCallback((contactId: string, text: string, currentUserId = "me") => {
     const msg: InternalMessageRecord = {
@@ -459,6 +547,8 @@ export function ChatEngineProvider({ children }: { children: React.ReactNode }) 
       internal: {
         messages: internalMessages,
         getConversation,
+        getConversationsWithMeta,
+        deleteConversation,
         sendText,
         sendVoice,
         sendFile,
@@ -475,6 +565,8 @@ export function ChatEngineProvider({ children }: { children: React.ReactNode }) 
       addCard,
       clearMessages,
       getConversation,
+      getConversationsWithMeta,
+      deleteConversation,
       sendText,
       sendVoice,
       sendFile,

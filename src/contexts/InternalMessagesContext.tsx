@@ -36,29 +36,73 @@ function saveMessages(messages: InternalMessage[]) {
 
 type InternalMessagesContextType = {
   messages: InternalMessage[];
+  groups: GroupConversation[];
   getConversation: (contactId: string) => InternalMessage[];
+  getGroupConversation: (groupId: string) => InternalMessage[];
   sendText: (contactId: string, text: string, currentUserId?: string) => void;
+  sendTextToGroup: (groupId: string, text: string, currentUserId?: string) => void;
   sendVoice: (contactId: string, blob: Blob, currentUserId?: string) => void;
   sendFile: (contactId: string, file: File, currentUserId?: string) => void;
   markConversationAsRead: (contactId: string, currentUserId?: string) => void;
+  createGroup: (name: string, participantIds: string[]) => GroupConversation;
+  updateGroupName: (groupId: string, name: string) => void;
+  removeGroup: (groupId: string) => void;
 };
 
 const InternalMessagesContext = createContext<InternalMessagesContextType | null>(null);
 
-function conversationId(a: string, b: string) {
+export function conversationId(a: string, b: string) {
   return [a, b].sort().join("--");
+}
+
+const GROUP_PREFIX = "group:";
+
+export interface GroupConversation {
+  id: string;
+  name: string;
+  participantIds: string[];
+  createdAt: number;
+}
+
+const GROUPS_KEY = "ollin_internal_groups";
+
+function loadGroups(): GroupConversation[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(GROUPS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveGroups(groups: GroupConversation[]) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(GROUPS_KEY, JSON.stringify(groups));
+  } catch (_) {}
 }
 
 export function InternalMessagesProvider({ children }: { children: React.ReactNode }) {
   const [messages, setMessages] = useState<InternalMessage[]>([]);
+  const [groups, setGroups] = useState<GroupConversation[]>([]);
 
   useEffect(() => {
     setMessages(loadMessages());
+    setGroups(loadGroups());
   }, []);
 
   const getConversation = useCallback(
     (contactId: string) => {
       const cid = conversationId("me", contactId);
+      return messages.filter((m) => m.conversationId === cid).sort((a, b) => a.createdAt - b.createdAt);
+    },
+    [messages]
+  );
+
+  const getGroupConversation = useCallback(
+    (groupId: string) => {
+      const cid = GROUP_PREFIX + groupId;
       return messages.filter((m) => m.conversationId === cid).sort((a, b) => a.createdAt - b.createdAt);
     },
     [messages]
@@ -129,9 +173,89 @@ export function InternalMessagesProvider({ children }: { children: React.ReactNo
     });
   }, []);
 
+  const sendTextToGroup = useCallback((groupId: string, text: string, currentUserId = "me") => {
+    const cid = GROUP_PREFIX + groupId;
+    const msg: InternalMessage = {
+      id: crypto.randomUUID(),
+      conversationId: cid,
+      senderId: currentUserId,
+      parts: [{ type: "text", content: text }],
+      createdAt: Date.now(),
+      status: "sent",
+    };
+    setMessages((prev) => {
+      const next = [msg, ...prev];
+      saveMessages(next);
+      return next;
+    });
+  }, []);
+
+  const createGroup = useCallback((name: string, participantIds: string[]) => {
+    const group: GroupConversation = {
+      id: crypto.randomUUID(),
+      name: name.trim() || "Group",
+      participantIds: [...participantIds],
+      createdAt: Date.now(),
+    };
+    setGroups((prev) => {
+      const next = [group, ...prev];
+      saveGroups(next);
+      return next;
+    });
+    return group;
+  }, []);
+
+  const updateGroupName = useCallback((groupId: string, name: string) => {
+    setGroups((prev) => {
+      const next = prev.map((g) => (g.id === groupId ? { ...g, name: name.trim() || g.name } : g));
+      saveGroups(next);
+      return next;
+    });
+  }, []);
+
+  const removeGroup = useCallback((groupId: string) => {
+    const cid = GROUP_PREFIX + groupId;
+    setGroups((prev) => {
+      const next = prev.filter((g) => g.id !== groupId);
+      saveGroups(next);
+      return next;
+    });
+    setMessages((prev) => {
+      const next = prev.filter((m) => m.conversationId !== cid);
+      saveMessages(next);
+      return next;
+    });
+  }, []);
+
   const value = useMemo(
-    () => ({ messages, getConversation, sendText, sendVoice, sendFile, markConversationAsRead }),
-    [messages, getConversation, sendText, sendVoice, sendFile, markConversationAsRead]
+    () => ({
+      messages,
+      groups,
+      getConversation,
+      getGroupConversation,
+      sendText,
+      sendTextToGroup,
+      sendVoice,
+      sendFile,
+      markConversationAsRead,
+      createGroup,
+      updateGroupName,
+      removeGroup,
+    }),
+    [
+      messages,
+      groups,
+      getConversation,
+      getGroupConversation,
+      sendText,
+      sendTextToGroup,
+      sendVoice,
+      sendFile,
+      markConversationAsRead,
+      createGroup,
+      updateGroupName,
+      removeGroup,
+    ]
   );
 
   return (

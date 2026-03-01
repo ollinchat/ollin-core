@@ -5,12 +5,14 @@ import { useLocale } from "@/contexts/LocaleContext";
 import { useBoard } from "@/contexts/BoardContext";
 import { t } from "@/lib/translations";
 import type { MeetingOrEvent, RSVPStatus } from "@/lib/board-types";
-import { Users, MapPin, Calendar, Check, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
+import { Users, MapPin, Calendar, Check, ChevronDown, ChevronUp, ExternalLink, Trash2, Archive } from "lucide-react";
 
 type MeetingEventCardProps = {
   item: MeetingOrEvent;
   selected?: boolean;
   onToggleSelect?: () => void;
+  /** Current user ID; only creator can delete */
+  currentUserId?: string;
 };
 
 function mapUrl(location: string): string {
@@ -18,9 +20,20 @@ function mapUrl(location: string): string {
   return `https://www.google.com/maps/search/?api=1&query=${q}`;
 }
 
-export function MeetingEventCard({ item, selected, onToggleSelect }: MeetingEventCardProps) {
+export function MeetingEventCard({ item, selected, onToggleSelect, currentUserId }: MeetingEventCardProps) {
   const { locale } = useLocale();
-  const { setGuestRSVP } = useBoard();
+  const { setGuestRSVP, removeMeeting, removeEvent, archiveMeeting, archiveEvent } = useBoard();
+  const isCreator = currentUserId && item.creatorId === currentUserId;
+  const handleDelete = () => {
+    if (!isCreator) return;
+    if (item.type === "meeting") removeMeeting(item.id);
+    else removeEvent(item.id);
+  };
+  const handleArchive = () => {
+    if (!isCreator) return;
+    if (item.type === "meeting") archiveMeeting(item.id);
+    else archiveEvent(item.id);
+  };
   const [expanded, setExpanded] = useState(false);
   const attending = item.guests.filter((g) => g.rsvp === "attending").length;
   const notAttending = item.guests.filter((g) => g.rsvp === "not_attending").length;
@@ -33,15 +46,16 @@ export function MeetingEventCard({ item, selected, onToggleSelect }: MeetingEven
 
   return (
     <div
-      className={`rounded-2xl bg-white overflow-hidden border-0 shadow-soft ${
+      className={`rounded-sm bg-white overflow-hidden border border-gray-200 shadow-soft ${
         selected ? "ring-2 ring-accent/30 shadow-glow-subtle" : ""
       }`}
     >
-      <button
-        type="button"
-        onClick={() => hasDetails && setExpanded((e) => !e)}
-        className="w-full p-3 flex items-start gap-2 text-left hover:bg-gray-50/50 transition-colors"
-      >
+      <div className="w-full p-3 flex items-start gap-2 text-left">
+        <button
+          type="button"
+          onClick={() => hasDetails && setExpanded((e) => !e)}
+          className="flex-1 min-w-0 flex items-start gap-2 text-left hover:bg-gray-50/50 transition-colors"
+        >
         {onToggleSelect != null && (
           <span
             className="mt-0.5 flex-shrink-0"
@@ -78,7 +92,30 @@ export function MeetingEventCard({ item, selected, onToggleSelect }: MeetingEven
             {expanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
           </span>
         )}
-      </button>
+        </button>
+        {isCreator && (
+          <>
+            <button
+              type="button"
+              onClick={handleArchive}
+              className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-sm flex-shrink-0"
+              title={locale === "he" ? "ארכב" : "Archive"}
+              aria-label="Archive"
+            >
+              <Archive className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={handleDelete}
+              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-sm flex-shrink-0"
+              title={locale === "he" ? "מחק" : "Delete"}
+              aria-label="Delete"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </>
+        )}
+      </div>
 
       {expanded && (
         <div className="px-3 pb-3 pt-0 border-t border-gray-100 space-y-3">

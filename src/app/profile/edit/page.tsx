@@ -16,6 +16,8 @@ import {
   type PortfolioItem,
   type ProjectPosition,
   type PressMediaLink,
+  type ProfileBlock,
+  type ProfileBlockType,
 } from "@/lib/profile-types";
 import {
   User,
@@ -28,7 +30,10 @@ import {
   Instagram,
   Image as ImageIcon,
   ChevronLeft,
+  LayoutGrid,
+  Plus,
 } from "lucide-react";
+import { ModularProfileGrid, PROFILE_TEMPLATES, ADDABLE_BLOCK_TYPES } from "@/components/profile/ModularProfileGrid";
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -173,13 +178,60 @@ export default function ProfileEditPage() {
     [pressMedia, updateProfile]
   );
 
+  const blocks = profile.blocks ?? [];
+
+  const addBlock = useCallback(
+    (type: import("@/lib/profile-types").ProfileBlockType) => {
+      const defaultConfig: ProfileBlock["config"] = {};
+      if (type === "cv") defaultConfig.cv = { experience: [], education: [], skills: [] };
+      if (type === "portfolio") defaultConfig.portfolio = { items: [] };
+      if (type === "productService") defaultConfig.productService = { items: [] };
+      if (type === "socialBio") defaultConfig.socialBio = { intro: "", links: [] };
+      if (type === "reviewsRatings") defaultConfig.reviewsRatings = { items: [] };
+      if (type === "experience") defaultConfig.experience = { items: [] };
+      if (type === "banner") defaultConfig.banner = { headline: "", subline: "" };
+      if (type === "articles") defaultConfig.articles = { title: "", items: [] };
+      if (type === "gallery") defaultConfig.gallery = { title: "", imageUrls: [] };
+      const newBlock: ProfileBlock = {
+        id: crypto.randomUUID(),
+        type,
+        order: blocks.length,
+        visible: true,
+        config: defaultConfig,
+      };
+      updateProfile({ blocks: [...blocks, newBlock] });
+    },
+    [blocks, updateProfile]
+  );
+
+  const removeBlock = useCallback(
+    (id: string) => {
+      updateProfile({ blocks: blocks.filter((b) => b.id !== id) });
+    },
+    [blocks, updateProfile]
+  );
+
+  const applyTemplate = useCallback(
+    (templateId: string) => {
+      const tpl = PROFILE_TEMPLATES.find((t) => t.id === templateId);
+      if (!tpl) return;
+      const newBlocks: ProfileBlock[] = tpl.blocks.map((b, i) => ({
+        ...b,
+        id: crypto.randomUUID(),
+        order: i,
+      }));
+      updateProfile({ blocks: newBlocks });
+    },
+    [updateProfile]
+  );
+
   const handleSave = useCallback(() => {
     router.push("/dashboard");
   }, [router]);
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-10 glass border-0 shadow-soft px-4 py-3 flex items-center justify-between">
+      <header className="sticky top-0 z-10 bg-white border-b border-border shadow-sm px-4 py-3 flex items-center justify-between">
         <Link
           href="/dashboard"
           className="text-gray-600 hover:text-gray-900 flex items-center gap-1 rounded-2xl px-2 py-1.5 hover:bg-white/60 hover:shadow-soft transition-all"
@@ -199,7 +251,7 @@ export default function ProfileEditPage() {
       <main className="max-w-xl mx-auto px-4 py-6 pb-24 space-y-8">
         {/* Hero: Ollin logo centered */}
         <section className="flex flex-col items-center justify-center py-8">
-          <div className="rounded-3xl bg-white/80 backdrop-blur-sm shadow-soft-md p-6 flex items-center justify-center">
+          <div className="rounded-lg bg-white border border-gray-200 shadow-sm p-6 flex items-center justify-center">
             <Image src="/logo.png" alt="OllinChat" width={160} height={44} className="h-11 w-auto object-contain" priority />
           </div>
         </section>
@@ -487,6 +539,56 @@ export default function ProfileEditPage() {
           </div>
         </section>
 
+        {/* Mini-site blocks */}
+        <section>
+          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-2">
+            <LayoutGrid className="w-4 h-4" />
+            {locale === "he" ? "בלוקים (מיני-אתר)" : "Mini-site blocks"}
+          </h2>
+          <p className="text-xs text-gray-500 mb-3">{locale === "he" ? "הוסף בלוקים: תיקיית עבודות, ניסיון, באנר, גלריית תמונות." : "Add blocks: Portfolio, Experience, Banner, Image gallery."}</p>
+          <div className="space-y-2 mb-4">
+            {(profile.blocks ?? []).map((b) => (
+              <div key={b.id} className="rounded-2xl border border-gray-200 bg-white px-4 py-2.5 flex items-center justify-between gap-2">
+                <span className="text-sm font-medium text-gray-700 capitalize">{b.type}</span>
+                <label className="flex items-center gap-2 text-sm text-gray-600">
+                  <input
+                    type="checkbox"
+                    checked={b.visible}
+                    onChange={() => {
+                      const next = (profile.blocks ?? []).map((x) => (x.id === b.id ? { ...x, visible: !x.visible } : x));
+                      updateProfile({ blocks: next });
+                    }}
+                    className="rounded border-gray-300 text-[#008080]"
+                  />
+                  {locale === "he" ? "גלוי" : "Visible"}
+                </label>
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(["portfolio", "experience", "banner", "gallery"] as ProfileBlockType[]).map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => {
+                  const blocks = profile.blocks ?? [];
+                  const newBlock: ProfileBlock = {
+                    id: crypto.randomUUID(),
+                    type,
+                    order: blocks.length,
+                    visible: true,
+                    config: type === "portfolio" ? { portfolio: { items: profile.portfolio.slice(0, 3) } } : type === "experience" ? { experience: { items: [] } } : type === "banner" ? { banner: { headline: "Headline", subline: "Subline" } } : { gallery: { title: "Gallery", imageUrls: [] } },
+                  };
+                  updateProfile({ blocks: [...blocks, newBlock] });
+                }}
+                className="rounded-2xl border border-[#008080]/30 bg-[#008080]/10 px-4 py-2 text-sm font-medium text-[#006666] hover:bg-[#008080]/20"
+              >
+                + {type}
+              </button>
+            ))}
+          </div>
+        </section>
+
         {/* Projects / Positions */}
         <section>
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-2">
@@ -564,6 +666,57 @@ export default function ProfileEditPage() {
               + Add link
             </button>
           </div>
+        </section>
+
+        {/* Modular Profile: Template Gallery + Add Block */}
+        <section>
+          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-2">
+            <LayoutGrid className="w-4 h-4" />
+            {locale === "he" ? "פרופיל מודולרי" : "Modular Profile"}
+          </h2>
+          <p className="text-xs text-gray-600 mb-3">
+            {locale === "he" ? "בחר תבנית או הוסף בלוקים. התצוגה בטאב פרופיל תציג רשת בלוקים." : "Choose a template or add blocks. Profile tab will show a block grid."}
+          </p>
+          <div className="mb-4">
+            <p className="text-xs font-medium text-gray-500 mb-2">{locale === "he" ? "גלריית תבניות" : "Template Gallery"}</p>
+            <div className="flex flex-wrap gap-2">
+              {PROFILE_TEMPLATES.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => applyTemplate(t.id)}
+                  className="px-3 py-2 border border-[#008080]/50 text-[#008080] text-sm font-medium hover:bg-[#008080]/10"
+                  style={{ borderRadius: 0 }}
+                >
+                  {locale === "he" ? t.labelHe : t.labelEn}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="mb-3">
+            <p className="text-xs font-medium text-gray-500 mb-2">+ Add Block</p>
+            <div className="flex flex-wrap gap-2">
+              {ADDABLE_BLOCK_TYPES.map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => addBlock(type)}
+                  className="px-3 py-2 border border-[#008080] bg-[#008080] text-white text-sm font-medium hover:bg-[#008080]/90"
+                  style={{ borderRadius: 0 }}
+                >
+                  <Plus className="w-4 h-4 inline mr-1" />
+                  {type === "cv" && (locale === "he" ? "קורות חיים" : "Professional CV")}
+                  {type === "portfolio" && (locale === "he" ? "תיק עבודות" : "Portfolio")}
+                  {type === "productService" && (locale === "he" ? "מוצרים/שירותים" : "Product/Service")}
+                  {type === "socialBio" && (locale === "he" ? "קישורים ואודות" : "Social & Bio")}
+                  {type === "reviewsRatings" && (locale === "he" ? "ביקורות ודירוגים" : "Reviews & Ratings")}
+                </button>
+              ))}
+            </div>
+          </div>
+          {blocks.length > 0 && (
+            <ModularProfileGrid profile={profile} locale={locale} editMode onRemoveBlock={removeBlock} />
+          )}
         </section>
       </main>
     </div>

@@ -37,6 +37,7 @@ function saveBoard(data: ReturnType<typeof loadBoardLocal>) {
 }
 
 type BoardContextType = {
+  loading: boolean;
   given: BoardTask[];
   received: BoardTask[];
   meetings: MeetingOrEvent[];
@@ -45,9 +46,13 @@ type BoardContextType = {
   addReceivedTask: (task: Omit<BoardTask, "id" | "createdAt">) => void;
   updateGivenTask: (id: string, updates: Partial<BoardTask>) => void;
   updateReceivedTask: (id: string, updates: Partial<BoardTask>) => void;
+  removeGivenTask: (id: string) => void;
+  removeReceivedTask: (id: string) => void;
   setTaskDone: (kind: "given" | "received", id: string, done: boolean) => void;
   addMeeting: (m: Omit<MeetingOrEvent, "id" | "createdAt">) => void;
   addEvent: (e: Omit<MeetingOrEvent, "id" | "createdAt">) => void;
+  removeMeeting: (id: string) => void;
+  removeEvent: (id: string) => void;
   updateMeetingOrEvent: (
     type: "meeting" | "event",
     id: string,
@@ -62,7 +67,16 @@ type BoardContextType = {
   toggleGuestListVisibility: (type: "meeting" | "event", itemId: string) => void;
   summarySelection: SummarySelection;
   setSummarySelection: (s: SummarySelection | ((prev: SummarySelection) => SummarySelection)) => void;
-  notifySenderTaskDone: (taskId: string) => void; // placeholder: "real-time notification to sender"
+  notifySenderTaskDone: (taskId: string) => void;
+  archiveGivenTask: (id: string) => void;
+  archiveReceivedTask: (id: string) => void;
+  unarchiveGivenTask: (id: string) => void;
+  unarchiveReceivedTask: (id: string) => void;
+  archiveMeeting: (id: string) => void;
+  archiveEvent: (id: string) => void;
+  unarchiveMeeting: (id: string) => void;
+  unarchiveEvent: (id: string) => void;
+  pingAssignees: (kind: "given" | "received", taskId: string, taskTitle: string) => void;
 };
 
 const BoardContext = createContext<BoardContextType | null>(null);
@@ -77,6 +91,7 @@ type BoardPayload = {
 const emptyBoard: BoardPayload = { given: [], received: [], meetings: [], events: [] };
 
 export function BoardProvider({ children }: { children: React.ReactNode }) {
+  const [loading, setLoading] = useState(true);
   const [board, setBoard] = useState<BoardPayload>(emptyBoard);
   const [summarySelection, setSummarySelection] = useState<SummarySelection>({
     taskIds: [],
@@ -85,14 +100,25 @@ export function BoardProvider({ children }: { children: React.ReactNode }) {
   });
 
   React.useEffect(() => {
-    loadBoardFromSupabase().then((remote) => {
-      if (remote) {
-        setBoard(remote);
-        saveBoard(remote);
-      } else {
-        setBoard(loadBoardLocal());
-      }
-    });
+    let cancelled = false;
+    setLoading(true);
+    loadBoardFromSupabase()
+      .then((remote) => {
+        if (cancelled) return;
+        if (remote) {
+          setBoard(remote);
+          saveBoard(remote);
+        } else {
+          setBoard(loadBoardLocal());
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setBoard(loadBoardLocal());
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
   }, []);
 
   const updateBoard = useCallback(
@@ -104,6 +130,17 @@ export function BoardProvider({ children }: { children: React.ReactNode }) {
       });
     },
     []
+  );
+
+  const updateMeetingOrEvent = useCallback(
+    (type: "meeting" | "event", id: string, updates: Partial<MeetingOrEvent>) => {
+      const key = type === "meeting" ? "meetings" : "events";
+      updateBoard((prev) => ({
+        ...prev,
+        [key]: prev[key].map((item) => (item.id === id ? { ...item, ...updates } : item)),
+      }));
+    },
+    [updateBoard]
   );
 
   const addGivenTask = useCallback(
@@ -150,6 +187,20 @@ export function BoardProvider({ children }: { children: React.ReactNode }) {
     [updateBoard]
   );
 
+  const removeGivenTask = useCallback(
+    (id: string) => {
+      updateBoard((prev) => ({ ...prev, given: prev.given.filter((t) => t.id !== id) }));
+    },
+    [updateBoard]
+  );
+
+  const removeReceivedTask = useCallback(
+    (id: string) => {
+      updateBoard((prev) => ({ ...prev, received: prev.received.filter((t) => t.id !== id) }));
+    },
+    [updateBoard]
+  );
+
   const setTaskDone = useCallback(
     (kind: "given" | "received", id: string, done: boolean) => {
       if (kind === "given") {
@@ -170,6 +221,72 @@ export function BoardProvider({ children }: { children: React.ReactNode }) {
   const notifySenderTaskDone = useCallback((_taskId: string) => {
     // Placeholder: in production would send real-time notification to task sender
   }, []);
+
+  const archiveGivenTask = useCallback(
+    (id: string) => {
+      updateGivenTask(id, { archived: true, archivedAt: Date.now() });
+    },
+    [updateGivenTask]
+  );
+
+  const archiveReceivedTask = useCallback(
+    (id: string) => {
+      updateReceivedTask(id, { archived: true, archivedAt: Date.now() });
+    },
+    [updateReceivedTask]
+  );
+
+  const unarchiveGivenTask = useCallback(
+    (id: string) => {
+      updateGivenTask(id, { archived: false, archivedAt: undefined });
+    },
+    [updateGivenTask]
+  );
+
+  const unarchiveReceivedTask = useCallback(
+    (id: string) => {
+      updateReceivedTask(id, { archived: false, archivedAt: undefined });
+    },
+    [updateReceivedTask]
+  );
+
+  const archiveMeeting = useCallback(
+    (id: string) => {
+      updateMeetingOrEvent("meeting", id, { archived: true, archivedAt: Date.now() });
+    },
+    [updateMeetingOrEvent]
+  );
+
+  const archiveEvent = useCallback(
+    (id: string) => {
+      updateMeetingOrEvent("event", id, { archived: true, archivedAt: Date.now() });
+    },
+    [updateMeetingOrEvent]
+  );
+
+  const unarchiveMeeting = useCallback(
+    (id: string) => {
+      updateMeetingOrEvent("meeting", id, { archived: false, archivedAt: undefined });
+    },
+    [updateMeetingOrEvent]
+  );
+
+  const unarchiveEvent = useCallback(
+    (id: string) => {
+      updateMeetingOrEvent("event", id, { archived: false, archivedAt: undefined });
+    },
+    [updateMeetingOrEvent]
+  );
+
+  const pingAssignees = useCallback((kind: "given" | "received", taskId: string, taskTitle: string) => {
+    const list = kind === "given" ? board.given : board.received;
+    const task = list.find((t) => t.id === taskId);
+    if (!task) return;
+    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+      new Notification("Ollin reminder", { body: taskTitle || "Task reminder" });
+    }
+    // In production: send push to task.assigneeUserId and observerIds (resolve to user IDs)
+  }, [board.given, board.received]);
 
   const addMeeting = useCallback(
     (m: Omit<MeetingOrEvent, "id" | "createdAt">) => {
@@ -195,13 +312,16 @@ export function BoardProvider({ children }: { children: React.ReactNode }) {
     [updateBoard]
   );
 
-  const updateMeetingOrEvent = useCallback(
-    (type: "meeting" | "event", id: string, updates: Partial<MeetingOrEvent>) => {
-      const key = type === "meeting" ? "meetings" : "events";
-      updateBoard((prev) => ({
-        ...prev,
-        [key]: prev[key].map((item) => (item.id === id ? { ...item, ...updates } : item)),
-      }));
+  const removeMeeting = useCallback(
+    (id: string) => {
+      updateBoard((prev) => ({ ...prev, meetings: prev.meetings.filter((m) => m.id !== id) }));
+    },
+    [updateBoard]
+  );
+
+  const removeEvent = useCallback(
+    (id: string) => {
+      updateBoard((prev) => ({ ...prev, events: prev.events.filter((e) => e.id !== id) }));
     },
     [updateBoard]
   );
@@ -242,6 +362,7 @@ export function BoardProvider({ children }: { children: React.ReactNode }) {
   return (
     <BoardContext.Provider
       value={{
+        loading,
         given: board.given,
         received: board.received,
         meetings: board.meetings,
@@ -250,15 +371,28 @@ export function BoardProvider({ children }: { children: React.ReactNode }) {
         addReceivedTask,
         updateGivenTask,
         updateReceivedTask,
+        removeGivenTask,
+        removeReceivedTask,
         setTaskDone,
         addMeeting,
         addEvent,
+        removeMeeting,
+        removeEvent,
         updateMeetingOrEvent,
         setGuestRSVP,
         toggleGuestListVisibility,
         summarySelection,
         setSummarySelection,
         notifySenderTaskDone,
+        archiveGivenTask,
+        archiveReceivedTask,
+        unarchiveGivenTask,
+        unarchiveReceivedTask,
+        archiveMeeting,
+        archiveEvent,
+        unarchiveMeeting,
+        unarchiveEvent,
+        pingAssignees,
       }}
     >
       {children}

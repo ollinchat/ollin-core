@@ -117,9 +117,9 @@ export default function MessagesPage() {
                     key={c.id}
                     type="button"
                     onClick={() => setSelectedId(c.id)}
-                    className={`w-full text-left p-3 rounded-2xl flex items-center gap-3 ${selectedId === c.id ? "bg-teal-50" : "hover:bg-gray-50"}`}
+                    className={`w-full text-left p-3 rounded-2xl flex items-center gap-3 ${selectedId === c.id ? "bg-[#008080]/10" : "hover:bg-gray-50"}`}
                   >
-                    <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 font-semibold flex-shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-[#008080]/15 flex items-center justify-center text-[#008080] font-semibold flex-shrink-0">
                       {c.name.slice(0, 1).toUpperCase()}
                     </div>
                     <div className="min-w-0 flex-1">
@@ -137,7 +137,7 @@ export default function MessagesPage() {
           {selected ? (
             <>
               <div className="flex-shrink-0 px-4 py-3 border-b border-gray-100 bg-white flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 text-sm font-semibold">
+                <div className="w-10 h-10 rounded-full bg-[#008080]/15 flex items-center justify-center text-[#008080] text-sm font-semibold">
                   {selected.name.slice(0, 1).toUpperCase()}
                 </div>
                 <span className="font-semibold text-gray-900">{selected.name}</span>
@@ -156,7 +156,7 @@ export default function MessagesPage() {
                       <div
                         className={`rounded-2xl px-4 py-2.5 max-w-[85%] shadow-sm ${
                           m.senderId === "me"
-                            ? "bg-gradient-to-br from-teal-500 to-teal-600 text-white rounded-br-md"
+                            ? "bg-gradient-to-br from-[#008080] to-[#006666] text-white rounded-br-md"
                             : "bg-white text-gray-900 border border-gray-100 rounded-bl-md"
                         }`}
                       >
@@ -227,7 +227,7 @@ export default function MessagesPage() {
                   onChange={onInputChange}
                   onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
                   placeholder="Type a message…"
-                  className="flex-1 rounded-2xl bg-gray-100 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-teal-500/20 focus:bg-white border border-transparent focus:border-teal-500/30"
+                  className="flex-1 rounded-2xl bg-gray-100 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-[#008080]/20 focus:bg-white border border-transparent focus:border-[#008080]/30"
                 />
                 <button
                   type="button"
@@ -244,7 +244,7 @@ export default function MessagesPage() {
                 <button
                   type="button"
                   onClick={handleSend}
-                  className="p-2.5 rounded-2xl bg-gradient-to-br from-teal-500 to-teal-600 text-white shadow-md hover:shadow-lg transition-shadow"
+                  className="p-2.5 rounded-2xl bg-gradient-to-br from-[#008080] to-[#006666] text-white shadow-md hover:shadow-lg transition-shadow"
                 >
                   <Send className="w-5 h-5" />
                 </button>

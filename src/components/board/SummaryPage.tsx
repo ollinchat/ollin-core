@@ -94,7 +94,7 @@ export function SummaryPage({ onBack, onGenerate }: SummaryPageProps) {
             type="button"
             onClick={() => setActiveTab(id)}
             className={`px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-colors uppercase tracking-wide ${
-              activeTab === id ? "bg-teal-500 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              activeTab === id ? "bg-[#008080] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
             }`}
           >
             {label}
@@ -103,7 +103,7 @@ export function SummaryPage({ onBack, onGenerate }: SummaryPageProps) {
       </div>
       <div className="flex-1 overflow-y-auto p-3">
         <div className="flex items-center justify-between gap-2 mb-3">
-          <button type="button" onClick={selectAll} className="text-xs font-medium text-teal-600 hover:underline">
+          <button type="button" onClick={selectAll} className="text-xs font-medium text-[#008080] hover:underline">
             {t(locale, "board.selectAll")}
           </button>
         </div>

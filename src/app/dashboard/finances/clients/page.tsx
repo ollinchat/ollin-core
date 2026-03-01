@@ -13,6 +13,7 @@ export default function ClientsPage() {
   const [email, setEmail] = useState("");
   const [clientType, setClientType] = useState<ClientType>("private");
   const [vatId, setVatId] = useState("");
+  const [hpNumber, setHpNumber] = useState("");
   const [address, setAddress] = useState("");
 
   const handleAdd = () => {
@@ -24,12 +25,14 @@ export default function ClientsPage() {
       email: trimmedEmail,
       clientType,
       vatId: vatId.trim() || undefined,
+      hpNumber: clientType === "company" ? (hpNumber.trim() || undefined) : undefined,
       address: address.trim() || undefined,
     });
     setName("");
     setEmail("");
     setClientType("private");
     setVatId("");
+    setHpNumber("");
     setAddress("");
     setShowForm(false);
   };
@@ -51,10 +54,11 @@ export default function ClientsPage() {
         <button
           type="button"
           onClick={() => setShowForm((v) => !v)}
-          className="p-2.5 rounded-2xl bg-accent text-white hover:shadow-glow-subtle"
+          className="p-2.5 rounded-sm border border-[#006666] bg-[#008080] text-white hover:shadow-glow-subtle"
           aria-label="Add client"
         >
           <Plus className="w-5 h-5" />
+          <span className="ml-1.5 text-sm font-medium hidden sm:inline">Add Client</span>
         </button>
       </header>
       <div className="flex-1 p-4 space-y-6">
@@ -63,11 +67,11 @@ export default function ClientsPage() {
             <div>
               <p className="text-xs font-medium text-gray-500 mb-1">Type</p>
               <div className="flex gap-2">
-                <button type="button" onClick={() => setClientType("company")} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium ${clientType === "company" ? "bg-teal-500 text-white" : "bg-gray-100 text-gray-600"}`}>
+                <button type="button" onClick={() => setClientType("company")} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium ${clientType === "company" ? "bg-[#008080] text-white" : "bg-gray-100 text-gray-600"}`}>
                   <Building2 className="w-4 h-4" />
                   Company
                 </button>
-                <button type="button" onClick={() => setClientType("private")} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium ${clientType === "private" ? "bg-teal-500 text-white" : "bg-gray-100 text-gray-600"}`}>
+                <button type="button" onClick={() => setClientType("private")} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium ${clientType === "private" ? "bg-[#008080] text-white" : "bg-gray-100 text-gray-600"}`}>
                   <User className="w-4 h-4" />
                   Private
                 </button>
@@ -76,6 +80,9 @@ export default function ClientsPage() {
             <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-gray-900" />
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-gray-900" />
             <input type="text" value={vatId} onChange={(e) => setVatId(e.target.value)} placeholder="VAT ID (optional)" className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-gray-900" />
+            {clientType === "company" && (
+              <input type="text" value={hpNumber} onChange={(e) => setHpNumber(e.target.value)} placeholder="P.C. / H.P. (ח.פ) number" className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-gray-900" />
+            )}
             <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Address (optional)" className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-gray-900" />
             <div className="flex gap-2">
               <button type="button" onClick={() => setShowForm(false)} className="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-700 font-medium">Cancel</button>
@@ -85,7 +92,7 @@ export default function ClientsPage() {
         )}
         <section>
           <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-2">
-            <Building2 className="w-4 h-4 text-teal-600" />
+            <Building2 className="w-4 h-4 text-[#008080]" />
             Companies
           </h2>
           <div className="space-y-2">
@@ -94,14 +101,14 @@ export default function ClientsPage() {
               <div key={c.id} className="rounded-2xl bg-white shadow-soft px-4 py-3 border border-gray-100">
                 <p className="font-medium text-gray-900">{c.name}</p>
                 <p className="text-sm text-gray-500">{c.email}</p>
-                {(c.vatId || c.address) && <p className="text-xs text-gray-400 mt-1">{[c.vatId, c.address].filter(Boolean).join(" · ")}</p>}
+                {(c.vatId || c.hpNumber || c.address) && <p className="text-xs text-gray-400 mt-1">{[c.vatId, c.hpNumber, c.address].filter(Boolean).join(" · ")}</p>}
               </div>
             ))}
           </div>
         </section>
         <section>
           <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-2">
-            <User className="w-4 h-4 text-teal-600" />
+            <User className="w-4 h-4 text-[#008080]" />
             Private Clients
           </h2>
           <div className="space-y-2">
@@ -110,7 +117,7 @@ export default function ClientsPage() {
               <div key={c.id} className="rounded-2xl bg-white shadow-soft px-4 py-3 border border-gray-100">
                 <p className="font-medium text-gray-900">{c.name}</p>
                 <p className="text-sm text-gray-500">{c.email}</p>
-                {(c.vatId || c.address) && <p className="text-xs text-gray-400 mt-1">{[c.vatId, c.address].filter(Boolean).join(" · ")}</p>}
+                {(c.vatId || c.hpNumber || c.address) && <p className="text-xs text-gray-400 mt-1">{[c.vatId, c.hpNumber, c.address].filter(Boolean).join(" · ")}</p>}
               </div>
             ))}
           </div>

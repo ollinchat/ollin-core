@@ -3,51 +3,71 @@
 @tailwind utilities;
 
 :root {
-  --background: #F8F9FA;
-  --surface: #FFFFFF;
-  --accent: #0D9488;
-  --accent-light: #14B8A6;
-  --accent-emerald: #059669;
-  --accent-hover: #0F766E;
-  --accent-muted: #CCFBF1;
-  --accent-muted-soft: #F0FDFA;
-  /* Premium gradient: emerald → teal */
-  --gradient-primary: linear-gradient(135deg, #059669 0%, #0D9488 50%, #14B8A6 100%);
-  --gradient-glow: 0 0 20px rgba(13, 148, 136, 0.25);
+  --background: #f8f9fa;
+  --surface: #ffffff;
+  --surface-elevated: #ffffff;
+  --primary: #008080;
+  --accent: #008080;
+  --success: #008080;
+  --accent-light: #26a6a6;
+  --accent-emerald: #008080;
+  --accent-hover: #006666;
+  --accent-muted: rgba(0, 128, 128, 0.15);
+  --accent-muted-soft: rgba(0, 128, 128, 0.08);
+  --border: #e5e5e5;
+  --radius-card: 12px;
+  --radius-button: 12px;
+  --radius-input: 12px;
+  --gradient-primary: linear-gradient(135deg, #006666 0%, #008080 50%, #26a6a6 100%);
+  --gradient-glow: 0 0 20px rgba(0, 128, 128, 0.25);
   --shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.06);
-  --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
-  --shadow-glow-accent: 0 0 24px rgba(13, 148, 136, 0.2);
+  --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.08);
+  --shadow-glow-accent: 0 0 24px rgba(0, 128, 128, 0.2);
 }
 
 body {
   background: var(--background);
-  color: #1a1a1a;
+  color: #171717;
   -webkit-font-smoothing: antialiased;
 }
 
-/* Premium typography: spacious headers */
-h1, h2, .heading-premium {
-  letter-spacing: 0.02em;
+/* Premium typography: luxury letter-spacing on headings */
+h1, h2, h3, .heading-premium {
+  letter-spacing: 0.05em;
 }
 
-/* Glassmorphism surfaces */
+/* Dark bottom nav (light theme app) */
 .glass {
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: #0a0a0a;
+  border-color: #262626;
 }
 
 .glass-subtle {
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: #fafafa;
+  border-color: var(--border);
 }
 
-/* Teal/Emerald accent for checkboxes and progress */
+/* Turquoise #008080: primary buttons, pills, popovers (use .btn-primary or inline) */
+.btn-primary {
+  background-color: #008080;
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 12px;
+}
+.btn-primary:hover {
+  background-color: #006666;
+}
+
+/* Checkboxes and progress use accent */
 input[type="checkbox"],
 input[type="radio"] {
   accent-color: var(--accent);
 }
+
+/* Softer edges: 12px radius (Golden State) */
+.rounded-card { border-radius: var(--radius-card); }
+.rounded-btn { border-radius: var(--radius-button); }
+.rounded-input { border-radius: var(--radius-input); }
 
 /* Soft surfaces: replace hard borders with shadow */
 .card-soft {
@@ -66,4 +86,38 @@ input[type="radio"] {
 /* RTL-aware utilities */
 [dir="rtl"] .rtl-mirror {
   transform: scaleX(-1);
+}
+
+/* Disable text selection on UI controls so touch doesn't trigger selection */
+button,
+[role="button"],
+nav a,
+.select-none {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.scroll-area-touch {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Hide scrollbar while keeping overflow scroll (channel tab bar) */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Explore: subtle radar/pulse for "scanning local signals" strip */
+@keyframes radar-pulse {
+  0%, 100% { opacity: 0.4; box-shadow: 0 0 0 0 rgba(0, 128, 128, 0.25); }
+  50% { opacity: 1; box-shadow: 0 0 0 8px rgba(0, 128, 128, 0); }
+}
+.explore-scan-radar {
+  animation: radar-pulse 2.5s ease-in-out infinite;
 }

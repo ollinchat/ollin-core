@@ -7,6 +7,51 @@ import { loadProfileFromSupabase, saveProfileToSupabase } from "@/lib/supabase-s
 import { generateUniqueUserId } from "@/lib/user-id";
 
 const STORAGE_KEY = "ollin_profile";
+const EMIL_BLOCKS: Profile["blocks"] = [
+  {
+    id: "emil-reviews",
+    type: "reviewsRatings",
+    order: 0,
+    visible: true,
+    config: {
+      reviewsRatings: {
+        items: [
+          { id: "r1", authorId: "u1", authorName: "Sarah C.", rating: 5, text: "Emil delivered exactly what we needed. Professional and responsive.", createdAt: Date.now() - 86400000 * 7 },
+          { id: "r2", authorId: "u2", authorName: "David L.", rating: 5, text: "Clear communication and on-time delivery. Highly recommend.", createdAt: Date.now() - 86400000 * 14 },
+          { id: "r3", authorId: "u3", authorName: "Maya K.", rating: 5, text: "A trusted partner for our team. Ollin has streamlined our workflow.", createdAt: Date.now() - 86400000 * 21 },
+        ],
+      },
+    },
+  },
+  {
+    id: "emil-cv",
+    type: "cv",
+    order: 1,
+    visible: true,
+    config: {
+      cv: {
+        experience: [
+          { id: "e1", title: "Founder", company: "Ollin", period: "2024 – Present", description: "Product, strategy, and growth." },
+          { id: "e2", title: "Product Lead", company: "Tech Co", period: "2020 – 2024", description: "Shipped multiple 0→1 products." },
+        ],
+        education: [{ id: "ed1", school: "University", degree: "B.Sc. Computer Science", period: "2016 – 2020" }],
+        skills: ["Product", "Strategy", "React", "Systems"],
+      },
+    },
+  },
+  {
+    id: "emil-social",
+    type: "socialBio",
+    order: 2,
+    visible: true,
+    config: {
+      socialBio: {
+        intro: "Connect for projects, talks, or collaboration.",
+        links: [{ id: "l1", label: "LinkedIn", url: "https://linkedin.com" }, { id: "l2", label: "Twitter", url: "https://twitter.com" }],
+      },
+    },
+  },
+];
 
 function loadProfileLocal(): Profile {
   if (typeof window === "undefined") return defaultProfile;
@@ -55,10 +100,19 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
             portfolio: Array.isArray(remote.portfolio) ? remote.portfolio : [],
             projects: Array.isArray(remote.projects) ? remote.projects : [],
             pressMedia: Array.isArray(remote.pressMedia) ? remote.pressMedia : [],
+            blocks: Array.isArray(remote.blocks) ? remote.blocks : [],
           }
         : loadProfileLocal();
       if (!merged.userId || !/^0\d{6}$/.test(merged.userId)) {
         merged.userId = generateUniqueUserId();
+      }
+      if (!merged.name?.trim() && (!merged.blocks || merged.blocks.length === 0) && typeof window !== "undefined" && !localStorage.getItem("ollin_emil_seeded")) {
+        merged.name = "Emil";
+        merged.professionalTitle = "Founder & Product";
+        merged.username = "emil";
+        merged.bio = "Building the future of work and identity. Ollin — one place for tasks, finance, and your professional presence.";
+        merged.blocks = EMIL_BLOCKS;
+        localStorage.setItem("ollin_emil_seeded", "1");
       }
       setProfileState(merged);
       saveProfileLocal(merged);

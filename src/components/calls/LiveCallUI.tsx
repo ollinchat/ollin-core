@@ -11,8 +11,8 @@ export function IncomingCallOverlay() {
   const { fromName, isVideo } = liveCall.call;
   return (
     <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-gray-900/95 p-6" role="dialog" aria-modal="true" aria-label="Incoming call">
-      <div className="w-20 h-20 rounded-full bg-teal-500/20 flex items-center justify-center mb-6">
-        {isVideo ? <Video className="w-10 h-10 text-teal-400" /> : <Phone className="w-10 h-10 text-teal-400" />}
+      <div className="w-20 h-20 rounded-full bg-[#008080]/20 flex items-center justify-center mb-6">
+        {isVideo ? <Video className="w-10 h-10 text-[#008080]" /> : <Phone className="w-10 h-10 text-[#008080]" />}
       </div>
       <p className="text-white text-lg font-medium mb-1">{fromName}</p>
       <p className="text-gray-400 text-sm mb-8">{isVideo ? "Video call" : "Voice call"}</p>
@@ -28,7 +28,7 @@ export function IncomingCallOverlay() {
         <button
           type="button"
           onClick={liveCall.acceptCall}
-          className="w-16 h-16 rounded-full bg-green-500 flex items-center justify-center text-white shadow-lg hover:bg-green-600"
+          className="w-16 h-16 rounded-full bg-[#008080] flex items-center justify-center text-white shadow-lg hover:bg-[#006666]"
           aria-label="Accept"
         >
           <Phone className="w-8 h-8 rotate-[135deg]" />
@@ -52,7 +52,11 @@ export function ActiveCallFloating() {
     return () => {
       if (localVideoRef.current) localVideoRef.current.srcObject = null;
     };
-  }, [liveCall?.call?.type, liveCall?.call?.screenStream, liveCall?.call?.localStream]);
+  }, [
+    liveCall?.call?.type,
+    liveCall?.call?.type === "active" ? (liveCall.call as { screenStream?: MediaStream | null }).screenStream : undefined,
+    liveCall?.call?.type === "active" ? (liveCall.call as { localStream?: MediaStream | null }).localStream : undefined,
+  ]);
 
   if (!liveCall?.call || liveCall.call.type !== "active") return null;
   const { contactName, isVideo, localStream, screenStream } = liveCall.call;
@@ -69,8 +73,8 @@ export function ActiveCallFloating() {
           className="w-full h-full object-cover"
         />
         {!isVideo && (
-          <div className="absolute inset-0 flex items-center justify-center bg-teal-900/80">
-            <Phone className="w-12 h-12 text-teal-300 rotate-[135deg]" />
+          <div className="absolute inset-0 flex items-center justify-center bg-[#008080]/80">
+            <Phone className="w-12 h-12 text-white/90 rotate-[135deg]" />
           </div>
         )}
         <p className="absolute bottom-1 left-2 text-white text-xs truncate max-w-[90%]">{contactName}</p>

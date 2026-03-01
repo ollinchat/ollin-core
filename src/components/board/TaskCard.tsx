@@ -6,32 +6,64 @@ import { useLocale } from "@/contexts/LocaleContext";
 import { useBoard } from "@/contexts/BoardContext";
 import { useProfile } from "@/contexts/ProfileContext";
 import { t } from "@/lib/translations";
-import type { BoardTask, ChecklistItem } from "@/lib/board-types";
+import type { BoardTask, ChecklistItem, TaskAttachment, TaskComment } from "@/lib/board-types";
 import type { Contact } from "@/contexts/ContactsContext";
-import { Check, ChevronDown, ChevronUp, User, Users } from "lucide-react";
+import { UserAvatar } from "@/components/ui/UserAvatar";
+import { UserSelector, buildInternalUsers } from "./UserSelector";
+import { MediaToolbox } from "./MediaToolbox";
+import { Check, ChevronDown, ChevronUp, Trash2, Archive, Bell, MessageSquare } from "lucide-react";
 
 type TaskCardProps = {
   task: BoardTask;
   kind: "given" | "received";
   selected?: boolean;
   onToggleSelect?: () => void;
-  /** Resolve assigneeId/observerIds to names */
   contacts?: Contact[];
 };
 
 export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }: TaskCardProps) {
-  const assigneeName = task.assigneeId && contacts.length ? (contacts.find((c) => c.id === task.assigneeId)?.name || contacts.find((c) => c.id === task.assigneeId)?.email || task.otherParty) : task.otherParty;
-  const observerNames = (task.observerIds || [])
-    .map((id) => contacts.find((c) => c.id === id)?.name || contacts.find((c) => c.id === id)?.email)
-    .filter(Boolean) as string[];
   const { locale } = useLocale();
   const { profile } = useProfile();
-  const { setTaskDone, updateGivenTask, updateReceivedTask, notifySenderTaskDone } = useBoard();
+  const {
+    setTaskDone,
+    updateGivenTask,
+    updateReceivedTask,
+    removeGivenTask,
+    removeReceivedTask,
+    archiveGivenTask,
+    archiveReceivedTask,
+    notifySenderTaskDone,
+    pingAssignees,
+  } = useBoard();
   const [expanded, setExpanded] = useState(true);
-  /** Only the primary assignee can mark the task done; observers cannot. */
-  const canCheck = !task.assigneeUserId || profile?.userId === task.assigneeUserId;
+  const [commentText, setCommentText] = useState("");
+  const [commentAttachments, setCommentAttachments] = useState<TaskAttachment[]>([]);
+
+  const internalUsers = buildInternalUsers(profile, contacts);
+  const legacyAssigneeIds = task.assigneeUserId ? [task.assigneeUserId] : [];
+  const assigneeIds = task.assigneeIds && task.assigneeIds.length > 0 ? task.assigneeIds : legacyAssigneeIds;
+  const assignees = assigneeIds
+    .map((id) => internalUsers.find((u) => u.userId === id))
+    .filter(Boolean);
+
+  const canCheck =
+    kind === "received"
+      ? true
+      : assigneeIds.length === 0
+        ? true
+        : Boolean(profile?.userId && assigneeIds.includes(profile.userId));
+  const isCreator = !task.creatorId || profile?.userId === task.creatorId;
+
+  /** GIVEN: creator = full menu; assignee = only Media. RECEIVED: current user = toggle + Media + Reply only */
+  const canUseMedia = kind === "given" ? (isCreator || canCheck) : true;
+  const canEditAssign = kind === "given" && isCreator;
+  const canDeleteArchive = kind === "given" && isCreator;
+  const canComment =
+    Boolean(profile?.userId) && (isCreator || kind === "received" || assigneeIds.includes(profile!.userId!));
 
   const updateTask = kind === "given" ? updateGivenTask : updateReceivedTask;
+  const removeTask = kind === "given" ? removeGivenTask : removeReceivedTask;
+  const archiveTask = kind === "given" ? archiveGivenTask : archiveReceivedTask;
 
   const handleDoneChange = (checked: boolean) => {
     setTaskDone(kind, task.id, checked);
@@ -58,75 +90,194 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
     updateTask(task.id, { checklist: [...task.checklist, newItem] });
   };
 
+  const addTaskAttachment = (att: Omit<TaskAttachment, "id" | "createdAt">) => {
+    const newAtt: TaskAttachment = {
+      ...att,
+      id: crypto.randomUUID(),
+      createdAt: Date.now(),
+    };
+    updateTask(task.id, { attachments: [...(task.attachments ?? []), newAtt] });
+  };
+
+  const addChecklistItemAttachment = (itemId: string, att: Omit<TaskAttachment, "id" | "createdAt">) => {
+    const newAtt: TaskAttachment = {
+      ...att,
+      id: crypto.randomUUID(),
+      createdAt: Date.now(),
+    };
+    const next = task.checklist.map((c) =>
+      c.id === itemId ? { ...c, attachments: [...(c.attachments ?? []), newAtt] } : c
+    );
+    updateTask(task.id, { checklist: next });
+  };
+
+  const addCommentAttachment = (att: Omit<TaskAttachment, "id" | "createdAt">) => {
+    const newAtt: TaskAttachment = {
+      ...att,
+      id: crypto.randomUUID(),
+      createdAt: Date.now(),
+    };
+    setCommentAttachments((prev) => [...prev, newAtt]);
+  };
+
+  const comments: TaskComment[] = (task.comments as TaskComment[] | undefined) ??
+    ((task.replies as unknown as TaskComment[] | undefined) ?? []);
+
+  const submitComment = () => {
+    const text = commentText.trim();
+    if (!text || !profile?.userId) return;
+    const newComment: TaskComment = {
+      id: crypto.randomUUID(),
+      userId: profile.userId,
+      text,
+      attachments: commentAttachments.length > 0 ? commentAttachments : undefined,
+      createdAt: Date.now(),
+    };
+    updateTask(task.id, { comments: [...comments, newComment] });
+    setCommentText("");
+    setCommentAttachments([]);
+  };
+
   return (
     <motion.div
       layout
       initial={false}
       transition={{ type: "spring", stiffness: 300, damping: 30 }}
-      className={`rounded-2xl bg-white overflow-hidden border-0 ${
+      className={`rounded-sm bg-white overflow-hidden border border-gray-200 ${
         selected ? "ring-2 ring-accent/30 shadow-glow-subtle" : "shadow-soft"
       } ${task.done ? "shadow-glow-subtle" : ""}`}
     >
-      <div className="p-3 flex items-start gap-3">
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => setExpanded((e) => !e)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") setExpanded((x) => !x);
+        }}
+        className="w-full p-3 flex items-start gap-3 text-left hover:bg-gray-50/50 transition-colors cursor-pointer"
+        aria-expanded={expanded}
+      >
         {onToggleSelect != null && (
           <button
             type="button"
-            onClick={onToggleSelect}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSelect();
+            }}
             className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-lg border-2 border-gray-300 flex items-center justify-center hover:border-accent transition-colors"
             aria-label={selected ? "Deselect" : "Select for summary"}
           >
             {selected && <Check className="w-3 h-3 text-accent" />}
           </button>
         )}
-        <label className={`flex-1 min-w-0 flex items-start gap-2 ${canCheck ? "cursor-pointer" : "cursor-not-allowed"}`}>
-          <motion.span whileTap={canCheck ? { scale: 0.9 } : undefined} transition={{ type: "spring", stiffness: 400, damping: 25 }} className="flex-shrink-0 mt-0.5">
-            <input
-              type="checkbox"
-              checked={task.done}
-              onChange={(e) => canCheck && handleDoneChange(e.target.checked)}
-              disabled={!canCheck}
-              title={!canCheck ? (locale === "he" ? "רק המבצע יכול לסמן כהושלם" : "Only the assignee can mark done") : undefined}
-              className="w-5 h-5 rounded-md border-2 border-gray-300 text-accent focus:ring-accent accent-accent disabled:opacity-60 disabled:cursor-not-allowed"
-            />
-          </motion.span>
-          <div className="min-w-0 flex-1">
-            <span className={`font-medium ${task.done ? "text-gray-500 line-through" : "text-gray-900"}`}>
-              {task.title || "Untitled task"}
-            </span>
-            {(assigneeName || observerNames.length > 0) && (
-              <p className="text-xs text-gray-500 mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
-                {assigneeName && (
-                  <span className="flex items-center gap-1">
-                    <User className="w-3 h-3" />
-                    {kind === "given" ? "Assignee:" : "From:"} {assigneeName}
-                  </span>
-                )}
-                {observerNames.length > 0 && (
-                  <span className="flex items-center gap-1">
-                    <Users className="w-3 h-3" />
-                    Observers: {observerNames.join(", ")}
-                  </span>
-                )}
+        <motion.span
+          whileTap={canCheck ? { scale: 0.9 } : undefined}
+          transition={{ type: "spring", stiffness: 400, damping: 25 }}
+          className="flex-shrink-0 mt-0.5"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <input
+            type="checkbox"
+            checked={task.done}
+            onChange={(e) => canCheck && handleDoneChange(e.target.checked)}
+            disabled={!canCheck}
+            title={!canCheck ? (locale === "he" ? "רק המבצע יכול לסמן כהושלם" : "Only assignees can mark done") : undefined}
+            className="w-5 h-5 rounded-sm border-2 border-gray-300 text-accent focus:ring-accent accent-accent disabled:opacity-60 disabled:cursor-not-allowed"
+          />
+        </motion.span>
+        <div className="min-w-0 flex-1 flex flex-col gap-1">
+          <span className={`font-medium ${task.done ? "text-gray-500 line-through" : "text-gray-900"}`}>
+            {task.title || "Untitled task"}
+          </span>
+          {canEditAssign ? (
+            <div onClick={(e) => e.stopPropagation()}>
+              <UserSelector
+                users={internalUsers}
+                multiple
+                multipleValue={assigneeIds}
+                onChange={() => {}}
+                onMultipleChange={(userIds) => {
+                  updateTask(task.id, {
+                    assigneeIds: userIds,
+                    assigneeUserId: userIds[0],
+                  });
+                }}
+                locale={locale}
+                placeholder={locale === "he" ? "בחר משתמשים" : "Select users"}
+              />
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {assignees.length > 0 ? (
+                assignees.map((u) => (
+                  <UserAvatar key={u!.userId} name={u!.name} email={u!.email} imageUrl={u!.avatar} size="sm" />
+                ))
+              ) : (
+                <UserAvatar email={task.otherParty} size="sm" />
+              )}
+              <p className="text-xs text-gray-500 truncate">
+                {kind === "given" ? (locale === "he" ? "מבצעים:" : "Assignees:") : (locale === "he" ? "מאת:" : "From:")}{" "}
+                {assignees.length > 0 ? assignees.map((u) => u!.name).join(", ") : task.otherParty}
               </p>
-            )}
-            {!assigneeName && !observerNames.length && task.otherParty && (
-              <p className="text-xs text-gray-500 mt-0.5">{kind === "given" ? "To:" : "From:"} {task.otherParty}</p>
-            )}
-          </div>
-        </label>
+            </div>
+          )}
+        </div>
         {task.done && task.doneNotifiedAt != null && (
           <span className="text-xs text-accent flex items-center gap-0.5 flex-shrink-0" title="Sender notified">
             {t(locale, "board.notified")}
           </span>
         )}
+        <span onClick={(e) => e.stopPropagation()}>
+          <MediaToolbox
+            onAddAttachment={addTaskAttachment}
+            locale={locale}
+            disabled={!canUseMedia}
+            count={(task.attachments ?? []).length}
+          />
+        </span>
         <button
           type="button"
-          onClick={() => setExpanded((e) => !e)}
-          className="p-1 text-gray-500 hover:bg-gray-100 rounded"
-          aria-expanded={expanded}
+          onClick={(e) => {
+            e.stopPropagation();
+            pingAssignees(kind, task.id, task.title);
+          }}
+          className="p-1.5 rounded-sm text-[#008080] hover:bg-[#008080]/10 flex-shrink-0"
+          title={locale === "he" ? "תזכורת למבצעים" : "Ping assignees"}
+          aria-label="Ping"
         >
-          {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          <Bell className="w-4 h-4" />
         </button>
+        {canDeleteArchive && (
+          <>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                archiveTask(task.id);
+              }}
+              className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-sm flex-shrink-0"
+              title={locale === "he" ? "ארכב" : "Archive"}
+              aria-label="Archive"
+            >
+              <Archive className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                removeTask(task.id);
+              }}
+              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-sm flex-shrink-0"
+              title={locale === "he" ? "מחק" : "Delete"}
+              aria-label="Delete"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </>
+        )}
+        <span className="p-1 text-gray-500 rounded-sm flex-shrink-0">
+          {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </span>
       </div>
 
       {checklistTotal > 0 && (
@@ -152,47 +303,60 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
               <input
                 type="checkbox"
                 checked={item.done}
-                onChange={(e) => toggleChecklistItem(item.id, e.target.checked)}
-                className="w-4 h-4 rounded border-gray-300 text-accent accent-accent"
+                onChange={(e) => canCheck && toggleChecklistItem(item.id, e.target.checked)}
+                disabled={!canCheck}
+                className="w-4 h-4 rounded-sm border-gray-300 text-accent accent-accent"
               />
-              <input
-                type="text"
-                value={item.label}
-                onChange={(e) => {
-                  const next = task.checklist.map((c) =>
-                    c.id === item.id ? { ...c, label: e.target.value } : c
-                  );
-                  updateTask(task.id, { checklist: next });
-                }}
-                placeholder="Sub-task"
-                className="flex-1 min-w-0 text-sm rounded-lg border border-gray-200 px-2 py-1"
-              />
-              <input
-                type="text"
-                value={item.assignedTo ?? ""}
-                onChange={(e) => {
-                  const next = task.checklist.map((c) =>
-                    c.id === item.id ? { ...c, assignedTo: e.target.value || undefined } : c
-                  );
-                  updateTask(task.id, { checklist: next });
-                }}
-                placeholder="Assign (email)"
-                className="w-24 text-xs rounded border border-gray-200 px-2 py-1"
-                title="Assign to (email/user)"
+              {canEditAssign ? (
+                <>
+                  <input
+                    type="text"
+                    value={item.label}
+                    onChange={(e) => {
+                      const next = task.checklist.map((c) =>
+                        c.id === item.id ? { ...c, label: e.target.value } : c
+                      );
+                      updateTask(task.id, { checklist: next });
+                    }}
+                    placeholder="Sub-task"
+                    className="flex-1 min-w-0 text-sm rounded-sm border border-gray-200 px-2 py-1"
+                  />
+                  <UserSelector
+                    users={internalUsers}
+                    value={item.assignedTo}
+                    onChange={(userId) => {
+                      const next = task.checklist.map((c) =>
+                        c.id === item.id ? { ...c, assignedTo: userId } : c
+                      );
+                      updateTask(task.id, { checklist: next });
+                    }}
+                    locale={locale}
+                  />
+                </>
+              ) : (
+                <span className="flex-1 min-w-0 text-sm text-gray-700">{item.label || "—"}</span>
+              )}
+              <MediaToolbox
+                onAddAttachment={(att) => addChecklistItemAttachment(item.id, att)}
+                locale={locale}
+                disabled={!canUseMedia}
+                count={(item.attachments ?? []).length}
               />
             </div>
           ))}
-          <button
-            type="button"
-            onClick={addChecklistItem}
-            className="text-xs text-accent hover:underline"
-          >
-            + Add sub-task
-          </button>
+          {canEditAssign && (
+            <button
+              type="button"
+              onClick={addChecklistItem}
+              className="text-xs text-accent hover:underline"
+            >
+              + Add sub-task
+            </button>
+          )}
         </div>
       )}
 
-      {expanded && task.checklist.length === 0 && (
+      {expanded && task.checklist.length === 0 && canEditAssign && (
         <div className="border-t border-gray-100 px-3 py-2">
           <button
             type="button"
@@ -201,6 +365,53 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
           >
             + Add checklist
           </button>
+        </div>
+      )}
+
+      {expanded && (
+        <div className="border-t border-gray-100 px-3 py-2 bg-gray-50/50 space-y-2">
+          <p className="text-xs font-medium text-gray-600 flex items-center gap-1">
+            <MessageSquare className="w-3.5 h-3.5" />
+            {locale === "he" ? "תגובות" : "Comments"}
+          </p>
+          {comments.length > 0 ? (
+            <ul className="space-y-1.5">
+              {comments.map((c) => (
+                <li key={c.id} className="text-xs text-gray-700 pl-2 border-l-2 border-[#008080]/30">
+                  {c.text}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs text-gray-400">{locale === "he" ? "אין תגובות עדיין." : "No comments yet."}</p>
+          )}
+
+          {canComment && (
+            <div className="flex gap-2 items-center">
+              <input
+                type="text"
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && submitComment()}
+                placeholder={locale === "he" ? "כתוב עדכון..." : "Write an update..."}
+                className="flex-1 min-w-0 text-sm rounded-sm border border-gray-200 px-2 py-1.5 bg-white"
+              />
+              <MediaToolbox
+                onAddAttachment={addCommentAttachment}
+                locale={locale}
+                disabled={!canUseMedia}
+                count={commentAttachments.length}
+              />
+              <button
+                type="button"
+                onClick={submitComment}
+                disabled={!commentText.trim()}
+                className="px-2.5 py-1.5 rounded-sm bg-[#008080] text-white text-sm font-medium disabled:opacity-50"
+              >
+                {locale === "he" ? "שלח" : "Send"}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </motion.div>

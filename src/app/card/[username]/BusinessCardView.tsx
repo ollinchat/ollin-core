@@ -84,26 +84,26 @@ export function BusinessCardView({ profile }: { profile: Profile }) {
   ].filter((s): s is { href: string; icon?: typeof Linkedin; label: string } => !!s.href?.trim());
 
   return (
-    <div className="fixed inset-0 flex flex-col items-center justify-center p-2 sm:p-3 gap-1 sm:gap-2 bg-gradient-to-b from-teal-50/50 to-amber-50/30 overflow-hidden overscroll-none touch-none w-full max-w-[100vw] box-border" style={{ height: "100vh", maxHeight: "100vh", minHeight: "100vh" }} dir={dir}>
+    <div className="fixed inset-0 flex flex-col items-center justify-center p-2 sm:p-3 gap-1 sm:gap-2 bg-gradient-to-b from-[#008080]/[0.08] to-amber-50/30 overflow-hidden overscroll-none touch-none w-full max-w-[100vw] box-border" style={{ height: "100vh", maxHeight: "100vh", minHeight: "100vh" }} dir={dir}>
       {/* Card: exactly one mobile screen (100vh), no scroll — perfect for sharing */}
       <article
         ref={cardRef}
-        className="bg-white border-2 border-teal-100 shadow-xl overflow-hidden flex flex-col rounded-2xl flex-shrink-0 w-full max-w-[min(400px,calc(100vw-1rem))] max-h-[calc(100vh-1.5rem)] min-h-0"
+        className="bg-white border-2 border-[#008080]/20 shadow-xl overflow-hidden flex flex-col rounded-2xl flex-shrink-0 w-full max-w-[min(400px,calc(100vw-1rem))] max-h-[calc(100vh-1.5rem)] min-h-0"
         style={{ aspectRatio: "4/5" }}
       >
         <div className="flex-1 min-h-0 px-4 pt-4 pb-3 flex flex-col items-center overflow-hidden">
-          <div className="w-16 h-16 rounded-xl border-2 border-teal-200 bg-teal-50 overflow-hidden flex-shrink-0">
+          <div className="w-16 h-16 rounded-xl border-2 border-[#008080]/30 bg-[#008080]/10 overflow-hidden flex-shrink-0">
             {profile.profileImage ? (
               <img src={profile.profileImage} alt="" className="w-full h-full object-cover" />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-teal-600 text-2xl font-bold">
+              <div className="w-full h-full flex items-center justify-center text-[#008080] text-2xl font-bold">
                 {profile.name?.slice(0, 1)?.toUpperCase() || "?"}
               </div>
             )}
           </div>
           <h1 className="mt-2 text-lg font-bold text-gray-900 text-center truncate w-full px-1">{profile.name || "—"}</h1>
           {profile.professionalTitle && (
-            <p className="text-teal-600 font-medium text-center text-sm truncate w-full px-1">{profile.professionalTitle}</p>
+            <p className="text-[#008080] font-medium text-center text-sm truncate w-full px-1">{profile.professionalTitle}</p>
           )}
           {socialLinks.length > 0 && (
             <div className="mt-2 flex gap-2 justify-center">
@@ -117,27 +117,27 @@ export function BusinessCardView({ profile }: { profile: Profile }) {
           {profile.bio && <p className="mt-2 text-gray-600 text-xs leading-snug text-center line-clamp-3 px-1">{profile.bio}</p>}
           <div className="mt-2 flex flex-wrap gap-1.5 justify-center">
             {profile.phone && (
-              <a href={`tel:${profile.phone}`} className="inline-flex items-center gap-1 rounded-full bg-teal-50 px-2.5 py-1 text-xs text-gray-800">
-                <Phone className="w-3 h-3 text-teal-600" />
+              <a href={`tel:${profile.phone}`} className="inline-flex items-center gap-1 rounded-full bg-[#008080]/10 px-2.5 py-1 text-xs text-gray-800">
+                <Phone className="w-3 h-3 text-[#008080]" />
                 {profile.phone}
               </a>
             )}
             {profile.email && (
-              <a href={`mailto:${profile.email}`} className="inline-flex items-center gap-1 rounded-full bg-teal-50 px-2.5 py-1 text-xs text-gray-800 truncate max-w-[180px]">
-                <Mail className="w-3 h-3 text-teal-600 shrink-0" />
+              <a href={`mailto:${profile.email}`} className="inline-flex items-center gap-1 rounded-full bg-[#008080]/10 px-2.5 py-1 text-xs text-gray-800 truncate max-w-[180px]">
+                <Mail className="w-3 h-3 text-[#008080] shrink-0" />
                 <span className="truncate">{profile.email}</span>
               </a>
             )}
             {profile.website && (
-              <a href={profile.website.startsWith("http") ? profile.website : `https://${profile.website}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-full bg-teal-50 px-2.5 py-1 text-xs text-gray-800 truncate max-w-[160px]">
-                <Globe className="w-3 h-3 text-teal-600 shrink-0" />
+              <a href={profile.website.startsWith("http") ? profile.website : `https://${profile.website}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-full bg-[#008080]/10 px-2.5 py-1 text-xs text-gray-800 truncate max-w-[160px]">
+                <Globe className="w-3 h-3 text-[#008080] shrink-0" />
                 <span className="truncate">{profile.website.replace(/^https?:\/\//, "")}</span>
               </a>
             )}
           </div>
-          <div className="mt-auto pt-3 border-t border-teal-100 w-full flex-shrink-0">
+          <div className="mt-auto pt-3 border-t border-[#008080]/20 w-full flex-shrink-0">
             <div className="grid grid-cols-2 gap-2">
-              <button type="button" onClick={handleShareAsImage} disabled={sharingImage} className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-teal-500 text-white text-sm font-medium hover:bg-teal-600 disabled:opacity-70">
+              <button type="button" onClick={handleShareAsImage} disabled={sharingImage} className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-[#008080] text-white text-sm font-medium hover:bg-[#006666] disabled:opacity-70">
                 <ImageIcon className="w-4 h-4" />
                 {locale === "he" ? "שתף כתמונה" : "Share as Image"}
               </button>
@@ -145,7 +145,7 @@ export function BusinessCardView({ profile }: { profile: Profile }) {
                 <Share2 className="w-4 h-4" />
                 {t(locale, "card.shareCard")}
               </button>
-              <button type="button" onClick={handleCopyProfileLink} className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-teal-50 text-teal-700 text-sm font-medium hover:bg-teal-100">
+              <button type="button" onClick={handleCopyProfileLink} className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-[#008080]/10 text-[#006666] text-sm font-medium hover:bg-[#008080]/20">
                 <Link2 className="w-4 h-4" />
                 {copied === "profile" ? (locale === "he" ? "הועתק!" : "Copied!") : (locale === "he" ? "קישור לפרופיל" : "Profile link")}
               </button>
