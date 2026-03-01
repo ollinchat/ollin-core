@@ -7,6 +7,7 @@ import { useNotes } from "@/contexts/NotesContext";
 import { useArchitect } from "@/contexts/ArchitectContext";
 import { useBoard } from "@/contexts/BoardContext";
 import { useProfile } from "@/contexts/ProfileContext";
+import { useChat } from "@/contexts/ChatEngineContext";
 import {
   CircleCheck,
   ScanLine,
@@ -52,29 +53,6 @@ type BrainSuggestion = {
   actionHe: string;
 };
 
-type AIMessage = { id: string; role: "user" | "assistant"; text: string; createdAt: number };
-
-/** Scan AI response for [TASK] title or JSON like {"task":"..."}. Returns task title or null. */
-function parseTaskFromAssistantMessage(text: string): string | null {
-  const trimmed = text.trim();
-  const taskTag = "[TASK]";
-  const idx = trimmed.indexOf(taskTag);
-  if (idx !== -1) {
-    const after = trimmed.slice(idx + taskTag.length).trim();
-    const end = after.indexOf("\n");
-    const title = (end === -1 ? after : after.slice(0, end)).trim();
-    if (title.length > 0) return title;
-  }
-  try {
-    const obj = JSON.parse(trimmed) as { task?: string; title?: string };
-    const t = obj?.task ?? obj?.title;
-    if (typeof t === "string" && t.trim()) return t.trim();
-  } catch {
-    // Not JSON, ignore
-  }
-  return null;
-}
-
 type FeatureItem = { key: string; labelEn: string; labelHe: string; icon: typeof ScanLine; href: string };
 
 const FEATURE_GRID: FeatureItem[] = [
@@ -103,26 +81,22 @@ export function ToolFanPanel({ onOpenBoard: _onOpenBoard }: ToolFanPanelProps) {
     setPredictivePaymentEnabled,
     setExploreBridgeEnabled,
   } = useArchitect();
-  const { addGivenTask } = useBoard();
+  useBoard();
   const { profile } = useProfile();
   const currentUserId = profile?.userId ?? "";
   const defaultFolderId = folders[0]?.id ?? "default";
   const recentNotes = (defaultFolderId ? getNotesInFolder(defaultFolderId) : []).slice(0, 12);
   const isHe = locale === "he";
 
+  const { messages, sendMessage } = useChat();
   const [view, setView] = useState<"chat" | "tools">("chat");
-  const [messages, setMessages] = useState<AIMessage[]>([]);
   const [input, setInput] = useState("");
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [brainOpen, setBrainOpen] = useState(false);
-  const [taskAddedToast, setTaskAddedToast] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Scroll to bottom when messages change (chat scroll fix)
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollIntoView({ behavior: "smooth" });
-    }
+    if (scrollRef.current) scrollRef.current.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   // Evolution Suggestions: Stage content — populated by Self-Optimization Scan (no mocks; real ArchitectContext)
@@ -204,45 +178,9 @@ export function ToolFanPanel({ onOpenBoard: _onOpenBoard }: ToolFanPanelProps) {
   const handleSend = useCallback(() => {
     const text = input.trim();
     if (!text) return;
-    const userMsg: AIMessage = { id: crypto.randomUUID(), role: "user", text, createdAt: Date.now() };
-    setMessages((prev) => [...prev, userMsg]);
     setInput("");
-
-    const lower = text.toLowerCase();
-    const wantsTask =
-      lower.includes("task") ||
-      lower.includes("recommend") ||
-      lower.includes("add ") ||
-      lower.includes("משימה") ||
-      lower.includes("הוסף משימה") ||
-      lower.includes("המלץ");
-    const replyText = wantsTask
-      ? (isHe
-          ? "הנה משימה מומלצת:\n\n[TASK] Set up marketing funnel\n\nנוספה ללוח המשימות שלך."
-          : "Here’s a recommended task:\n\n[TASK] Set up marketing funnel\n\nAdded to your Board.")
-      : (isHe ? "התקבל. אולין כאן לעזור — חיבור מלא יגיע בקרוב." : "Got it. Ollin is here to help — full connection coming soon.");
-
-    const reply: AIMessage = {
-      id: crypto.randomUUID(),
-      role: "assistant",
-      text: replyText,
-      createdAt: Date.now() + 1,
-    };
-    setMessages((prev) => [...prev, reply]);
-
-    const taskTitle = parseTaskFromAssistantMessage(replyText);
-    if (taskTitle && currentUserId) {
-      addGivenTask({
-        title: taskTitle,
-        otherParty: "—",
-        checklist: [],
-        done: false,
-        creatorId: currentUserId,
-      });
-      setTaskAddedToast(true);
-      setTimeout(() => setTaskAddedToast(false), 3000);
-    }
-  }, [input, isHe, currentUserId, addGivenTask]);
+    sendMessage(text);
+  }, [input, sendMessage]);
 
   const handleNewNote = () => {
     if (!defaultFolderId) return;
@@ -390,18 +328,6 @@ export function ToolFanPanel({ onOpenBoard: _onOpenBoard }: ToolFanPanelProps) {
 
   return (
     <>
-      {/* Toast: task added to board from chat */}
-      {taskAddedToast && (
-        <div
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 px-4 py-3 rounded-xl bg-[#008080] text-white text-sm font-medium shadow-lg border border-[#006666]/30"
-          role="status"
-          aria-live="polite"
-        >
-          <ListTodo className="w-5 h-5 shrink-0" strokeWidth={2} />
-          {isHe ? "משימה נוספה ללוח" : "Task Added to Board"}
-        </div>
-      )}
-
       {/* Brain panel overlay */}
       {brainOpen && (
         <>
@@ -470,21 +396,36 @@ export function ToolFanPanel({ onOpenBoard: _onOpenBoard }: ToolFanPanelProps) {
           )}
           <div className="flex flex-col space-y-5 lg:space-y-6 max-w-2xl mx-auto flex-1">
             {messages.map((m) => (
-              <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                <div
-                  className={`max-w-[85%] lg:max-w-[75%] rounded-2xl px-4 py-3 lg:px-5 lg:py-3.5 ${
-                    m.role === "user" ? "bg-[#008080] text-white" : "bg-white border border-gray-200 text-gray-900 shadow-sm"
-                  }`}
-                >
-                  {m.role === "assistant" && (
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <CircleCheck className="w-4 h-4 text-[#008080] shrink-0" strokeWidth={2} />
-                      <span className="text-xs font-medium text-gray-500">Ollin Architect</span>
-                    </div>
-                  )}
-                  <p className="text-sm lg:text-base whitespace-pre-wrap break-words leading-relaxed">{m.text}</p>
+              "role" in m ? (
+                <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                  <div
+                    className={`max-w-[85%] lg:max-w-[75%] rounded-2xl px-4 py-3 lg:px-5 lg:py-3.5 ${
+                      m.role === "user" ? "bg-[#008080] text-white" : "bg-white border border-gray-200 text-gray-900 shadow-sm"
+                    }`}
+                  >
+                    {m.role === "assistant" && (
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <CircleCheck className="w-4 h-4 text-[#008080] shrink-0" strokeWidth={2} />
+                        <span className="text-xs font-medium text-gray-500">Ollin Architect</span>
+                      </div>
+                    )}
+                    <p className="text-sm lg:text-base whitespace-pre-wrap break-words leading-relaxed">{typeof m.content === "string" ? m.content : ""}</p>
+                  </div>
                 </div>
-              </div>
+              ) : "type" in m && m.type === "taskAdded" ? (
+                <div key={m.id} className="flex justify-center">
+                  <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 px-3 py-1.5 text-xs font-medium">
+                    <ListTodo className="w-4 h-4 shrink-0" strokeWidth={2} />
+                    {isHe ? "נוסף ללוח" : "Added to Board"}: <span className="font-semibold truncate max-w-[180px]">{m.taskTitle}</span>
+                  </div>
+                </div>
+              ) : (
+                <div key={m.id} className="flex justify-start">
+                  <div className="max-w-[85%] rounded-2xl px-4 py-2 bg-gray-100 border border-gray-200 text-gray-600 text-sm">
+                    {"formType" in m ? `[${m.formType}]` : "card"}
+                  </div>
+                </div>
+              )
             ))}
           </div>
           <div ref={scrollRef} aria-hidden />

@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useLocale } from "@/contexts/LocaleContext";
 import { useContacts } from "@/contexts/ContactsContext";
-import { useInternalMessages } from "@/contexts/ChatEngineContext";
+import { useInternalMessages, useChat } from "@/contexts/ChatEngineContext";
 import { useProfile } from "@/contexts/ProfileContext";
 import { useBoard } from "@/contexts/BoardContext";
 import { MessageSquare, Send, Trash2, Search, Camera, Plus, MapPin, FileText, ImagePlus, Forward, ListTodo, CircleCheck, Instagram, Bot, Linkedin, ScanLine, BarChart3, Mic, ChevronLeft, Phone, Video, ClipboardList, CalendarDays, Users, Brain, Ban, UserPlus } from "lucide-react";
@@ -53,8 +53,10 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
   const { profile } = useProfile();
   const { addReceivedTask, given, received } = useBoard();
   const { getConversation, getConversationsWithMeta, deleteConversation, sendText, sendVoice, sendFile, markConversationAsRead } = useInternalMessages();
+  const { messages: aiMessages, sendMessage: sendAiMessage } = useChat();
   const currentUserId = profile?.userId ?? "me";
   const [selectedContactId, setSelectedContactId] = useState<string | null>(preselectedContactId ?? null);
+  const [aiInput, setAiInput] = useState("");
 
   React.useEffect(() => {
     if (preselectedContactId !== undefined) setSelectedContactId(preselectedContactId);
@@ -545,6 +547,39 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
                       </div>
                     </>
                   )}
+            </div>
+          ) : activeChannel === "ollin" && !selectedContactId ? (
+            /* Ollin AI channel: persisted AI chat (localStorage + [TASK] to board) */
+            <div className="flex-1 flex flex-col min-h-0 bg-[#f8f9fa]">
+              <div className="flex-1 overflow-y-auto px-2 py-3 space-y-2">
+                {aiMessages.length === 0 && (
+                  <p className="text-center text-gray-500 text-sm py-6">{isHe ? "שלח הודעה לאולין — משימות יישמרו ללוח." : "Send a message to Ollin — tasks are saved to your board."}</p>
+                )}
+                {aiMessages.map((m) =>
+                  "role" in m ? (
+                    <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                      <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${m.role === "user" ? "bg-[#008080] text-white" : "bg-white border border-gray-200 text-gray-800"}`}>
+                        {typeof m.content === "string" ? m.content : ""}
+                      </div>
+                    </div>
+                  ) : "type" in m && m.type === "taskAdded" ? (
+                    <div key={m.id} className="flex justify-center">
+                      <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 px-3 py-1.5 text-xs font-medium">
+                        <ListTodo className="w-4 h-4 shrink-0" strokeWidth={2} />
+                        {isHe ? "נוסף ללוח" : "Added to Board"}: <span className="font-semibold truncate max-w-[140px]">{m.taskTitle}</span>
+                      </div>
+                    </div>
+                  ) : null
+                )}
+              </div>
+              <div className="flex-shrink-0 p-2 border-t border-gray-100 bg-white/95">
+                <div className="flex gap-1.5 rounded-xl border border-gray-200 bg-white pl-2 pr-1.5 py-2">
+                  <input type="text" value={aiInput} onChange={(e) => setAiInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); const t = aiInput.trim(); if (t) { setAiInput(""); sendAiMessage(t); } } }} placeholder={isHe ? "הודעה לאולין..." : "Message Ollin..."} className="flex-1 min-w-0 bg-transparent px-2 py-1.5 text-sm text-gray-900 placeholder-gray-400 outline-none" />
+                  <button type="button" onClick={() => { const t = aiInput.trim(); if (t) { setAiInput(""); sendAiMessage(t); } }} className="p-2.5 bg-[#008080] text-white rounded-xl shrink-0" aria-label="Send">
+                    <Send className="w-4 h-4" strokeWidth={2} />
+                  </button>
+                </div>
+              </div>
             </div>
           ) : (
             /* List view: full-width conversation list (no sidebar) */

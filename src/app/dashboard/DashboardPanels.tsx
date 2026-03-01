@@ -49,9 +49,9 @@ export function DashboardPanels() {
       <ActiveCallFloating />
       <OutgoingCallBar />
 
-      {/* Main content: flex child that shrinks; each panel has internal scroll zone */}
+      {/* Main content: flex child that shrinks; padding-bottom keeps bottom nav visible */}
       <div
-        className="flex-1 min-h-0 min-w-0 overflow-hidden flex flex-col p-3 sm:p-4 bg-background"
+        className="flex-1 min-h-0 min-w-0 overflow-hidden flex flex-col p-3 sm:p-4 pb-2 bg-background"
         data-architect-layout={architectState.adaptiveLayoutMode}
       >
         {safePanelIndex === 0 && <div className="flex-1 min-h-0 flex flex-col"><PaymentsPanel onOpenBoard={() => setPanelIndexSafe(3)} /></div>}
@@ -69,8 +69,8 @@ export function DashboardPanels() {
         )}
       </div>
 
-      {/* Bottom nav: fixed at bottom of shell, above content */}
-      <nav className="flex-shrink-0 min-h-[56px] flex items-center border-t border-gray-200 bg-white/90 backdrop-blur-xl rounded-t-xl z-[100]">
+      {/* Bottom nav: always visible and functional */}
+      <nav className="flex-shrink-0 min-h-[56px] flex items-center justify-around border-t border-gray-200 bg-white/95 backdrop-blur-xl rounded-t-xl z-[100] shadow-[0_-2px_10px_rgba(0,0,0,0.04)]">
         {tabs.map(({ i, Icon, label }) => {
           const isActive = safePanelIndex === i;
           return (
