@@ -22,6 +22,7 @@ import {
   Scale,
   Send,
   LayoutGrid,
+  ListTodo,
   Brain,
   Sparkles,
   X,
