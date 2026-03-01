@@ -45,17 +45,49 @@ export interface QuoteCardPayload {
   [key: string]: unknown;
 }
 
-/** AI chat message (user, assistant, form, or card). */
+/** AI chat message (user, assistant, form, card, or task-added notification). */
 export type AIMessage =
   | { id: string; role: "user"; content: string }
   | { id: string; role: "assistant"; content: string }
   | { id: string; type: "form"; formType: "poll" | "event" | "task" | "converter" }
   | { id: string; type: "card"; cardType: "quote" | "event"; content: string; payload: QuoteCardPayload | EventCardPayload }
-  | { id: string; role: "assistant"; content: string; status?: "loading" };
+  | { id: string; role: "assistant"; content: string; status?: "loading" }
+  | { id: string; type: "taskAdded"; taskTitle: string };
 
 // --- 2. INTENT PARSING ---
-export const getLastMessageIsTaskIntent = (input: string) => /צריך|משימה|TODO/i.test(input);
-export const parseTaskTitleFromIntent = (input: string) => input.replace(/צריך|משימה|TODO/gi, "").trim();
+/** Prompt trigger: [TASK: title] or [TASK:title] */
+const TASK_TRIGGER_REGEX = /\[TASK\s*:\s*([^\]]+)\]/i;
+/** Explicit phrases (EN + HE) that mean "add a task to the board". */
+const EXPLICIT_TASK_PHRASES = {
+  en: /^(remind me to|add task|create task|add to board|save task|don't forget|remember to)\b|\b(remind me|add task|add to board)\b/i,
+  he: /^(תזכיר|הוסף משימה|צור משימה|רשום|שמור|הוסף ללוח|תזכור)/,
+};
+
+export function parseTaskTrigger(input: string): { title: string } | null {
+  const m = input.trim().match(TASK_TRIGGER_REGEX);
+  if (m) return { title: m[1].trim() || "New task" };
+  return null;
+}
+
+export const getLastMessageIsTaskIntent = (input: string): boolean => {
+  const t = input.trim();
+  if (TASK_TRIGGER_REGEX.test(t)) return true;
+  if (/צריך|משימה|TODO/i.test(t)) return true;
+  if (EXPLICIT_TASK_PHRASES.en.test(t) || EXPLICIT_TASK_PHRASES.he.test(t)) return true;
+  return false;
+};
+
+export const parseTaskTitleFromIntent = (input: string): string => {
+  const trigger = parseTaskTrigger(input);
+  if (trigger) return trigger.title;
+  const stripped = input
+    .replace(TASK_TRIGGER_REGEX, "")
+    .replace(/^(remind me to|add task|create task|add to board|save task|don't forget|remember to)\s*/gi, "")
+    .replace(/^(תזכיר\s*(לי)?|הוסף משימה|צור משימה|רשום|שמור|הוסף ללוח|תזכור\s*(לי)?)\s*/i, "")
+    .replace(/צריך|משימה|TODO/gi, "")
+    .trim();
+  return stripped || "New task";
+};
 export const isDoneIntent = (input: string) => /בוצע|סיימתי|done/i.test(input);
 export const parseDoneIntent = (input: string) => input;
 export const isHandledIntent = (input: string) => false;

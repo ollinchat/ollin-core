@@ -841,6 +841,13 @@ const AIHubPanelInner = forwardRef<AIHubPanelHandle, { locale: "en" | "he"; pane
                       if (data.title) addReceivedTask({ title: data.title, otherParty: "—", checklist: [], done: false });
                     }}
                   />
+                ) : "type" in msg && msg.type === "taskAdded" ? (
+                  <div className="flex justify-center">
+                    <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 px-3 py-1.5 text-xs font-medium shadow-sm">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" aria-hidden />
+                      {locale === "he" ? "נוסף ללוח" : "Added to Board"}: <span className="font-semibold truncate max-w-[180px]">{msg.taskTitle}</span>
+                    </div>
+                  </div>
                 ) : null}
               </div>
             ))}

@@ -216,6 +216,10 @@ export function ChatEngineProvider({ children }: { children: React.ReactNode }) 
     const formTypeToAdd = isEventIntent(content) ? "event" : isPollIntent(content) ? "poll" : null;
     setAiMessages((prev) => {
       historyWithUser = [...prev, userMsg];
+      if (addedTaskTitle) {
+        const taskAddedMsg: AIMessage = { id: crypto.randomUUID(), type: "taskAdded", taskTitle: addedTaskTitle };
+        historyWithUser = [...historyWithUser, taskAddedMsg];
+      }
       if (formTypeToAdd) {
         const formMsg: AIMessage = { id: crypto.randomUUID(), type: "form", formType: formTypeToAdd };
         historyWithUser = [...historyWithUser, formMsg];
