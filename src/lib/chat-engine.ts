@@ -112,11 +112,19 @@ export type OllinContext = {
   overdueBrief?: string;
   /** "We have 2 Price Quotes waiting for approval and 1 Overdue Invoice. Want me to send a reminder to the clients?" */
   financeProactiveBrief?: string;
+  /** Set when a task was just added to the board (human-centric reply). */
+  addedTaskTitle?: string;
 };
 
 export const generateReply = (userInput: string, context?: OllinContext) => generateOllinResponse(userInput, context);
 
 export const generateOllinResponse = (userInput: string, ctx?: OllinContext) => {
+  if (ctx?.addedTaskTitle) {
+    const day = "today";
+    const time = "9:00 AM";
+    return `DONE. I've scheduled your task: '${ctx.addedTaskTitle}' for ${day} at ${time}. Let me know if you need any changes.`;
+  }
+
   const isHebrew = detectLanguage(userInput) === 'he';
   const name = ctx?.userName ?? 'Emil';
   const pending = ctx?.pendingTaskCount ?? 0;

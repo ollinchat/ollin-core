@@ -138,6 +138,17 @@ export function ChatEngineProvider({ children }: { children: React.ReactNode }) 
     setInternalMessages(list);
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      if (aiMessages.length === 0) {
+        const stored = localStorage.getItem("ollin_ai_messages");
+        if (stored && stored !== "[]") return;
+      }
+      saveAIMessages(aiMessages);
+    } catch (_) {}
+  }, [aiMessages]);
+
   const sendMessage = useCallback((content: string) => {
     const lang = detectLanguage(content);
     setDetectedLanguage(lang);
