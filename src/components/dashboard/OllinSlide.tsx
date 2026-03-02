@@ -25,6 +25,14 @@ import {
   ChevronUp,
 } from "lucide-react";
 
+const HIDE_SCROLL_THRESHOLD = 56;
+const SHOW_SCROLL_THRESHOLD = 24;
+const CHAT_BLOCK_HEIGHT = 176;
+const PEEKABOO_DURATION = 0.4;
+const EASE_OUT = [0, 0, 0.2, 1];
+const EASE_SMOOTH = [0.32, 0.72, 0, 1];
+const TRANSITION_MS = 300;
+
 const FEATURE_GRID: { key: string; labelEn: string; labelHe: string; icon: typeof ScanLine; href: string }[] = [
   { key: "scanner", labelEn: "Scanner", labelHe: "סורק", icon: ScanLine, href: "/dashboard" },
   { key: "invoices", labelEn: "Invoices", labelHe: "חשבוניות", icon: FileText, href: "/dashboard/finances/documents" },
@@ -60,11 +68,24 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard: _onOpenBoard }:
 
   const [input, setInput] = useState("");
   const [expanded, setExpanded] = useState(false);
+  const [chatVisible, setChatVisible] = useState(true);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [brainMenuOpen, setBrainMenuOpen] = useState(false);
   const [placeholderDots, setPlaceholderDots] = useState("");
   const topInputRef = useRef<HTMLTextAreaElement>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
+  const dashboardScrollRef = useRef<HTMLDivElement>(null);
+  const lastScrollTopRef = useRef(0);
+
+  const onDashboardScroll = useCallback(() => {
+    const el = dashboardScrollRef.current;
+    if (!el) return;
+    const top = el.scrollTop;
+    const scrollingDown = top > lastScrollTopRef.current;
+    lastScrollTopRef.current = top;
+    if (scrollingDown && top > HIDE_SCROLL_THRESHOLD) setChatVisible(false);
+    else if (!scrollingDown || top <= SHOW_SCROLL_THRESHOLD) setChatVisible(true);
+  }, []);
 
   // Animated "waiting/thinking" dots for placeholder
   useEffect(() => {
@@ -95,10 +116,10 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard: _onOpenBoard }:
     }
   }, [expanded]);
 
-  const slideTransition = { type: "tween" as const, duration: 0.35, ease: [0.32, 0.72, 0, 1] };
+  const slideTransition = { type: "tween" as const, duration: TRANSITION_MS / 1000, ease: EASE_SMOOTH };
   const openChat = useCallback(() => {
     setExpanded(true);
-    setTimeout(() => topInputRef.current?.focus({ preventScroll: true }), 100);
+    setTimeout(() => topInputRef.current?.focus({ preventScroll: true }), TRANSITION_MS + 50);
   }, []);
 
   const inputRow = (
@@ -157,37 +178,50 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard: _onOpenBoard }:
     </div>
   );
 
+  const chatBlockBorder = "border-2 border-[#008080]/20 rounded-2xl shadow-[0_6px_28px_rgba(0,128,128,0.10)]";
+  const chatBlockFocus = "focus-within:border-[#008080]/40 focus-within:shadow-[0_8px_32px_rgba(0,128,128,0.14)]";
+
   return (
     <div className="h-full min-h-0 flex flex-col overflow-hidden rounded-2xl bg-white/70 backdrop-blur-xl border border-[#008080]/10 shadow-[0_8px_32px_rgba(0,128,128,0.06)]">
-      {/* Two-panel slide: dashboard (left) slides out, chat (right) slides in */}
-      <div className="relative flex-1 min-h-0 overflow-hidden" style={{ width: "100%" }}>
-        {/* Panel 1: Dashboard — Hero + Tools + Notes (slides left when expanded) */}
-        <motion.div
-          className="absolute inset-0 flex flex-col min-h-0 overflow-hidden"
-          style={{ width: "100%" }}
-          initial={false}
-          animate={{ x: expanded ? "-100%" : 0 }}
-          transition={slideTransition}
-        >
-          {/* Top: Ollin Chat Block — click to expand to full-screen chat */}
-          <div className="flex-shrink-0 p-3 sm:p-4">
-            <div
-              role="button"
-              tabIndex={0}
-              onClick={openChat}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openChat(); } }}
-              className="w-full flex flex-col rounded-2xl bg-white/95 backdrop-blur-sm border-2 border-[#008080]/20 shadow-[0_6px_28px_rgba(0,128,128,0.10)] focus-within:border-[#008080]/40 focus-within:shadow-[0_8px_32px_rgba(0,128,128,0.14)] transition-all min-h-[140px] overflow-hidden cursor-text"
+      {/* Dashboard: scrollable column; sticky AI block hides on scroll down, reappears on scroll up */}
+      <div
+        ref={dashboardScrollRef}
+        onScroll={onDashboardScroll}
+        className="relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+      >
+        {/* Sticky wrapper: height collapses to 0 when hidden so Tools/Notes move up */}
+        <div className="sticky top-0 z-10 overflow-hidden">
+          <motion.div
+            animate={{ height: chatVisible ? CHAT_BLOCK_HEIGHT + 24 : 0 }}
+            transition={{ type: "tween", duration: PEEKABOO_DURATION, ease: EASE_OUT }}
+            className="px-3 sm:px-4 pt-3 sm:pt-4"
+          >
+            <motion.div
+              animate={{
+                opacity: chatVisible ? 1 : 0,
+                y: chatVisible ? 0 : "-100%",
+              }}
+              transition={{ type: "tween", duration: PEEKABOO_DURATION, ease: EASE_OUT }}
+              className={`w-full flex flex-col overflow-hidden bg-white/95 backdrop-blur-sm ${chatBlockBorder} ${chatBlockFocus} cursor-text transition-[box-shadow,border-color] duration-300`}
+              style={{ height: CHAT_BLOCK_HEIGHT }}
             >
-              <textarea
-                ref={topInputRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                onClick={(e) => e.stopPropagation()}
-                placeholder={`How can I help${placeholderDots}`}
-                rows={3}
-                className="flex-1 min-w-0 w-full px-5 pt-5 pb-2 rounded-t-2xl border-0 bg-transparent text-gray-900 placeholder-gray-400 focus:ring-0 outline-none text-base min-h-[96px] resize-none"
-              />
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={openChat}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openChat(); } }}
+                className="w-full h-full flex flex-col min-h-0"
+              >
+                <textarea
+                  ref={topInputRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                  onClick={(e) => e.stopPropagation()}
+                  placeholder={`How can I help${placeholderDots}`}
+                  rows={3}
+                  className="flex-1 min-w-0 w-full px-5 pt-5 pb-2 rounded-t-2xl border-0 bg-transparent text-gray-900 placeholder-gray-400 focus:ring-0 outline-none text-base min-h-[96px] resize-none"
+                />
                 <div className="flex items-center justify-between px-3 pb-3 pt-1.5">
                   <div className="flex items-center gap-2">
                     <div className="relative">
@@ -234,91 +268,113 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard: _onOpenBoard }:
                   </motion.button>
                 </div>
               </div>
-            </div>
+            </motion.div>
+          </motion.div>
+        </div>
 
-            {/* Directly below: Compact Tools Grid then Notes */}
-            <div className="flex-1 min-h-0 overflow-y-auto">
-            <div className="flex-shrink-0 px-3 sm:px-4 pb-2 pt-1">
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                {FEATURE_GRID.map(({ key, href, labelEn, labelHe, icon: Icon }) => (
-                  <Link key={key} href={href} className="flex flex-col items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl bg-white/70 backdrop-blur-sm border border-[#008080]/15 hover:bg-white/95 hover:border-[#008080]/30 text-gray-700 hover:text-gray-900 transition-all shadow-sm">
-                    <div className="w-9 h-9 rounded-xl bg-[#008080]/10 flex items-center justify-center">
-                      <Icon className="w-4 h-4 text-[#008080]" strokeWidth={2} />
-                    </div>
-                    <span className="text-[11px] font-medium text-center leading-tight text-gray-700">{isHe ? labelHe : labelEn}</span>
-                  </Link>
-                ))}
-              </div>
+        {/* Tools + Notes — fade out when expanding so chat "takes the stage" */}
+        <motion.div
+          animate={{ opacity: expanded ? 0 : 1 }}
+          transition={{ duration: TRANSITION_MS / 1000, ease: EASE_SMOOTH }}
+          className="px-3 sm:px-4 pb-4 pt-1"
+        >
+          <div className="flex-shrink-0 pb-2 pt-1">
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+              {FEATURE_GRID.map(({ key, href, labelEn, labelHe, icon: Icon }) => (
+                <Link key={key} href={href} className="flex flex-col items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl bg-white/70 backdrop-blur-sm border border-[#008080]/15 hover:bg-white/95 hover:border-[#008080]/30 text-gray-700 hover:text-gray-900 transition-all shadow-sm">
+                  <div className="w-9 h-9 rounded-xl bg-[#008080]/10 flex items-center justify-center">
+                    <Icon className="w-4 h-4 text-[#008080]" strokeWidth={2} />
+                  </div>
+                  <span className="text-[11px] font-medium text-center leading-tight text-gray-700">{isHe ? labelHe : labelEn}</span>
+                </Link>
+              ))}
             </div>
-
-            <div className="flex-shrink-0 px-3 sm:px-4 pb-4 pt-2 border-t border-[#008080]/10">
-              <ul className="space-y-0.5">
-                {recentNotes.slice(0, 3).map((note) => (
-                  <li key={note.id}>
-                    <button type="button" onClick={() => onOpenNote?.(note.id)} className="w-full flex items-center gap-1.5 py-1.5 px-2 rounded-lg hover:bg-white/70 text-left border border-transparent hover:border-[#008080]/15 transition-all">
-                      <Pencil className="w-3 h-3 text-[#008080] shrink-0" strokeWidth={2} />
-                      <span className="text-xs text-gray-700 truncate">{note.title || (isHe ? "ללא כותרת" : "Untitled")}</span>
-                    </button>
-                  </li>
-                ))}
-                <li>
-                  <button type="button" onClick={onNewNote} className="flex items-center gap-1.5 py-1.5 px-2 rounded-lg text-[#008080] hover:bg-[#008080]/10 text-xs font-medium">
-                    <Plus className="w-3 h-3" strokeWidth={2.5} /> {isHe ? "פתק חדש" : "New Note"}
+          </div>
+          <div className="flex-shrink-0 pt-2 border-t border-[#008080]/10">
+            <ul className="space-y-0.5">
+              {recentNotes.slice(0, 3).map((note) => (
+                <li key={note.id}>
+                  <button type="button" onClick={() => onOpenNote?.(note.id)} className="w-full flex items-center gap-1.5 py-1.5 px-2 rounded-lg hover:bg-white/70 text-left border border-transparent hover:border-[#008080]/15 transition-all">
+                    <Pencil className="w-3 h-3 text-[#008080] shrink-0" strokeWidth={2} />
+                    <span className="text-xs text-gray-700 truncate">{note.title || (isHe ? "ללא כותרת" : "Untitled")}</span>
                   </button>
                 </li>
-              </ul>
-            </div>
-            </div>
-        </motion.div>
-
-        {/* Panel 2: Full-screen chat (slides in from right when expanded) */}
-        <motion.div
-          className="absolute inset-0 flex flex-col min-h-0 overflow-hidden bg-white/80 backdrop-blur-xl rounded-2xl"
-          style={{ left: "100%", width: "100%" }}
-          initial={false}
-          animate={{ x: expanded ? "-100%" : 0 }}
-          transition={slideTransition}
-        >
-          <div className="flex-shrink-0 flex items-center gap-2 px-3 py-2.5 border-b border-[#008080]/10 bg-white/90">
-            <button type="button" onClick={() => setExpanded(false)} className="p-2 rounded-xl text-[#008080] hover:bg-[#008080]/10 transition-colors flex items-center gap-1.5" aria-label={isHe ? "חזרה ללוח" : "Back to dashboard"}>
-              <ChevronUp className="w-5 h-5" strokeWidth={2} />
-              <span className="text-sm font-medium">{isHe ? "חזרה" : "Back"}</span>
-            </button>
-            <span className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-              <CircleCheck className="w-4 h-4 text-[#008080]" strokeWidth={2} />
-              {isHe ? "אולין AI" : "Ollin AI"}
-            </span>
-          </div>
-          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 bg-white/30">
-            {messages.length === 0 && <p className="text-center text-gray-500 text-sm py-8">{isHe ? "שלח הודעה — משימות יישמרו ללוח." : "Send a message — tasks are saved to your board."}</p>}
-            {messages.map((m) =>
-              "role" in m ? (
-                <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                  <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${m.role === "user" ? "bg-[#008080] text-white shadow-[0_2px_12px_rgba(0,128,128,0.25)]" : "bg-white/90 backdrop-blur-sm border border-[#008080]/15 text-gray-900 shadow-sm"}`}>
-                    {typeof m.content === "string" ? m.content : ""}
-                  </div>
-                </div>
-              ) : "type" in m && m.type === "taskAdded" ? (
-                <div key={m.id} className="flex justify-center">
-                  <div className="inline-flex items-center gap-2 rounded-full bg-[#008080]/10 border border-[#008080]/25 text-[#008080] px-3 py-1.5 text-xs font-medium">
-                    <ListTodo className="w-4 h-4 shrink-0" strokeWidth={2} />
-                    {isHe ? "נוסף ללוח" : "Added to Board"}: <span className="font-semibold truncate max-w-[140px]">{m.taskTitle}</span>
-                  </div>
-                </div>
-              ) : (
-                <div key={m.id} className="flex justify-start">
-                  <div className="max-w-[85%] rounded-2xl px-3 py-2 bg-white/60 border border-[#008080]/10 text-gray-500 text-xs">{"formType" in m ? `[${m.formType}]` : ""}</div>
-                </div>
-              )
-            )}
-            <div ref={chatScrollRef} />
-          </div>
-          {/* Expanded input row: [+][Brain] bottom-left, then input + Send */}
-          <div className="flex-shrink-0 p-3 border-t border-[#008080]/10 bg-white/80 backdrop-blur-sm">
-            {inputRow}
+              ))}
+              <li>
+                <button type="button" onClick={onNewNote} className="flex items-center gap-1.5 py-1.5 px-2 rounded-lg text-[#008080] hover:bg-[#008080]/10 text-xs font-medium">
+                  <Plus className="w-3 h-3" strokeWidth={2.5} /> {isHe ? "פתק חדש" : "New Note"}
+                </button>
+              </li>
+            </ul>
           </div>
         </motion.div>
       </div>
+
+      {/* Blurred backdrop when expanded — subtle blur on dashboard so focus is on conversation */}
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: TRANSITION_MS / 1000, ease: EASE_SMOOTH }}
+            className="absolute inset-0 z-[18] rounded-2xl bg-white/20 backdrop-blur-md pointer-events-none"
+            aria-hidden
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Expanded full-screen chat: slides up (0.3s ease-in-out), turquoise borders */}
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "tween", duration: TRANSITION_MS / 1000, ease: EASE_SMOOTH }}
+            className="absolute inset-0 z-20 flex flex-col min-h-0 overflow-hidden rounded-2xl border-2 border-[#008080]/20 bg-white/95 backdrop-blur-sm shadow-[0_8px_32px_rgba(0,128,128,0.12)]"
+            style={{ boxShadow: "0 8px 32px rgba(0,128,128,0.12), 0 0 0 1px rgba(0,128,128,0.08)" }}
+          >
+            <div className="flex-shrink-0 flex items-center gap-2 px-3 py-2.5 border-b border-[#008080]/10 bg-white/90 rounded-t-2xl">
+              <button type="button" onClick={() => setExpanded(false)} className="p-2 rounded-xl text-[#008080] hover:bg-[#008080]/10 transition-colors flex items-center gap-1.5" aria-label={isHe ? "חזרה ללוח" : "Back to dashboard"}>
+                <ChevronUp className="w-5 h-5" strokeWidth={2} />
+                <span className="text-sm font-medium">{isHe ? "חזרה" : "Back"}</span>
+              </button>
+              <span className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                <CircleCheck className="w-4 h-4 text-[#008080]" strokeWidth={2} />
+                {isHe ? "אולין AI" : "Ollin AI"}
+              </span>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 bg-white/30 min-h-0">
+              {messages.length === 0 && <p className="text-center text-gray-500 text-sm py-8">{isHe ? "שלח הודעה — משימות יישמרו ללוח." : "Send a message — tasks are saved to your board."}</p>}
+              {messages.map((m) =>
+                "role" in m ? (
+                  <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                    <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${m.role === "user" ? "bg-[#008080] text-white shadow-[0_2px_12px_rgba(0,128,128,0.25)]" : "bg-white/90 backdrop-blur-sm border border-[#008080]/15 text-gray-900 shadow-sm"}`}>
+                      {typeof m.content === "string" ? m.content : ""}
+                    </div>
+                  </div>
+                ) : "type" in m && m.type === "taskAdded" ? (
+                  <div key={m.id} className="flex justify-center">
+                    <div className="inline-flex items-center gap-2 rounded-full bg-[#008080]/10 border border-[#008080]/25 text-[#008080] px-3 py-1.5 text-xs font-medium">
+                      <ListTodo className="w-4 h-4 shrink-0" strokeWidth={2} />
+                      {isHe ? "נוסף ללוח" : "Added to Board"}: <span className="font-semibold truncate max-w-[140px]">{m.taskTitle}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div key={m.id} className="flex justify-start">
+                    <div className="max-w-[85%] rounded-2xl px-3 py-2 bg-white/60 border border-[#008080]/10 text-gray-500 text-xs">{"formType" in m ? `[${m.formType}]` : ""}</div>
+                  </div>
+                )
+              )}
+              <div ref={chatScrollRef} />
+            </div>
+            <div className="flex-shrink-0 p-3 border-t border-[#008080]/10 bg-white/80 backdrop-blur-sm rounded-b-2xl">
+              {inputRow}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
