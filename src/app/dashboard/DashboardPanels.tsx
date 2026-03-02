@@ -19,13 +19,23 @@ import { LibraryPanel } from "@/components/dashboard/LibraryPanel";
 
 const PANEL_COUNT = 5;
 const DEFAULT_PANEL_INDEX = 2;
+export const BOARD_PANEL_INDEX = 3;
 
-export function DashboardPanels() {
+export type DashboardPanelsProps = {
+  panelIndex?: number;
+  setPanelIndex?: (value: number | ((prev: number) => number)) => void;
+};
+
+export function DashboardPanels(props: DashboardPanelsProps = {}) {
+  const { panelIndex: controlledIndex, setPanelIndex: controlledSetIndex } = props;
   const { locale } = useLocale();
   const { state: architectState } = useArchitect();
-  const [panelIndex, setPanelIndex] = useState(DEFAULT_PANEL_INDEX);
+  const [internalIndex, setInternalIndex] = useState(DEFAULT_PANEL_INDEX);
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
   const onSelectedContactChange = useCallback((id: string | null) => setSelectedContactId(id), []);
+
+  const panelIndex = controlledIndex ?? internalIndex;
+  const setPanelIndex = controlledSetIndex ?? setInternalIndex;
 
   const safePanelIndex = Math.max(0, Math.min(PANEL_COUNT - 1, panelIndex));
   const setPanelIndexSafe = useCallback((value: number | ((prev: number) => number)) => {
@@ -33,14 +43,14 @@ export function DashboardPanels() {
       const next = typeof value === "function" ? value(prev) : value;
       return Math.max(0, Math.min(PANEL_COUNT - 1, next));
     });
-  }, []);
+  }, [setPanelIndex]);
 
   const tabs = [
     { i: 0, Icon: Wallet, label: "Payments" },
     { i: 1, Icon: Compass, label: "Explore" },
     { i: 2, Icon: Home, label: "Home" },
     { i: 3, Icon: ListTodo, label: "Board" },
-    { i: 4, Icon: BookOpen, label: "Library" },
+    { i: 4, Icon: BookOpen, label: "Messages" },
   ] as const;
 
   return (

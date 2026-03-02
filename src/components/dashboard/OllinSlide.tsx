@@ -95,15 +95,18 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard: _onOpenBoard }:
     }
   }, [expanded]);
 
-  // Slide only on Send (Enter or click Send) — type in dashboard first
   const slideTransition = { type: "tween" as const, duration: 0.35, ease: [0.32, 0.72, 0, 1] };
+  const openChat = useCallback(() => {
+    setExpanded(true);
+    setTimeout(() => topInputRef.current?.focus({ preventScroll: true }), 100);
+  }, []);
 
   const inputRow = (
     <div className="flex gap-2 items-center">
-      <div className="flex items-center gap-1 shrink-0">
+      <div className="flex items-center gap-2 shrink-0">
         <div className="relative">
-          <motion.button type="button" onClick={() => setPlusMenuOpen((o) => !o)} className="w-8 h-8 rounded-lg bg-[#008080]/90 text-white flex items-center justify-center hover:bg-[#008080] transition-colors opacity-90 hover:opacity-100" whileTap={{ scale: 0.95 }} aria-label="Add">
-            <Plus className="w-4 h-4" strokeWidth={2.5} />
+          <motion.button type="button" onClick={() => setPlusMenuOpen((o) => !o)} className="w-11 h-11 rounded-xl bg-[#008080] text-white flex items-center justify-center hover:bg-[#006666] transition-colors shadow-[0_2px_12px_rgba(0,128,128,0.28)]" whileTap={{ scale: 0.95 }} aria-label="Add">
+            <Plus className="w-5 h-5" strokeWidth={2.5} />
           </motion.button>
           <AnimatePresence>
             {plusMenuOpen && (
@@ -122,8 +125,8 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard: _onOpenBoard }:
           </AnimatePresence>
         </div>
         <div className="relative">
-          <button type="button" onClick={() => setBrainMenuOpen((o) => !o)} className="w-8 h-8 rounded-lg border border-[#008080]/20 bg-white/80 text-[#008080] hover:bg-[#008080]/10 flex items-center justify-center transition-colors opacity-90 hover:opacity-100" aria-label={isHe ? "מודל AI" : "AI model"}>
-            <Brain className="w-4 h-4" strokeWidth={2} />
+          <button type="button" onClick={() => setBrainMenuOpen((o) => !o)} className="w-11 h-11 rounded-xl border-2 border-[#008080]/25 bg-white text-[#008080] hover:bg-[#008080]/10 flex items-center justify-center transition-colors shadow-sm" aria-label={isHe ? "מודל AI" : "AI model"}>
+            <Brain className="w-5 h-5" strokeWidth={2} />
           </button>
           {brainMenuOpen && (
             <>
@@ -146,9 +149,9 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard: _onOpenBoard }:
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
         placeholder={`How can I help${placeholderDots}`}
-        className="flex-1 min-w-0 px-4 py-2.5 rounded-xl border-0 bg-white/90 text-gray-900 placeholder-gray-500 focus:ring-0 outline-none text-sm min-h-[40px]"
+        className="flex-1 min-w-0 px-4 py-3 rounded-xl border border-[#008080]/15 bg-white/95 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-[#008080]/20 focus:border-[#008080]/40 outline-none text-sm min-h-[44px]"
       />
-      <motion.button type="button" onClick={handleSend} className="w-9 h-9 rounded-xl bg-[#008080] text-white hover:bg-[#006666] transition-colors shrink-0 flex items-center justify-center shadow-sm" whileTap={{ scale: 0.95 }} aria-label="Send">
+      <motion.button type="button" onClick={handleSend} className="w-11 h-11 rounded-xl bg-[#008080] text-white hover:bg-[#006666] transition-colors shrink-0 flex items-center justify-center shadow-[0_2px_12px_rgba(0,128,128,0.28)]" whileTap={{ scale: 0.95 }} aria-label="Send">
         <Send className="w-5 h-5" strokeWidth={2} />
       </motion.button>
     </div>
@@ -166,23 +169,30 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard: _onOpenBoard }:
           animate={{ x: expanded ? "-100%" : 0 }}
           transition={slideTransition}
         >
-          {/* Hero: type here; slide to full chat only on Enter / Send */}
-          <div className="flex-shrink-0 p-2 sm:p-3">
-            <div className="w-full flex flex-col rounded-2xl bg-white/95 backdrop-blur-sm border border-[#008080]/15 shadow-[0_4px_24px_rgba(0,128,128,0.08)] focus-within:border-[#008080]/35 focus-within:shadow-[0_4px_28px_rgba(0,128,128,0.12)] transition-all min-h-[120px] overflow-hidden">
+          {/* Top: Ollin Chat Block — click to expand to full-screen chat */}
+          <div className="flex-shrink-0 p-3 sm:p-4">
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={openChat}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openChat(); } }}
+              className="w-full flex flex-col rounded-2xl bg-white/95 backdrop-blur-sm border-2 border-[#008080]/20 shadow-[0_6px_28px_rgba(0,128,128,0.10)] focus-within:border-[#008080]/40 focus-within:shadow-[0_8px_32px_rgba(0,128,128,0.14)] transition-all min-h-[140px] overflow-hidden cursor-text"
+            >
               <textarea
                 ref={topInputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                onClick={(e) => e.stopPropagation()}
                 placeholder={`How can I help${placeholderDots}`}
                 rows={3}
-                className="flex-1 min-w-0 w-full px-4 pt-4 pb-1 rounded-t-2xl border-0 bg-transparent text-gray-900 placeholder-gray-400 focus:ring-0 outline-none text-base min-h-[88px] resize-none"
+                className="flex-1 min-w-0 w-full px-5 pt-5 pb-2 rounded-t-2xl border-0 bg-transparent text-gray-900 placeholder-gray-400 focus:ring-0 outline-none text-base min-h-[96px] resize-none"
               />
-                <div className="flex items-center justify-between px-2 pb-2 pt-1">
-                  <div className="flex items-center gap-1">
+                <div className="flex items-center justify-between px-3 pb-3 pt-1.5">
+                  <div className="flex items-center gap-2">
                     <div className="relative">
-                      <motion.button type="button" onClick={() => setPlusMenuOpen((o) => !o)} className="w-8 h-8 rounded-lg bg-[#008080]/90 text-white flex items-center justify-center hover:bg-[#008080] transition-colors opacity-80 hover:opacity-100" whileTap={{ scale: 0.95 }} aria-label="Add">
-                        <Plus className="w-4 h-4" strokeWidth={2.5} />
+                      <motion.button type="button" onClick={(e) => { e.stopPropagation(); setPlusMenuOpen((o) => !o); }} className="w-11 h-11 rounded-xl bg-[#008080] text-white flex items-center justify-center hover:bg-[#006666] transition-colors shadow-[0_2px_12px_rgba(0,128,128,0.28)]" whileTap={{ scale: 0.95 }} aria-label="Add">
+                        <Plus className="w-5 h-5" strokeWidth={2.5} />
                       </motion.button>
                       <AnimatePresence>
                         {plusMenuOpen && (
@@ -201,8 +211,8 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard: _onOpenBoard }:
                       </AnimatePresence>
                     </div>
                     <div className="relative">
-                      <button type="button" onClick={() => setBrainMenuOpen((o) => !o)} className="w-8 h-8 rounded-lg border border-[#008080]/20 bg-white/60 text-[#008080] hover:bg-[#008080]/10 flex items-center justify-center transition-colors opacity-80 hover:opacity-100" aria-label={isHe ? "מודל AI" : "AI model"}>
-                        <Brain className="w-4 h-4" strokeWidth={2} />
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setBrainMenuOpen((o) => !o); }} className="w-11 h-11 rounded-xl border-2 border-[#008080]/25 bg-white text-[#008080] hover:bg-[#008080]/10 flex items-center justify-center transition-colors shadow-sm" aria-label={isHe ? "מודל AI" : "AI model"}>
+                        <Brain className="w-5 h-5" strokeWidth={2} />
                       </button>
                       {brainMenuOpen && (
                         <>
@@ -219,28 +229,29 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard: _onOpenBoard }:
                       )}
                     </div>
                   </div>
-                  <motion.button type="button" onClick={handleSend} className="w-9 h-9 rounded-xl bg-[#008080] text-white hover:bg-[#006666] transition-colors flex items-center justify-center shadow-[0_2px_10px_rgba(0,128,128,0.25)]" whileTap={{ scale: 0.95 }} aria-label="Send">
+                  <motion.button type="button" onClick={(e) => { e.stopPropagation(); handleSend(); }} className="w-11 h-11 rounded-xl bg-[#008080] text-white hover:bg-[#006666] transition-colors flex items-center justify-center shadow-[0_2px_12px_rgba(0,128,128,0.28)]" whileTap={{ scale: 0.95 }} aria-label="Send">
                     <Send className="w-5 h-5" strokeWidth={2} />
                   </motion.button>
                 </div>
               </div>
             </div>
 
-            {/* Compact Tools + Notes — no labels */}
+            {/* Directly below: Compact Tools Grid then Notes */}
             <div className="flex-1 min-h-0 overflow-y-auto">
-            <div className="flex-shrink-0 px-2 sm:px-3 pb-1">
-              <div className="grid grid-cols-4 sm:grid-cols-5 gap-1">
+            <div className="flex-shrink-0 px-3 sm:px-4 pb-2 pt-1">
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                 {FEATURE_GRID.map(({ key, href, labelEn, labelHe, icon: Icon }) => (
-                  <Link key={key} href={href} className="flex flex-col items-center justify-center gap-0 py-1 px-0.5 rounded-md bg-white/60 backdrop-blur-sm border border-[#008080]/10 hover:bg-white/90 hover:border-[#008080]/25 text-gray-700 hover:text-gray-900 transition-all min-h-0" title={isHe ? labelHe : labelEn}>
-                    <div className="w-5 h-5 rounded bg-[#008080]/10 flex items-center justify-center shrink-0">
-                      <Icon className="w-3 h-3 text-[#008080]" strokeWidth={2} />
+                  <Link key={key} href={href} className="flex flex-col items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl bg-white/70 backdrop-blur-sm border border-[#008080]/15 hover:bg-white/95 hover:border-[#008080]/30 text-gray-700 hover:text-gray-900 transition-all shadow-sm">
+                    <div className="w-9 h-9 rounded-xl bg-[#008080]/10 flex items-center justify-center">
+                      <Icon className="w-4 h-4 text-[#008080]" strokeWidth={2} />
                     </div>
+                    <span className="text-[11px] font-medium text-center leading-tight text-gray-700">{isHe ? labelHe : labelEn}</span>
                   </Link>
                 ))}
               </div>
             </div>
 
-            <div className="flex-shrink-0 px-2 sm:px-3 pb-3 pt-1 border-t border-[#008080]/10">
+            <div className="flex-shrink-0 px-3 sm:px-4 pb-4 pt-2 border-t border-[#008080]/10">
               <ul className="space-y-0.5">
                 {recentNotes.slice(0, 3).map((note) => (
                   <li key={note.id}>
