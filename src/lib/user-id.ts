@@ -47,3 +47,27 @@ export function generateUniqueUserId(): string {
 export function isOllinUserId(s: string): boolean {
   return /^0\d{6}$/.test((s || "").trim());
 }
+
+/** Format any identifier for display as 7-digit ID (e.g. "ID: 1234567"). Only 7-digit IDs are allowed in UI. */
+export function formatOllinIdForDisplay(id: string | undefined | null): string {
+  if (!id) return "—";
+  const t = id.trim();
+  if (/^0\d{6}$/.test(t)) return t;
+  if (/^\d{7}$/.test(t)) return t;
+  const num = t.split("").reduce((acc, c) => (acc + c.charCodeAt(0)) % 10000000, 0);
+  return String(num).padStart(7, "0").slice(-7);
+}
+
+/** Format as standard mobile (e.g. +972 5X-XXXXXXX). Replaces UUIDs/fake IDs with readable number. */
+export function formatStandardMobile(phone: string | undefined | null): string {
+  if (!phone) return "—";
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length >= 9 && (digits.startsWith("972") || digits.startsWith("0"))) {
+    const rest = digits.startsWith("972") ? digits.slice(3) : digits.slice(1);
+    if (rest.length >= 9) return `+972 ${rest.slice(0, 2)}-${rest.slice(2, 5)}-${rest.slice(5, 9)}`;
+    if (rest.length >= 8) return `+972 ${rest.slice(0, 2)}-${rest.slice(2, 5)}-${rest.slice(5)}`;
+  }
+  if (digits.length >= 10) return `+${digits.slice(0, 3)} ${digits.slice(3, 5)}-${digits.slice(5, 8)}-${digits.slice(8)}`;
+  if (digits.length >= 7) return `+${digits.slice(0, 3)} ${digits.slice(3)}`;
+  return phone.trim() || "—";
+}

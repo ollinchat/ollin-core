@@ -131,9 +131,61 @@ export function ChatEngineProvider({ children }: { children: React.ReactNode }) 
         };
         demoMessages.push(fromThem, fromMe);
       });
+      // Demo unknown number (not in contact list) — for Safety Block / Block & Add flow
+      const unknownId = "+972550000000";
+      const unknownCid = conversationId("me", unknownId);
+      demoMessages.push(
+        {
+          id: "dm-unknown-1",
+          conversationId: unknownCid,
+          senderId: unknownId,
+          parts: [{ type: "text" as const, content: "Hi, I got your number from the event. Can we sync on the project?" }],
+          createdAt: now - 60000,
+          status: "read" as const,
+        },
+        {
+          id: "dm-unknown-2",
+          conversationId: unknownCid,
+          senderId: "me",
+          parts: [{ type: "text" as const, content: "Sure, who is this?" }],
+          createdAt: now - 30000,
+          status: "read" as const,
+        }
+      );
       saveInternalMessages(demoMessages);
       localStorage.setItem("ollin_internal_messages_seeded", "1");
       list = demoMessages;
+    } else if (list.length > 0 && typeof window !== "undefined" && !localStorage.getItem("ollin_internal_messages_unknown_seeded")) {
+      const unknownId = "+972550000000";
+      const unknownCid = conversationId("me", unknownId);
+      const hasUnknown = list.some((m) => m.conversationId === unknownCid);
+      if (!hasUnknown) {
+        const now = Date.now();
+        const unknownMessages: InternalMessageRecord[] = [
+          {
+            id: "dm-unknown-1",
+            conversationId: unknownCid,
+            senderId: unknownId,
+            parts: [{ type: "text" as const, content: "Hi, I got your number from the event. Can we sync on the project?" }],
+            createdAt: now - 60000,
+            status: "read" as const,
+          },
+          {
+            id: "dm-unknown-2",
+            conversationId: unknownCid,
+            senderId: "me",
+            parts: [{ type: "text" as const, content: "Sure, who is this?" }],
+            createdAt: now - 30000,
+            status: "read" as const,
+          },
+        ];
+        const next = [...unknownMessages, ...list];
+        saveInternalMessages(next);
+        localStorage.setItem("ollin_internal_messages_unknown_seeded", "1");
+        list = next;
+      } else {
+        localStorage.setItem("ollin_internal_messages_unknown_seeded", "1");
+      }
     }
     setInternalMessages(list);
   }, []);

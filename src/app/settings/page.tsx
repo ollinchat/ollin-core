@@ -100,7 +100,7 @@ export default function SettingsPage() {
             </div>
             <div>
               <p className="text-xs font-medium text-[#006666] uppercase tracking-wider">{locale === "he" ? "מזהה Ollin" : "Ollin ID"}</p>
-              <p className="text-lg font-mono font-semibold text-gray-900 tracking-widest">{profile.userId}</p>
+              <p className="text-lg font-mono font-semibold text-gray-900 tracking-widest">{profile.userId ?? "—"}</p>
             </div>
           </div>
         )}

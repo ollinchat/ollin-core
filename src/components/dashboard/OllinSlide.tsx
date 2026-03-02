@@ -25,11 +25,6 @@ import {
   ChevronUp,
 } from "lucide-react";
 
-const HIDE_SCROLL_THRESHOLD = 56;
-const SHOW_SCROLL_THRESHOLD = 24;
-const CHAT_BLOCK_HEIGHT = 176;
-const PEEKABOO_DURATION = 0.4;
-const EASE_OUT = [0, 0, 0.2, 1];
 const EASE_SMOOTH = [0.32, 0.72, 0, 1];
 const TRANSITION_MS = 300;
 
@@ -68,24 +63,12 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard: _onOpenBoard }:
 
   const [input, setInput] = useState("");
   const [expanded, setExpanded] = useState(false);
-  const [chatVisible, setChatVisible] = useState(true);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [brainMenuOpen, setBrainMenuOpen] = useState(false);
   const [placeholderDots, setPlaceholderDots] = useState("");
   const topInputRef = useRef<HTMLTextAreaElement>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const dashboardScrollRef = useRef<HTMLDivElement>(null);
-  const lastScrollTopRef = useRef(0);
-
-  const onDashboardScroll = useCallback(() => {
-    const el = dashboardScrollRef.current;
-    if (!el) return;
-    const top = el.scrollTop;
-    const scrollingDown = top > lastScrollTopRef.current;
-    lastScrollTopRef.current = top;
-    if (scrollingDown && top > HIDE_SCROLL_THRESHOLD) setChatVisible(false);
-    else if (!scrollingDown || top <= SHOW_SCROLL_THRESHOLD) setChatVisible(true);
-  }, []);
 
   // Animated "waiting/thinking" dots for placeholder
   useEffect(() => {
@@ -183,28 +166,13 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard: _onOpenBoard }:
 
   return (
     <div className="h-full min-h-0 flex flex-col overflow-hidden rounded-2xl bg-white/70 backdrop-blur-xl border border-[#008080]/10 shadow-[0_8px_32px_rgba(0,128,128,0.06)]">
-      {/* Dashboard: scrollable column; sticky AI block hides on scroll down, reappears on scroll up */}
-      <div
-        ref={dashboardScrollRef}
-        onScroll={onDashboardScroll}
-        className="relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
-      >
-        {/* Sticky wrapper: height collapses to 0 when hidden so Tools/Notes move up */}
-        <div className="sticky top-0 z-10 overflow-hidden">
-          <motion.div
-            animate={{ height: chatVisible ? CHAT_BLOCK_HEIGHT + 24 : 0 }}
-            transition={{ type: "tween", duration: PEEKABOO_DURATION, ease: EASE_OUT }}
-            className="px-3 sm:px-4 pt-3 sm:pt-4"
+      {/* Dashboard: STATIC AI chat block at top (click/type triggers full-screen expansion); then scrollable Tools + Notes */}
+      <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
+        {/* Static AI Chat block — always visible; clicking or typing opens full-screen chat */}
+        <div ref={dashboardScrollRef} className="flex-shrink-0 p-3 sm:p-4">
+          <div
+            className={`w-full flex flex-col overflow-hidden bg-white/95 backdrop-blur-sm min-h-[176px] ${chatBlockBorder} ${chatBlockFocus} cursor-text transition-[box-shadow,border-color] duration-300`}
           >
-            <motion.div
-              animate={{
-                opacity: chatVisible ? 1 : 0,
-                y: chatVisible ? 0 : "-100%",
-              }}
-              transition={{ type: "tween", duration: PEEKABOO_DURATION, ease: EASE_OUT }}
-              className={`w-full flex flex-col overflow-hidden bg-white/95 backdrop-blur-sm ${chatBlockBorder} ${chatBlockFocus} cursor-text transition-[box-shadow,border-color] duration-300`}
-              style={{ height: CHAT_BLOCK_HEIGHT }}
-            >
               <div
                 role="button"
                 tabIndex={0}
@@ -268,15 +236,14 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard: _onOpenBoard }:
                   </motion.button>
                 </div>
               </div>
-            </motion.div>
-          </motion.div>
+            </div>
         </div>
 
-        {/* Tools + Notes — fade out when expanding so chat "takes the stage" */}
+        {/* Tools + Notes — scrollable; fade out when expanding so chat "takes the stage" */}
         <motion.div
           animate={{ opacity: expanded ? 0 : 1 }}
           transition={{ duration: TRANSITION_MS / 1000, ease: EASE_SMOOTH }}
-          className="px-3 sm:px-4 pb-4 pt-1"
+          className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-4 pb-4 pt-1"
         >
           <div className="flex-shrink-0 pb-2 pt-1">
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">

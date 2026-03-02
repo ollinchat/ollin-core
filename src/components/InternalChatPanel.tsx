@@ -126,13 +126,12 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
     (text: string) => {
       setMessageMenu(null);
       const contact = selectedContactId ? contacts.find((c) => c.id === selectedContactId) : null;
-      const otherPartyName = (contact?.name || contact?.email || selectedContactId) ?? "—";
-      if (contact) {
-        if (contact.allowTasksFrom === false) return; // blocked
-        if (contact.allowTasksFrom === undefined) {
-          setTaskHandshakeModal({ contactId: contact.id, contactName: otherPartyName, text });
-          return;
-        }
+      if (!contact) return; // Unknown user: cannot send/receive tasks until added to contacts
+      const otherPartyName = (contact.name || contact.email || selectedContactId) ?? "—";
+      if (contact.allowTasksFrom === false) return; // blocked
+      if (contact.allowTasksFrom === undefined) {
+        setTaskHandshakeModal({ contactId: contact.id, contactName: otherPartyName, text });
+        return;
       }
       addReceivedTask({
         title: text.slice(0, 200),
@@ -282,12 +281,17 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
                   <button type="button" onClick={() => { setSelectedContactId(null); setTasksPanelOpen(false); setChatSearchVisible(false); }} className="p-1.5 rounded-xl text-gray-600 hover:bg-gray-100" aria-label={isHe ? "חזרה" : "Back"}>
                     <ChevronLeft className="w-5 h-5" />
                   </button>
-                  <div className="flex-1 flex items-center justify-center gap-2 py-2">
-                    <button type="button" onClick={() => { addContactWithId(selectedContactId!, { name: selectedContactId! }); }} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#008080] text-white text-xs font-medium hover:bg-[#006666]">
-                      <UserPlus className="w-4 h-4" strokeWidth={2} />
-                      {isHe ? "הוסף לאנשי קשר" : "Add to Contacts"}
+                  <Link href={`/dashboard/messages/contact/${selectedContactId}`} className="flex-shrink-0 w-9 h-9 rounded-xl bg-gray-200 flex items-center justify-center text-sm font-semibold text-gray-600 hover:bg-gray-300 transition-colors" aria-label={isHe ? "פרטי איש קשר" : "Contact info"}>
+                    ?
+                  </Link>
+                  <div className="flex-1 min-w-0 flex items-center justify-center gap-2 py-1">
+                    <span className="font-mono text-xs text-gray-600 truncate max-w-[120px]">{selectedContactId}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button type="button" onClick={() => { addContactWithId(selectedContactId!, { name: selectedContactId! }); }} className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-white text-xs font-medium hover:opacity-90 transition-opacity" style={{ backgroundColor: TEAL }}>
+                      <UserPlus className="w-3.5 h-3.5" strokeWidth={2} />
+                      {isHe ? "הוסף" : "Add"}
                     </button>
-                    <span className="text-gray-300">|</span>
                     <button
                       type="button"
                       onClick={() => {
@@ -295,10 +299,10 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
                         updateContact(selectedContactId!, { blocked: true });
                         setSelectedContactId(null);
                       }}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 text-gray-600 text-xs font-medium hover:bg-gray-50"
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-red-600 text-white text-xs font-medium hover:bg-red-700 transition-colors"
                     >
-                      <Ban className="w-4 h-4" strokeWidth={2} />
-                      {isHe ? "חסום / דווח" : "Block / Report"}
+                      <Ban className="w-3.5 h-3.5" strokeWidth={2} />
+                      {isHe ? "חסום" : "Block"}
                     </button>
                   </div>
                 </div>
@@ -509,9 +513,9 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
                         className="fixed z-50 min-w-[160px] py-0.5 bg-white border border-gray-200 rounded-xl shadow-lg"
                         style={{ left: Math.min(messageMenu.x, typeof window !== "undefined" ? window.innerWidth - 180 : messageMenu.x), top: messageMenu.y }}
                       >
-                        <button type="button" onClick={() => handleConvertToTask(messageMenu.text)} className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-left text-[11px] text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl">
-                          <ListTodo className="w-3.5 h-3.5 text-[#008080]" strokeWidth={2} />
-                          {isHe ? "המר למשימה" : "Convert to Task"}
+                        <button type="button" onClick={() => !isUnknownContact && handleConvertToTask(messageMenu.text)} className={`w-full flex items-center gap-1.5 px-2.5 py-1.5 text-left text-[11px] rounded-xl ${isUnknownContact ? "text-gray-400 cursor-not-allowed" : "text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080]"}`} title={isUnknownContact ? (isHe ? "הוסף לאנשי קשר קודם" : "Add to contacts first") : undefined}>
+                          <ListTodo className={`w-3.5 h-3.5 ${isUnknownContact ? "text-gray-400" : "text-[#008080]"}`} strokeWidth={2} />
+                          {isUnknownContact ? (isHe ? "המר למשימה (הוסף קודם)" : "Convert to Task (add first)") : (isHe ? "המר למשימה" : "Convert to Task")}
                         </button>
                         <button type="button" className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-left text-[11px] text-gray-700 hover:bg-gray-100 rounded-xl" onClick={() => setMessageMenu(null)}>
                           <Forward className="w-3.5 h-3.5" />
