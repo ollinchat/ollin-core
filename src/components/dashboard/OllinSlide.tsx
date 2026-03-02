@@ -18,7 +18,6 @@ import {
   CalendarDays,
   Users,
   FileOutput,
-  Scale,
   Send,
   ListTodo,
   Brain,
@@ -39,7 +38,6 @@ const FEATURE_GRID: { key: string; labelEn: string; labelHe: string; icon: typeo
   { key: "events", labelEn: "Events", labelHe: "אירועים", icon: CalendarDays, href: "/dashboard/events/new" },
   { key: "meetings", labelEn: "Meetings", labelHe: "פגישות", icon: Users, href: "/dashboard" },
   { key: "converter", labelEn: "File Converter", labelHe: "המרת קבצים", icon: FileOutput, href: "/dashboard" },
-  { key: "compare", labelEn: "Product Comparison", labelHe: "השוואת מוצרים", icon: Scale, href: "/dashboard" },
 ];
 
 const PLUS_ACTIONS: { action: "poll" | "event" | "task" | "converter"; labelEn: string; labelHe: string; icon: typeof BarChart2 }[] = [

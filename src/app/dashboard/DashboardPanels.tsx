@@ -88,7 +88,7 @@ export function DashboardPanels(props: DashboardPanelsProps = {}) {
               key={i}
               type="button"
               onClick={() => setPanelIndexSafe(i)}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-3 px-2 text-xs font-medium border-b-2 min-w-0 transition-colors ${
+              className={`flex-1 flex items-center justify-center py-3 px-2 border-b-2 min-w-0 transition-colors ${
                 isActive
                   ? "text-[#008080] border-[#008080] bg-[#008080]/5"
                   : "text-gray-600 border-transparent hover:bg-gray-100/80 hover:text-gray-800"
@@ -96,8 +96,7 @@ export function DashboardPanels(props: DashboardPanelsProps = {}) {
               aria-label={label}
               aria-current={isActive ? "page" : undefined}
             >
-              <Icon className="w-4 h-4 shrink-0" strokeWidth={2} />
-              <span className="hidden sm:inline truncate">{label}</span>
+              <Icon className="w-5 h-5 shrink-0" strokeWidth={2} />
             </button>
           );
         })}

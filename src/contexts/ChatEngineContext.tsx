@@ -158,7 +158,7 @@ export function ChatEngineProvider({ children }: { children: React.ReactNode }) 
     } else if (list.length > 0 && typeof window !== "undefined" && !localStorage.getItem("ollin_internal_messages_unknown_seeded")) {
       const unknownId = "+972550000000";
       const unknownCid = conversationId("me", unknownId);
-      const hasUnknown = list.some((m) => m.conversationId === unknownCid);
+      const hasUnknown = list.some((m: InternalMessageRecord) => m.conversationId === unknownCid);
       if (!hasUnknown) {
         const now = Date.now();
         const unknownMessages: InternalMessageRecord[] = [

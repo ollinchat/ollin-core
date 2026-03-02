@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useLocale } from "@/contexts/LocaleContext";
@@ -12,6 +12,14 @@ import { LocaleSwitcher } from "@/components/LocaleSwitcher";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 
 export default function DashboardPage() {
+  return (
+    <Suspense fallback={<div className="flex flex-col h-[100dvh] overflow-hidden bg-background" />}>
+      <DashboardPageInner />
+    </Suspense>
+  );
+}
+
+function DashboardPageInner() {
   const { locale } = useLocale();
   const { profile } = useProfile();
   const searchParams = useSearchParams();

@@ -36,28 +36,24 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  let body: { type?: string; fromUserId?: string; fromName?: string; toUserId?: string; isVideo?: boolean } = {};
   try {
-    const body = (await request.json()) as {
-      type?: string;
-      fromUserId?: string;
-      fromName?: string;
-      toUserId?: string;
-      isVideo?: boolean;
-    };
-    if (body?.type === "incoming" && body.toUserId) {
-      pending.set(body.toUserId, {
-        type: "incoming",
-        fromUserId: body.fromUserId ?? "",
-        fromName: body.fromName ?? "User",
-        toUserId: body.toUserId,
-        isVideo: body.isVideo ?? false,
-      });
-    }
-    if (body?.type === "accepted" && body.toUserId) {
-      pending.set(body.toUserId, { type: "accepted", toUserId: body.toUserId });
-    }
+    const raw = await request.json();
+    if (raw && typeof raw === "object") body = raw as typeof body;
   } catch {
-    // Invalid JSON or missing body: respond with ok so client doesn't retry
+    // Empty or invalid JSON — do not crash, always return 200
+  }
+  if (body.type === "incoming" && body.toUserId) {
+    pending.set(body.toUserId, {
+      type: "incoming",
+      fromUserId: body.fromUserId ?? "",
+      fromName: body.fromName ?? "User",
+      toUserId: body.toUserId,
+      isVideo: body.isVideo ?? false,
+    });
+  }
+  if (body.type === "accepted" && body.toUserId) {
+    pending.set(body.toUserId, { type: "accepted", toUserId: body.toUserId });
   }
   return NextResponse.json({ ok: true }, { status: 200 });
 }
