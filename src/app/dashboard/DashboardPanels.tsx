@@ -4,7 +4,7 @@ import { useState, useCallback } from "react";
 import { useLocale } from "@/contexts/LocaleContext";
 import { useArchitect } from "@/contexts/ArchitectContext";
 import {
-  LayoutGrid,
+  Home,
   Wallet,
   Compass,
   ListTodo,
@@ -18,7 +18,7 @@ import { ToolFanPanel } from "@/components/dashboard/ToolFanPanel";
 import { LibraryPanel } from "@/components/dashboard/LibraryPanel";
 
 const PANEL_COUNT = 5;
-const DEFAULT_PANEL_INDEX = 1;
+const DEFAULT_PANEL_INDEX = 2;
 
 export function DashboardPanels() {
   const { locale } = useLocale();
@@ -38,7 +38,7 @@ export function DashboardPanels() {
   const tabs = [
     { i: 0, Icon: Wallet, label: "Payments" },
     { i: 1, Icon: Compass, label: "Explore" },
-    { i: 2, Icon: LayoutGrid, label: "Ollin AI" },
+    { i: 2, Icon: Home, label: "Home" },
     { i: 3, Icon: ListTodo, label: "Board" },
     { i: 4, Icon: BookOpen, label: "Library" },
   ] as const;

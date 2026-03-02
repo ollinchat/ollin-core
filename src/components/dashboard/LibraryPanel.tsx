@@ -5,7 +5,7 @@ import { useLocale } from "@/contexts/LocaleContext";
 import { useFolders } from "@/contexts/FoldersContext";
 import { StickyNote, MessageSquare, Archive, FolderOpen } from "lucide-react";
 import { NotebookPanel } from "@/components/board/NotebookPanel";
-import { ConversationsView } from "@/components/dashboard/ConversationsView";
+import { InternalChatPanel } from "@/components/InternalChatPanel";
 import { PanelWrapper } from "@/components/dashboard/PanelWrapper";
 
 /** System folder IDs — pinned, locked, cannot be deleted */
@@ -34,7 +34,7 @@ export function LibraryPanel({ locale, onSelectedContactChange, onOpenBoard }: L
   if (contentId === "chats") {
     return (
       <PanelWrapper className="flex-1 min-h-0">
-        <ConversationsView locale={locale} onSelectedContactChange={onSelectedContactChange} />
+        <InternalChatPanel locale={locale} onSelectedContactChange={onSelectedContactChange} />
       </PanelWrapper>
     );
   }

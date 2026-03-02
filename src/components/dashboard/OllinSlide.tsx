@@ -1,0 +1,313 @@
+"use client";
+
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
+import { useLocale } from "@/contexts/LocaleContext";
+import { useNotes } from "@/contexts/NotesContext";
+import { useChat } from "@/contexts/ChatEngineContext";
+import {
+  CircleCheck,
+  ScanLine,
+  FileText,
+  FileStack,
+  PenLine,
+  Pencil,
+  Plus,
+  BarChart2,
+  CalendarDays,
+  Users,
+  FileOutput,
+  Scale,
+  Send,
+  ListTodo,
+  Brain,
+  ChevronUp,
+} from "lucide-react";
+
+const FEATURE_GRID: { key: string; labelEn: string; labelHe: string; icon: typeof ScanLine; href: string }[] = [
+  { key: "scanner", labelEn: "Scanner", labelHe: "סורק", icon: ScanLine, href: "/dashboard" },
+  { key: "invoices", labelEn: "Invoices", labelHe: "חשבוניות", icon: FileText, href: "/dashboard/finances/documents" },
+  { key: "files", labelEn: "Files", labelHe: "קבצים", icon: FileStack, href: "/dashboard" },
+  { key: "sign", labelEn: "Sign Docs", labelHe: "חתימת מסמכים", icon: PenLine, href: "/dashboard/finances/documents" },
+  { key: "poll", labelEn: "Create Poll", labelHe: "סקרים", icon: BarChart2, href: "/dashboard" },
+  { key: "events", labelEn: "Events", labelHe: "אירועים", icon: CalendarDays, href: "/dashboard/events/new" },
+  { key: "meetings", labelEn: "Meetings", labelHe: "פגישות", icon: Users, href: "/dashboard" },
+  { key: "converter", labelEn: "File Converter", labelHe: "המרת קבצים", icon: FileOutput, href: "/dashboard" },
+  { key: "compare", labelEn: "Product Comparison", labelHe: "השוואת מוצרים", icon: Scale, href: "/dashboard" },
+];
+
+const PLUS_ACTIONS: { action: "poll" | "event" | "task" | "converter"; labelEn: string; labelHe: string; icon: typeof BarChart2 }[] = [
+  { action: "poll", labelEn: "Poll", labelHe: "סקר", icon: BarChart2 },
+  { action: "event", labelEn: "Event", labelHe: "אירוע", icon: CalendarDays },
+  { action: "task", labelEn: "Task", labelHe: "משימה", icon: ListTodo },
+  { action: "converter", labelEn: "Converter", labelHe: "המרה", icon: FileOutput },
+];
+
+export type OllinSlideProps = {
+  onOpenNote?: (noteId: string) => void;
+  onNewNote?: () => void;
+  onOpenBoard?: () => void;
+};
+
+export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard: _onOpenBoard }: OllinSlideProps) {
+  const { locale } = useLocale();
+  const isHe = locale === "he";
+  const { folders, getNotesInFolder } = useNotes();
+  const { messages, sendMessage, addFormMessage } = useChat();
+  const defaultFolderId = folders[0]?.id ?? "default";
+  const recentNotes = (defaultFolderId ? getNotesInFolder(defaultFolderId) : []).slice(0, 8);
+
+  const [input, setInput] = useState("");
+  const [expanded, setExpanded] = useState(false);
+  const [plusMenuOpen, setPlusMenuOpen] = useState(false);
+  const [brainMenuOpen, setBrainMenuOpen] = useState(false);
+  const [placeholderDots, setPlaceholderDots] = useState("");
+  const topInputRef = useRef<HTMLTextAreaElement>(null);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+
+  // Animated "waiting/thinking" dots for placeholder
+  useEffect(() => {
+    const frames = ["", ".", "..", "..."];
+    let i = 0;
+    const id = setInterval(() => {
+      i = (i + 1) % 4;
+      setPlaceholderDots(frames[i]);
+    }, 400);
+    return () => clearInterval(id);
+  }, []);
+
+  const handleSend = useCallback(() => {
+    const t = input.trim();
+    if (!t) return;
+    setInput("");
+    sendMessage(t);
+    setExpanded(true);
+  }, [input, sendMessage]);
+
+  useEffect(() => {
+    if (expanded && chatScrollRef.current) chatScrollRef.current.scrollIntoView({ behavior: "smooth" });
+  }, [expanded, messages]);
+  useEffect(() => {
+    if (!expanded) {
+      const t = setTimeout(() => topInputRef.current?.focus({ preventScroll: true }), 300);
+      return () => clearTimeout(t);
+    }
+  }, [expanded]);
+
+  // Slide only on Send (Enter or click Send) — type in dashboard first
+  const slideTransition = { type: "tween" as const, duration: 0.35, ease: [0.32, 0.72, 0, 1] };
+
+  const inputRow = (
+    <div className="flex gap-2 items-center">
+      <div className="flex items-center gap-1 shrink-0">
+        <div className="relative">
+          <motion.button type="button" onClick={() => setPlusMenuOpen((o) => !o)} className="w-8 h-8 rounded-lg bg-[#008080]/90 text-white flex items-center justify-center hover:bg-[#008080] transition-colors opacity-90 hover:opacity-100" whileTap={{ scale: 0.95 }} aria-label="Add">
+            <Plus className="w-4 h-4" strokeWidth={2.5} />
+          </motion.button>
+          <AnimatePresence>
+            {plusMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setPlusMenuOpen(false)} aria-hidden />
+                <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }} className="absolute bottom-full left-0 mb-2 rounded-xl bg-white/95 backdrop-blur-md border border-[#008080]/15 py-2 z-50 min-w-[160px] shadow-lg">
+                  {PLUS_ACTIONS.map(({ action, labelEn, labelHe, icon: Icon }) => (
+                    <button key={action} type="button" onClick={() => { addFormMessage(action); setPlusMenuOpen(false); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-[#008080]/10 rounded-lg">
+                      <Icon className="w-4 h-4 text-[#008080]" strokeWidth={2} />
+                      {isHe ? labelHe : labelEn}
+                    </button>
+                  ))}
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
+        </div>
+        <div className="relative">
+          <button type="button" onClick={() => setBrainMenuOpen((o) => !o)} className="w-8 h-8 rounded-lg border border-[#008080]/20 bg-white/80 text-[#008080] hover:bg-[#008080]/10 flex items-center justify-center transition-colors opacity-90 hover:opacity-100" aria-label={isHe ? "מודל AI" : "AI model"}>
+            <Brain className="w-4 h-4" strokeWidth={2} />
+          </button>
+          {brainMenuOpen && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setBrainMenuOpen(false)} aria-hidden />
+              <div className="absolute bottom-full left-0 mb-2 rounded-xl bg-white/95 backdrop-blur-md border border-[#008080]/15 py-2 z-50 w-48 shadow-lg">
+                <p className="px-3 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">{isHe ? "מודל" : "Model"}</p>
+                {["Ollin", "GPT-4", "Claude"].map((name) => (
+                  <button key={name} type="button" onClick={() => setBrainMenuOpen(false)} className="w-full px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-[#008080]/10 rounded-lg">
+                    {name}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+      <input
+        type="text"
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+        placeholder={`How can I help${placeholderDots}`}
+        className="flex-1 min-w-0 px-4 py-2.5 rounded-xl border-0 bg-white/90 text-gray-900 placeholder-gray-500 focus:ring-0 outline-none text-sm min-h-[40px]"
+      />
+      <motion.button type="button" onClick={handleSend} className="w-9 h-9 rounded-xl bg-[#008080] text-white hover:bg-[#006666] transition-colors shrink-0 flex items-center justify-center shadow-sm" whileTap={{ scale: 0.95 }} aria-label="Send">
+        <Send className="w-5 h-5" strokeWidth={2} />
+      </motion.button>
+    </div>
+  );
+
+  return (
+    <div className="h-full min-h-0 flex flex-col overflow-hidden rounded-2xl bg-white/70 backdrop-blur-xl border border-[#008080]/10 shadow-[0_8px_32px_rgba(0,128,128,0.06)]">
+      {/* Two-panel slide: dashboard (left) slides out, chat (right) slides in */}
+      <div className="relative flex-1 min-h-0 overflow-hidden" style={{ width: "100%" }}>
+        {/* Panel 1: Dashboard — Hero + Tools + Notes (slides left when expanded) */}
+        <motion.div
+          className="absolute inset-0 flex flex-col min-h-0 overflow-hidden"
+          style={{ width: "100%" }}
+          initial={false}
+          animate={{ x: expanded ? "-100%" : 0 }}
+          transition={slideTransition}
+        >
+          {/* Hero: type here; slide to full chat only on Enter / Send */}
+          <div className="flex-shrink-0 p-2 sm:p-3">
+            <div className="w-full flex flex-col rounded-2xl bg-white/95 backdrop-blur-sm border border-[#008080]/15 shadow-[0_4px_24px_rgba(0,128,128,0.08)] focus-within:border-[#008080]/35 focus-within:shadow-[0_4px_28px_rgba(0,128,128,0.12)] transition-all min-h-[120px] overflow-hidden">
+              <textarea
+                ref={topInputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                placeholder={`How can I help${placeholderDots}`}
+                rows={3}
+                className="flex-1 min-w-0 w-full px-4 pt-4 pb-1 rounded-t-2xl border-0 bg-transparent text-gray-900 placeholder-gray-400 focus:ring-0 outline-none text-base min-h-[88px] resize-none"
+              />
+                <div className="flex items-center justify-between px-2 pb-2 pt-1">
+                  <div className="flex items-center gap-1">
+                    <div className="relative">
+                      <motion.button type="button" onClick={() => setPlusMenuOpen((o) => !o)} className="w-8 h-8 rounded-lg bg-[#008080]/90 text-white flex items-center justify-center hover:bg-[#008080] transition-colors opacity-80 hover:opacity-100" whileTap={{ scale: 0.95 }} aria-label="Add">
+                        <Plus className="w-4 h-4" strokeWidth={2.5} />
+                      </motion.button>
+                      <AnimatePresence>
+                        {plusMenuOpen && (
+                          <>
+                            <div className="fixed inset-0 z-40" onClick={() => setPlusMenuOpen(false)} aria-hidden />
+                            <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }} className="absolute bottom-full left-0 mb-2 rounded-xl bg-white/95 backdrop-blur-md border border-[#008080]/15 py-2 z-50 min-w-[160px] shadow-lg">
+                              {PLUS_ACTIONS.map(({ action, labelEn, labelHe, icon: Icon }) => (
+                                <button key={action} type="button" onClick={() => { addFormMessage(action); setPlusMenuOpen(false); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-[#008080]/10 rounded-lg">
+                                  <Icon className="w-4 h-4 text-[#008080]" strokeWidth={2} />
+                                  {isHe ? labelHe : labelEn}
+                                </button>
+                              ))}
+                            </motion.div>
+                          </>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                    <div className="relative">
+                      <button type="button" onClick={() => setBrainMenuOpen((o) => !o)} className="w-8 h-8 rounded-lg border border-[#008080]/20 bg-white/60 text-[#008080] hover:bg-[#008080]/10 flex items-center justify-center transition-colors opacity-80 hover:opacity-100" aria-label={isHe ? "מודל AI" : "AI model"}>
+                        <Brain className="w-4 h-4" strokeWidth={2} />
+                      </button>
+                      {brainMenuOpen && (
+                        <>
+                          <div className="fixed inset-0 z-40" onClick={() => setBrainMenuOpen(false)} aria-hidden />
+                          <div className="absolute bottom-full left-0 mb-2 rounded-xl bg-white/95 backdrop-blur-md border border-[#008080]/15 py-2 z-50 w-48 shadow-lg">
+                            <p className="px-3 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">{isHe ? "מודל" : "Model"}</p>
+                            {["Ollin", "GPT-4", "Claude"].map((name) => (
+                              <button key={name} type="button" onClick={() => setBrainMenuOpen(false)} className="w-full px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-[#008080]/10 rounded-lg">
+                                {name}
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <motion.button type="button" onClick={handleSend} className="w-9 h-9 rounded-xl bg-[#008080] text-white hover:bg-[#006666] transition-colors flex items-center justify-center shadow-[0_2px_10px_rgba(0,128,128,0.25)]" whileTap={{ scale: 0.95 }} aria-label="Send">
+                    <Send className="w-5 h-5" strokeWidth={2} />
+                  </motion.button>
+                </div>
+              </div>
+            </div>
+
+            {/* Compact Tools + Notes — no labels */}
+            <div className="flex-1 min-h-0 overflow-y-auto">
+            <div className="flex-shrink-0 px-2 sm:px-3 pb-1">
+              <div className="grid grid-cols-4 sm:grid-cols-5 gap-1">
+                {FEATURE_GRID.map(({ key, href, labelEn, labelHe, icon: Icon }) => (
+                  <Link key={key} href={href} className="flex flex-col items-center justify-center gap-0 py-1 px-0.5 rounded-md bg-white/60 backdrop-blur-sm border border-[#008080]/10 hover:bg-white/90 hover:border-[#008080]/25 text-gray-700 hover:text-gray-900 transition-all min-h-0" title={isHe ? labelHe : labelEn}>
+                    <div className="w-5 h-5 rounded bg-[#008080]/10 flex items-center justify-center shrink-0">
+                      <Icon className="w-3 h-3 text-[#008080]" strokeWidth={2} />
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex-shrink-0 px-2 sm:px-3 pb-3 pt-1 border-t border-[#008080]/10">
+              <ul className="space-y-0.5">
+                {recentNotes.slice(0, 3).map((note) => (
+                  <li key={note.id}>
+                    <button type="button" onClick={() => onOpenNote?.(note.id)} className="w-full flex items-center gap-1.5 py-1.5 px-2 rounded-lg hover:bg-white/70 text-left border border-transparent hover:border-[#008080]/15 transition-all">
+                      <Pencil className="w-3 h-3 text-[#008080] shrink-0" strokeWidth={2} />
+                      <span className="text-xs text-gray-700 truncate">{note.title || (isHe ? "ללא כותרת" : "Untitled")}</span>
+                    </button>
+                  </li>
+                ))}
+                <li>
+                  <button type="button" onClick={onNewNote} className="flex items-center gap-1.5 py-1.5 px-2 rounded-lg text-[#008080] hover:bg-[#008080]/10 text-xs font-medium">
+                    <Plus className="w-3 h-3" strokeWidth={2.5} /> {isHe ? "פתק חדש" : "New Note"}
+                  </button>
+                </li>
+              </ul>
+            </div>
+            </div>
+        </motion.div>
+
+        {/* Panel 2: Full-screen chat (slides in from right when expanded) */}
+        <motion.div
+          className="absolute inset-0 flex flex-col min-h-0 overflow-hidden bg-white/80 backdrop-blur-xl rounded-2xl"
+          style={{ left: "100%", width: "100%" }}
+          initial={false}
+          animate={{ x: expanded ? "-100%" : 0 }}
+          transition={slideTransition}
+        >
+          <div className="flex-shrink-0 flex items-center gap-2 px-3 py-2.5 border-b border-[#008080]/10 bg-white/90">
+            <button type="button" onClick={() => setExpanded(false)} className="p-2 rounded-xl text-[#008080] hover:bg-[#008080]/10 transition-colors flex items-center gap-1.5" aria-label={isHe ? "חזרה ללוח" : "Back to dashboard"}>
+              <ChevronUp className="w-5 h-5" strokeWidth={2} />
+              <span className="text-sm font-medium">{isHe ? "חזרה" : "Back"}</span>
+            </button>
+            <span className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+              <CircleCheck className="w-4 h-4 text-[#008080]" strokeWidth={2} />
+              {isHe ? "אולין AI" : "Ollin AI"}
+            </span>
+          </div>
+          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 bg-white/30">
+            {messages.length === 0 && <p className="text-center text-gray-500 text-sm py-8">{isHe ? "שלח הודעה — משימות יישמרו ללוח." : "Send a message — tasks are saved to your board."}</p>}
+            {messages.map((m) =>
+              "role" in m ? (
+                <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                  <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${m.role === "user" ? "bg-[#008080] text-white shadow-[0_2px_12px_rgba(0,128,128,0.25)]" : "bg-white/90 backdrop-blur-sm border border-[#008080]/15 text-gray-900 shadow-sm"}`}>
+                    {typeof m.content === "string" ? m.content : ""}
+                  </div>
+                </div>
+              ) : "type" in m && m.type === "taskAdded" ? (
+                <div key={m.id} className="flex justify-center">
+                  <div className="inline-flex items-center gap-2 rounded-full bg-[#008080]/10 border border-[#008080]/25 text-[#008080] px-3 py-1.5 text-xs font-medium">
+                    <ListTodo className="w-4 h-4 shrink-0" strokeWidth={2} />
+                    {isHe ? "נוסף ללוח" : "Added to Board"}: <span className="font-semibold truncate max-w-[140px]">{m.taskTitle}</span>
+                  </div>
+                </div>
+              ) : (
+                <div key={m.id} className="flex justify-start">
+                  <div className="max-w-[85%] rounded-2xl px-3 py-2 bg-white/60 border border-[#008080]/10 text-gray-500 text-xs">{"formType" in m ? `[${m.formType}]` : ""}</div>
+                </div>
+              )
+            )}
+            <div ref={chatScrollRef} />
+          </div>
+          {/* Expanded input row: [+][Brain] bottom-left, then input + Send */}
+          <div className="flex-shrink-0 p-3 border-t border-[#008080]/10 bg-white/80 backdrop-blur-sm">
+            {inputRow}
+          </div>
+        </motion.div>
+      </div>
+    </div>
+  );
+}
