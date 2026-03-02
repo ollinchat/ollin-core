@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useLocale } from "@/contexts/LocaleContext";
 import { useProfile } from "@/contexts/ProfileContext";
 import { slugFromUsername } from "@/lib/profile-types";
@@ -13,8 +14,13 @@ import { UserAvatar } from "@/components/ui/UserAvatar";
 export default function DashboardPage() {
   const { locale } = useLocale();
   const { profile } = useProfile();
+  const searchParams = useSearchParams();
   const cardSlug = profile?.username ? slugFromUsername(profile.username) : "card";
   const [panelIndex, setPanelIndex] = useState(2);
+
+  useEffect(() => {
+    if (searchParams.get("open") === "board") setPanelIndex(BOARD_PANEL_INDEX);
+  }, [searchParams]);
   const setPanelIndexSafe = useCallback((value: number | ((prev: number) => number)) => {
     setPanelIndex((prev) => {
       const next = typeof value === "function" ? value(prev) : value;
