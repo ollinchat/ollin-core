@@ -23,6 +23,8 @@ import {
   ListTodo,
   Brain,
   ChevronUp,
+  Menu,
+  MessageSquare,
 } from "lucide-react";
 
 const EASE_SMOOTH = [0.32, 0.72, 0, 1];
@@ -57,7 +59,7 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard: _onOpenBoard }:
   const { locale } = useLocale();
   const isHe = locale === "he";
   const { folders, getNotesInFolder } = useNotes();
-  const { messages, sendMessage, addFormMessage } = useChat();
+  const { messages, sendMessage, addFormMessage, clearMessages } = useChat();
   const defaultFolderId = folders[0]?.id ?? "default";
   const recentNotes = (defaultFolderId ? getNotesInFolder(defaultFolderId) : []).slice(0, 8);
 
@@ -66,6 +68,8 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard: _onOpenBoard }:
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [brainMenuOpen, setBrainMenuOpen] = useState(false);
   const [placeholderDots, setPlaceholderDots] = useState("");
+  const [topicsSidebarOpen, setTopicsSidebarOpen] = useState(false);
+  const [topics, setTopics] = useState<{ id: string; title: string }[]>([]);
   const topInputRef = useRef<HTMLTextAreaElement>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const dashboardScrollRef = useRef<HTMLDivElement>(null);
@@ -161,18 +165,21 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard: _onOpenBoard }:
     </div>
   );
 
-  const chatBlockBorder = "border-2 border-[#008080]/20 rounded-2xl shadow-[0_6px_28px_rgba(0,128,128,0.10)]";
-  const chatBlockFocus = "focus-within:border-[#008080]/40 focus-within:shadow-[0_8px_32px_rgba(0,128,128,0.14)]";
+  const handleNewChat = useCallback(() => {
+    const firstUser = messages.find((m) => "role" in m && m.role === "user");
+    const title = typeof firstUser?.content === "string" ? firstUser.content.slice(0, 40).trim() || (isHe ? "שיחה חדשה" : "New Chat") : isHe ? "שיחה חדשה" : "New Chat";
+    if (messages.length > 0) setTopics((prev) => [{ id: crypto.randomUUID(), title }, ...prev]);
+    clearMessages();
+    setTopicsSidebarOpen(false);
+  }, [messages, isHe, clearMessages]);
 
   return (
-    <div className="h-full min-h-0 flex flex-col overflow-hidden rounded-2xl bg-white/70 backdrop-blur-xl border border-[#008080]/10 shadow-[0_8px_32px_rgba(0,128,128,0.06)]">
-      {/* Dashboard: STATIC AI chat block at top (click/type triggers full-screen expansion); then scrollable Tools + Notes */}
-      <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
-        {/* Static AI Chat block — always visible; clicking or typing opens full-screen chat */}
-        <div ref={dashboardScrollRef} className="flex-shrink-0 p-3 sm:p-4">
-          <div
-            className={`w-full flex flex-col overflow-hidden bg-white/95 backdrop-blur-sm min-h-[176px] ${chatBlockBorder} ${chatBlockFocus} cursor-text transition-[box-shadow,border-color] duration-300`}
-          >
+    <div className="relative h-full min-h-0 flex flex-col overflow-hidden rounded-2xl bg-white/70 backdrop-blur-xl border border-[#008080]/10 shadow-[0_8px_32px_rgba(0,128,128,0.06)]">
+      {/* Top: AI Input — static, does not scroll. No fixed/sticky. */}
+      <div ref={dashboardScrollRef} className="flex-none p-3 sm:p-4 bg-white/95 backdrop-blur-md border-b border-[#008080]/5">
+        <div
+          className="w-full flex flex-col overflow-hidden bg-white/95 backdrop-blur-md min-h-[176px] border-2 border-[#008080]/20 rounded-2xl shadow-[0_6px_28px_rgba(0,128,128,0.10)] focus-within:border-[#008080]/40 focus-within:shadow-[0_8px_32px_rgba(0,128,128,0.14)] cursor-text transition-[box-shadow,border-color] duration-300"
+        >
               <div
                 role="button"
                 tabIndex={0}
@@ -239,12 +246,12 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard: _onOpenBoard }:
             </div>
         </div>
 
-        {/* Tools + Notes — scrollable; fade out when expanding so chat "takes the stage" */}
-        <motion.div
-          animate={{ opacity: expanded ? 0 : 1 }}
-          transition={{ duration: TRANSITION_MS / 1000, ease: EASE_SMOOTH }}
-          className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-4 pb-4 pt-1"
-        >
+      {/* Bottom: only this section scrolls (icons/grid + notes). flex-1 overflow-y-auto. */}
+      <motion.div
+        animate={{ opacity: expanded ? 0 : 1 }}
+        transition={{ duration: TRANSITION_MS / 1000, ease: EASE_SMOOTH }}
+        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-3 sm:px-4 pb-4 pt-1"
+      >
           <div className="flex-shrink-0 pb-2 pt-1">
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
               {FEATURE_GRID.map(({ key, href, labelEn, labelHe, icon: Icon }) => (
@@ -259,6 +266,11 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard: _onOpenBoard }:
           </div>
           <div className="flex-shrink-0 pt-2 border-t border-[#008080]/10">
             <ul className="space-y-0.5">
+              <li>
+                <button type="button" onClick={onNewNote} className="flex items-center gap-1.5 py-1.5 px-2 rounded-lg text-[#008080] hover:bg-[#008080]/10 text-xs font-medium w-full text-left">
+                  <Plus className="w-3 h-3" strokeWidth={2.5} /> {isHe ? "פתק חדש" : "New Note"}
+                </button>
+              </li>
               {recentNotes.slice(0, 3).map((note) => (
                 <li key={note.id}>
                   <button type="button" onClick={() => onOpenNote?.(note.id)} className="w-full flex items-center gap-1.5 py-1.5 px-2 rounded-lg hover:bg-white/70 text-left border border-transparent hover:border-[#008080]/15 transition-all">
@@ -267,15 +279,9 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard: _onOpenBoard }:
                   </button>
                 </li>
               ))}
-              <li>
-                <button type="button" onClick={onNewNote} className="flex items-center gap-1.5 py-1.5 px-2 rounded-lg text-[#008080] hover:bg-[#008080]/10 text-xs font-medium">
-                  <Plus className="w-3 h-3" strokeWidth={2.5} /> {isHe ? "פתק חדש" : "New Note"}
-                </button>
-              </li>
             </ul>
           </div>
         </motion.div>
-      </div>
 
       {/* Blurred backdrop when expanded — subtle blur on dashboard so focus is on conversation */}
       <AnimatePresence>
@@ -307,12 +313,52 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard: _onOpenBoard }:
                 <ChevronUp className="w-5 h-5" strokeWidth={2} />
                 <span className="text-sm font-medium">{isHe ? "חזרה" : "Back"}</span>
               </button>
-              <span className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+              <button type="button" onClick={() => setTopicsSidebarOpen((o) => !o)} className="p-2 rounded-xl text-[#008080] hover:bg-[#008080]/10 transition-colors" aria-label={isHe ? "נושאים ושיחות" : "Topics & Conversations"}>
+                <Menu className="w-5 h-5" strokeWidth={2} />
+              </button>
+              <span className="text-sm font-semibold text-gray-900 flex items-center gap-2 flex-1">
                 <CircleCheck className="w-4 h-4 text-[#008080]" strokeWidth={2} />
                 {isHe ? "אולין AI" : "Ollin AI"}
               </span>
             </div>
-            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 bg-white/30 min-h-0">
+            <div className="flex-1 flex min-h-0 overflow-hidden">
+              {/* Topics & Conversations sidebar */}
+              <AnimatePresence>
+                {topicsSidebarOpen && (
+                  <motion.aside
+                    initial={{ width: 0, opacity: 0 }}
+                    animate={{ width: 260, opacity: 1 }}
+                    exit={{ width: 0, opacity: 0 }}
+                    transition={{ type: "tween", duration: 0.2 }}
+                    className="flex-shrink-0 border-r border-[#008080]/10 bg-white/95 backdrop-blur-sm overflow-hidden flex flex-col"
+                  >
+                    <div className="p-3 border-b border-[#008080]/10">
+                      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                        <MessageSquare className="w-4 h-4 text-[#008080]" strokeWidth={2} />
+                        {isHe ? "נושאים ושיחות" : "Topics & Conversations"}
+                      </h3>
+                    </div>
+                    <div className="flex-1 overflow-y-auto py-2 min-w-[260px]">
+                      <button type="button" onClick={handleNewChat} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-[#008080] hover:bg-[#008080]/10 rounded-lg mx-2 transition-colors">
+                        <Plus className="w-4 h-4" strokeWidth={2.5} />
+                        {isHe ? "שיחה חדשה" : "New chat"}
+                      </button>
+                      <div className="border-t border-gray-100 my-2" />
+                      {topics.length === 0 && <p className="px-3 py-2 text-xs text-gray-400">{isHe ? "אין שיחות קודמות" : "No previous conversations"}</p>}
+                      <ul className="space-y-0.5 px-2">
+                        {topics.map((t) => (
+                          <li key={t.id}>
+                            <button type="button" className="w-full text-left px-3 py-2.5 rounded-xl text-sm text-gray-700 hover:bg-[#008080]/5 hover:text-gray-900 truncate border border-transparent hover:border-[#008080]/10 transition-colors">
+                              {t.title}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </motion.aside>
+                )}
+              </AnimatePresence>
+              <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 bg-white/30 min-h-0">
               {messages.length === 0 && <p className="text-center text-gray-500 text-sm py-8">{isHe ? "שלח הודעה — משימות יישמרו ללוח." : "Send a message — tasks are saved to your board."}</p>}
               {messages.map((m) =>
                 "role" in m ? (
@@ -335,6 +381,7 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard: _onOpenBoard }:
                 )
               )}
               <div ref={chatScrollRef} />
+              </div>
             </div>
             <div className="flex-shrink-0 p-3 border-t border-[#008080]/10 bg-white/80 backdrop-blur-sm rounded-b-2xl">
               {inputRow}

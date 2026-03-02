@@ -7,9 +7,10 @@ import { useContacts } from "@/contexts/ContactsContext";
 import { useInternalMessages } from "@/contexts/ChatEngineContext";
 import { useProfile } from "@/contexts/ProfileContext";
 import { useBoard } from "@/contexts/BoardContext";
-import { MessageSquare, Send, Trash2, Search, Camera, Plus, MapPin, FileText, ImagePlus, Forward, ListTodo, Instagram, Bot, Linkedin, ScanLine, BarChart3, Mic, ChevronLeft, Phone, Video, ClipboardList, CalendarDays, Users, Brain, Ban, UserPlus } from "lucide-react";
+import { MessageSquare, Send, Trash2, Search, Camera, Plus, MapPin, FileText, ImagePlus, Forward, ListTodo, Instagram, Bot, Linkedin, ScanLine, BarChart3, Mic, ChevronLeft, Phone, Video, ClipboardList, CalendarDays, Users, Brain, Ban, UserPlus, Shield } from "lucide-react";
 import { SOURCE_ICONS, type ChatSourceId } from "@/components/dashboard/SourceBadge";
 import type { InternalMessageRecord } from "@/lib/chat-engine";
+import { formatOllinIdForDisplay } from "@/lib/user-id";
 
 const TEAL = "#008080";
 
@@ -287,25 +288,10 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
                   <div className="flex-1 min-w-0 flex items-center justify-center gap-2 py-1">
                     <span className="font-mono text-xs text-gray-600 truncate max-w-[120px]">{selectedContactId}</span>
                   </div>
-                  {/* Safety Banner (first interaction): [Block (Red)] | [Add to Contacts (Turquoise)] */}
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        addContactWithId(selectedContactId!, { name: selectedContactId! });
-                        updateContact(selectedContactId!, { blocked: true });
-                        setSelectedContactId(null);
-                      }}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-[20px] bg-red-600 text-white text-xs font-medium hover:bg-red-700 transition-colors"
-                    >
-                      <Ban className="w-3.5 h-3.5" strokeWidth={2} />
-                      {isHe ? "חסום" : "Block"}
-                    </button>
-                    <button type="button" onClick={() => { addContactWithId(selectedContactId!, { name: selectedContactId! }); }} className="flex items-center gap-1 px-2.5 py-1.5 rounded-[20px] text-white text-xs font-medium hover:opacity-90 transition-opacity" style={{ backgroundColor: TEAL }}>
-                      <UserPlus className="w-3.5 h-3.5" strokeWidth={2} />
-                      {isHe ? "הוסף לאנשי קשר" : "Add to Contacts"}
-                    </button>
-                  </div>
+                  {/* Chat header: only Add to Contacts icon for unknown sender */}
+                  <button type="button" onClick={() => { addContactWithId(selectedContactId!, { name: selectedContactId!, phone: /^[\d+-\s()]+$/.test(selectedContactId!) ? selectedContactId! : undefined }); }} className="p-2 rounded-xl text-white hover:opacity-90 transition-opacity flex items-center justify-center" style={{ backgroundColor: TEAL }} aria-label={isHe ? "הוסף לאנשי קשר" : "Add to Contacts"}>
+                    <UserPlus className="w-5 h-5" strokeWidth={2} />
+                  </button>
                 </div>
               ) : selectedContact ? (
               <div className="flex-shrink-0 flex items-center gap-2 px-2 py-1.5 border-b border-gray-100/80 bg-white/95">
@@ -317,7 +303,7 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
                 </Link>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-gray-900 truncate text-[11px]">{selectedContact.name || selectedContact.email}</p>
-                  <p className="text-[9px] text-gray-500">{isHe ? "שיחה דו-כיוונית" : "Two-way chat"}</p>
+                  <p className="text-[9px] text-gray-500 font-mono">ID: {formatOllinIdForDisplay(selectedContact.userId ?? selectedContact.id)}</p>
                 </div>
                 <div className="flex items-center gap-0.5">
                   <button type="button" className="p-2 rounded-xl text-[#008080] hover:bg-[#008080]/10" aria-label={isHe ? "שיחת אודיו" : "Voice call"}><Phone className="w-4 h-4" strokeWidth={2} /></button>
@@ -348,6 +334,131 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
                 </div>
               )}
                   <div className="flex-1 overflow-y-auto p-1.5 space-y-1">
+                    {/* Unified onboarding card: single glass card for unknown sender. Vanishes when added to contacts. */}
+                    {isUnknownContact && (
+                      <div className="flex flex-col items-center py-3 px-2">
+                        <div className="w-full max-w-[90%] rounded-2xl overflow-hidden backdrop-blur-xl bg-white/80 border border-[#008080]/10 shadow-[0_8px_32px_rgba(0,128,128,0.08)]">
+                          {/* Row 1: Identity — Unknown Sender + [Add to Contacts] + [Safety Tools] link */}
+                          <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-[#008080]/10">
+                            <span className="text-sm font-semibold text-gray-900">{isHe ? "שולח לא מוכר" : "Unknown Sender"}</span>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => addContactWithId(selectedContactId!, { name: selectedContactId!, phone: /^[\d+-\s()]+$/.test(selectedContactId!) ? selectedContactId! : undefined })}
+                                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white hover:opacity-90 transition-opacity"
+                                style={{ backgroundColor: TEAL }}
+                              >
+                                <UserPlus className="w-4 h-4" strokeWidth={2} />
+                                {isHe ? "הוסף לאנשי קשר" : "Add to Contacts"}
+                              </button>
+                              <Link href={`/dashboard/messages/contact/${selectedContactId}`} className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl text-xs font-medium text-gray-600 hover:bg-[#008080]/10 hover:text-[#008080] transition-colors">
+                                <Shield className="w-4 h-4" strokeWidth={2} />
+                                {isHe ? "כלי בטיחות" : "Safety Tools"}
+                              </Link>
+                            </div>
+                          </div>
+                          {/* Row 2: Social proof — Mutual Contacts, Groups in Common */}
+                          <div className="flex items-center gap-4 px-4 py-2.5 border-b border-[#008080]/10 bg-white/50">
+                            <span className="flex items-center gap-1.5 text-xs text-gray-600">
+                              <Users className="w-4 h-4 text-[#008080]" strokeWidth={2} />
+                              {isHe ? "אנשי קשר משותפים" : "Mutual Contacts"}: <span className="font-semibold text-gray-900 tabular-nums">0</span>
+                            </span>
+                            <span className="flex items-center gap-1.5 text-xs text-gray-600">
+                              <MessageSquare className="w-4 h-4 text-[#008080]" strokeWidth={2} />
+                              {isHe ? "קבוצות במשותף" : "Groups in Common"}: <span className="font-semibold text-gray-900 tabular-nums">0</span>
+                            </span>
+                          </div>
+                          {/* Row 3: Task logic — Assign tasks to my board? [Allow] [Decline] */}
+                          <div className="px-4 py-3 border-b border-[#008080]/10">
+                            <p className="text-xs text-gray-600 mb-2">{isHe ? "להקצות משימות ללוח שלי?" : "Assign tasks to my board?"}</p>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  addContactWithId(selectedContactId!, { name: selectedContactId!, phone: /^[\d+-\s()]+$/.test(selectedContactId!) ? selectedContactId! : undefined });
+                                  updateContact(selectedContactId!, { allowTasksFrom: true });
+                                }}
+                                className="px-4 py-2 rounded-xl text-xs font-semibold text-white hover:opacity-90 transition-opacity"
+                                style={{ backgroundColor: TEAL }}
+                              >
+                                {isHe ? "אפשר" : "Allow"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  addContactWithId(selectedContactId!, { name: selectedContactId! });
+                                  updateContact(selectedContactId!, { allowTasksFrom: false });
+                                }}
+                                className="px-4 py-2 rounded-xl text-xs font-medium text-gray-500 bg-gray-200/80 hover:bg-gray-300/80 border border-gray-300/80 transition-colors"
+                              >
+                                {isHe ? "דחה" : "Decline"}
+                              </button>
+                            </div>
+                          </div>
+                          {/* Footer: Red [Block] button */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              addContactWithId(selectedContactId!, { name: selectedContactId! });
+                              updateContact(selectedContactId!, { blocked: true });
+                              setSelectedContactId(null);
+                            }}
+                            className="w-full flex items-center justify-center gap-2 py-3 text-red-600 text-xs font-semibold hover:bg-red-50 transition-colors border-t border-red-100"
+                          >
+                            <Ban className="w-4 h-4" strokeWidth={2} />
+                            {isHe ? "חסום" : "Block"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {/* Known contact (isSaved): title = Contact Name; no Add to Contacts, no Safety Tools, no Unknown Sender. Keep Mutual Contacts, Groups, Allow Tasks, Block. */}
+                    {selectedContact && !isUnknownContact && sortedMessages.length === 0 && (
+                      <div className="flex flex-col items-center py-3 px-2">
+                        <div className="w-full max-w-[90%] rounded-2xl overflow-hidden backdrop-blur-xl bg-white/80 border border-[#008080]/10 shadow-[0_8px_32px_rgba(0,128,128,0.08)]">
+                          <div className="px-4 py-3 border-b border-[#008080]/10">
+                            <h3 className="text-sm font-semibold text-gray-900">{selectedContact.name || selectedContact.email || selectedContactId}</h3>
+                          </div>
+                          <div className="flex items-center gap-4 px-4 py-2.5 border-b border-[#008080]/10 bg-white/50">
+                            <span className="flex items-center gap-1.5 text-xs text-gray-600">
+                              <Users className="w-4 h-4 text-[#008080]" strokeWidth={2} />
+                              {isHe ? "אנשי קשר משותפים" : "Mutual Contacts"}: <span className="font-semibold text-gray-900 tabular-nums">0</span>
+                            </span>
+                            <span className="flex items-center gap-1.5 text-xs text-gray-600">
+                              <MessageSquare className="w-4 h-4 text-[#008080]" strokeWidth={2} />
+                              {isHe ? "קבוצות במשותף" : "Groups in Common"}: <span className="font-semibold text-gray-900 tabular-nums">0</span>
+                            </span>
+                          </div>
+                          <div className="px-4 py-3 border-b border-[#008080]/10">
+                            <p className="text-xs text-gray-600 mb-2">{isHe ? "להקצות משימות ללוח שלי?" : "Assign tasks to my board?"}</p>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => updateContact(selectedContactId!, { allowTasksFrom: true })}
+                                className="px-4 py-2 rounded-xl text-xs font-semibold text-white hover:opacity-90 transition-opacity"
+                                style={{ backgroundColor: TEAL }}
+                              >
+                                {isHe ? "אפשר" : "Allow"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => updateContact(selectedContactId!, { allowTasksFrom: false })}
+                                className="px-4 py-2 rounded-xl text-xs font-medium text-gray-500 bg-gray-200/80 hover:bg-gray-300/80 border border-gray-300/80 transition-colors"
+                              >
+                                {isHe ? "דחה" : "Decline"}
+                              </button>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => { updateContact(selectedContactId!, { blocked: true }); setSelectedContactId(null); }}
+                            className="w-full flex items-center justify-center gap-2 py-2.5 text-red-600 text-[11px] font-medium hover:bg-red-50 transition-colors border-t border-red-100"
+                          >
+                            <Ban className="w-3.5 h-3.5" strokeWidth={2} />
+                            {isHe ? "חסום" : "Block"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     {(chatSearchQuery.trim() ? sortedMessages.filter((m) => { const text = m.parts.find((p) => p.type === "text")?.content ?? ""; return text.toLowerCase().includes(chatSearchQuery.trim().toLowerCase()); }) : sortedMessages).map((m) => (
                       <MessageBubble
                         key={m.id}

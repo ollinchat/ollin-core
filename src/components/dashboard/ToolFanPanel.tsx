@@ -38,8 +38,10 @@ export function ToolFanPanel({ onOpenBoard }: ToolFanPanelProps) {
   }
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col">
-      <OllinSlide onOpenNote={handleOpenNote} onNewNote={handleNewNote} onOpenBoard={onOpenBoard} />
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <OllinSlide onOpenNote={handleOpenNote} onNewNote={handleNewNote} onOpenBoard={onOpenBoard} />
+      </div>
     </div>
   );
 }
