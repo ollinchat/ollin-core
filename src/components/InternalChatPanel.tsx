@@ -287,11 +287,8 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
                   <div className="flex-1 min-w-0 flex items-center justify-center gap-2 py-1">
                     <span className="font-mono text-xs text-gray-600 truncate max-w-[120px]">{selectedContactId}</span>
                   </div>
+                  {/* Safety Banner (first interaction): [Block (Red)] | [Add to Contacts (Turquoise)] */}
                   <div className="flex items-center gap-1.5">
-                    <button type="button" onClick={() => { addContactWithId(selectedContactId!, { name: selectedContactId! }); }} className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-white text-xs font-medium hover:opacity-90 transition-opacity" style={{ backgroundColor: TEAL }}>
-                      <UserPlus className="w-3.5 h-3.5" strokeWidth={2} />
-                      {isHe ? "הוסף" : "Add"}
-                    </button>
                     <button
                       type="button"
                       onClick={() => {
@@ -299,10 +296,14 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
                         updateContact(selectedContactId!, { blocked: true });
                         setSelectedContactId(null);
                       }}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-red-600 text-white text-xs font-medium hover:bg-red-700 transition-colors"
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-[20px] bg-red-600 text-white text-xs font-medium hover:bg-red-700 transition-colors"
                     >
                       <Ban className="w-3.5 h-3.5" strokeWidth={2} />
                       {isHe ? "חסום" : "Block"}
+                    </button>
+                    <button type="button" onClick={() => { addContactWithId(selectedContactId!, { name: selectedContactId! }); }} className="flex items-center gap-1 px-2.5 py-1.5 rounded-[20px] text-white text-xs font-medium hover:opacity-90 transition-opacity" style={{ backgroundColor: TEAL }}>
+                      <UserPlus className="w-3.5 h-3.5" strokeWidth={2} />
+                      {isHe ? "הוסף לאנשי קשר" : "Add to Contacts"}
                     </button>
                   </div>
                 </div>
