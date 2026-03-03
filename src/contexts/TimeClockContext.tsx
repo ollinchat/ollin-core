@@ -26,8 +26,8 @@ function saveEntriesToStorage(entries: TimeClockEntry[]) {
 
 type TimeClockContextType = {
   entries: TimeClockEntry[];
-  clockIn: (note?: string) => Promise<void>;
-  clockOut: (note?: string) => Promise<void>;
+  clockIn: (note?: string, address?: string) => Promise<void>;
+  clockOut: (note?: string, address?: string) => Promise<void>;
   updateEntryNote: (entryId: string, note: string) => void;
 };
 
@@ -57,7 +57,7 @@ export function TimeClockProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const recordEntry = useCallback(async (type: "in" | "out", note?: string) => {
+  const recordEntry = useCallback(async (type: "in" | "out", note?: string, address?: string) => {
     let lat: number | null = null;
     let lng: number | null = null;
     let label: string | undefined;
@@ -84,6 +84,7 @@ export function TimeClockProvider({ children }: { children: React.ReactNode }) {
       lat,
       lng,
       label,
+      address,
       note,
     };
     setEntries((prev) => {
@@ -103,8 +104,8 @@ export function TimeClockProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const clockIn = useCallback((note?: string) => recordEntry("in", note), [recordEntry]);
-  const clockOut = useCallback((note?: string) => recordEntry("out", note), [recordEntry]);
+  const clockIn = useCallback((note?: string, address?: string) => recordEntry("in", note, address), [recordEntry]);
+  const clockOut = useCallback((note?: string, address?: string) => recordEntry("out", note, address), [recordEntry]);
 
   return (
     <TimeClockContext.Provider value={{ entries, clockIn, clockOut, updateEntryNote }}>

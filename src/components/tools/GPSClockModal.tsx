@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { useLocale } from "@/contexts/LocaleContext";
 import { useTimeClock } from "@/contexts/TimeClockContext";
@@ -22,11 +22,38 @@ import type { TimeClockEntry } from "@/lib/timeclock-types";
 
 type Props = { onClose: () => void };
 
-type BoardLocation = { boardId: string; name: string; address: string; radiusMeters: number; assignedUserId?: string };
+const RADIUS_OPTIONS = [
+  { value: 100, label: "100m" },
+  { value: 250, label: "250m" },
+  { value: 500, label: "500m" },
+  { value: 1000, label: "1km" },
+] as const;
+
+type BoardLocation = {
+  boardId: string;
+  name: string;
+  address: string;
+  radiusMeters: 100 | 250 | 500 | 1000;
+  restrictLocation: boolean;
+  assignedUserIds: string[];
+};
+
+function migrateBoard(b: Record<string, unknown>): BoardLocation {
+  const radius = [100, 250, 500, 1000].includes(Number(b.radiusMeters)) ? (b.radiusMeters as 100 | 250 | 500 | 1000) : 500;
+  const assignedUserId = b.assignedUserId as string | undefined;
+  return {
+    boardId: String(b.boardId),
+    name: String(b.name ?? ""),
+    address: String(b.address ?? ""),
+    radiusMeters: radius,
+    restrictLocation: Boolean(b.restrictLocation),
+    assignedUserIds: Array.isArray(b.assignedUserIds) ? b.assignedUserIds : (assignedUserId ? [assignedUserId] : []),
+  };
+}
 
 const DEFAULT_BOARDS: BoardLocation[] = [
-  { boardId: "board1", name: "Main Warehouse", address: "", radiusMeters: 500 },
-  { boardId: "board2", name: "Board 2", address: "", radiusMeters: 500 },
+  { boardId: "board1", name: "Main Warehouse", address: "", radiusMeters: 500, restrictLocation: false, assignedUserIds: [] },
+  { boardId: "board2", name: "Board 2", address: "", radiusMeters: 500, restrictLocation: false, assignedUserIds: [] },
 ];
 
 function formatClock(ms: number): string {
@@ -55,11 +82,25 @@ export function GPSClockModal({ onClose }: Props) {
     if (typeof window === "undefined") return DEFAULT_BOARDS;
     try {
       const raw = localStorage.getItem("ollin_gps_board_locations");
-      return raw ? JSON.parse(raw) : DEFAULT_BOARDS;
+      if (!raw) return DEFAULT_BOARDS;
+      const parsed = JSON.parse(raw) as Record<string, unknown>[];
+      return Array.isArray(parsed) ? parsed.map((b) => migrateBoard(b)) : DEFAULT_BOARDS;
     } catch {
       return DEFAULT_BOARDS;
     }
   });
+  const [hourlyRate, setHourlyRate] = useState("");
+  const [clockOutSummary, setClockOutSummary] = useState<{
+    totalMs: number;
+    startAddress: string;
+    endAddress: string;
+    note: string;
+    outEntryId: string | null;
+  } | null>(null);
+  const [clockOutPopupNotes, setClockOutPopupNotes] = useState("");
+  const [placesScriptReady, setPlacesScriptReady] = useState(false);
+  const addressInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const autocompleteAttached = useRef<Set<string>>(new Set());
 
   const latest = entries[0];
   const isClockedIn = latest?.type === "in";
@@ -73,15 +114,36 @@ export function GPSClockModal({ onClose }: Props) {
     return () => clearInterval(id);
   }, [isClockedIn, clockInTime]);
 
-  const handleToggle = () => {
+  const handleToggle = async () => {
+    const noteVal = note.trim() || undefined;
     if (isClockedIn) {
-      clockOut(note.trim() || undefined);
+      const inEntry = entries.find((e) => e.type === "in");
+      const startAddress = inEntry?.address || inEntry?.label || "—";
+      const totalMs = inEntry ? Date.now() - inEntry.timestamp : 0;
+      await clockOut(noteVal);
       setNote("");
+      setClockOutSummary({
+        totalMs,
+        startAddress,
+        endAddress: "—",
+        note: noteVal ?? "",
+        outEntryId: null,
+      });
+      setClockOutPopupNotes(noteVal ?? "");
     } else {
-      clockIn(note.trim() || undefined);
+      await clockIn(noteVal);
       setNote("");
     }
   };
+
+  useEffect(() => {
+    if (!clockOutSummary || (clockOutSummary.endAddress !== "—" && clockOutSummary.outEntryId != null)) return;
+    const outEntry = entries[0];
+    if (outEntry?.type === "out") {
+      const endAddr = outEntry.address || outEntry.label || "—";
+      setClockOutSummary((prev) => prev ? { ...prev, endAddress: endAddr, outEntryId: outEntry.id } : null);
+    }
+  }, [clockOutSummary, entries]);
 
   const saveBoardLocations = (next: BoardLocation[]) => {
     setBoardLocations(next);
@@ -90,7 +152,7 @@ export function GPSClockModal({ onClose }: Props) {
     } catch (_) {}
   };
 
-  const updateBoardLocation = (boardId: string, field: "address" | "radiusMeters" | "name" | "assignedUserId", value: string | number) => {
+  const updateBoardLocation = (boardId: string, field: keyof BoardLocation, value: string | number | boolean | string[]) => {
     setBoardLocations((prev) => {
       const next = prev.map((b) =>
         b.boardId === boardId ? { ...b, [field]: value } : b
@@ -99,6 +161,76 @@ export function GPSClockModal({ onClose }: Props) {
       return next;
     });
   };
+
+  const toggleBoardContact = (boardId: string, contactId: string) => {
+    setBoardLocations((prev) => {
+      const next = prev.map((b) => {
+        if (b.boardId !== boardId) return b;
+        const ids = b.assignedUserIds.includes(contactId)
+          ? b.assignedUserIds.filter((id) => id !== contactId)
+          : [...b.assignedUserIds, contactId];
+        return { ...b, assignedUserIds: ids };
+      });
+      saveBoardLocations(next);
+      return next;
+    });
+  };
+
+  const baseUrl =
+    (process.env.NEXT_PUBLIC_APP_URL ?? "").trim() ||
+    (typeof window !== "undefined" ? window.location.origin : "");
+  const signupLink = baseUrl ? `${baseUrl}/onboarding` : "/onboarding";
+  const boardInviteLink = baseUrl ? `${baseUrl}/dashboard` : "/dashboard";
+  const sendWhatsAppSignup = (contact: { phone?: string }) => {
+    const msg = encodeURIComponent(`Join our team on Ollin: ${signupLink}`);
+    const num = (contact.phone ?? "").replace(/\D/g, "");
+    if (num) window.open(`https://wa.me/${num}?text=${msg}`, "_blank");
+  };
+  const sendWhatsAppBoardInvite = (contact: { phone?: string }) => {
+    const msg = encodeURIComponent(`Hi! I sent you a new board on Ollin. Join here: ${boardInviteLink}`);
+    const num = (contact.phone ?? "").replace(/\D/g, "");
+    if (num) window.open(`https://wa.me/${num}?text=${msg}`, "_blank");
+  };
+
+  // Load Google Places script for address autocomplete (NEXT_PUBLIC_GOOGLE_MAPS_API_KEY from .env.local)
+  useEffect(() => {
+    const key = (process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "").trim();
+    if (!key || !adminOpen) return;
+    if ((window as unknown as { __ollinPlacesLoaded?: boolean }).__ollinPlacesLoaded) {
+      setPlacesScriptReady(true);
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places`;
+    script.async = true;
+    script.onload = () => {
+      (window as unknown as { __ollinPlacesLoaded?: boolean }).__ollinPlacesLoaded = true;
+      setPlacesScriptReady(true);
+    };
+    document.head.appendChild(script);
+    return () => {};
+  }, [adminOpen]);
+
+  // Attach Places Autocomplete to address inputs
+  useEffect(() => {
+    if (!placesScriptReady || !adminOpen || typeof window === "undefined") return;
+    const g = (window as unknown as { google?: { maps?: { places?: { Autocomplete?: new (el: HTMLInputElement, opts: { types?: string[] }) => { addListener: (ev: string, cb: () => void) => void; getPlace: () => { formatted_address?: string } } } } } }).google;
+    const Autocomplete = g?.maps?.places?.Autocomplete;
+    if (!Autocomplete) return;
+    boardLocations.forEach((b) => {
+      const el = addressInputRefs.current[b.boardId];
+      if (!el || autocompleteAttached.current.has(b.boardId)) return;
+      try {
+        const autocomplete = new Autocomplete(el, { types: ["address"] });
+        autocomplete.addListener("place_changed", () => {
+          const place = autocomplete.getPlace();
+          const addr = place?.formatted_address ?? "";
+          if (addr) updateBoardLocation(b.boardId, "address", addr);
+        });
+        autocompleteAttached.current.add(b.boardId);
+      } catch (_) {}
+    });
+  }, [placesScriptReady, adminOpen, boardLocations]);
 
   const handleExportCsv = () => {
     const lines = ["Date,Type,Note,Location,Time"];
@@ -167,6 +299,17 @@ export function GPSClockModal({ onClose }: Props) {
     .sort(([a], [b]) => new Date(b).getTime() - new Date(a).getTime())
     .slice(0, 15);
 
+  const totalPeriodMs = dayRows.reduce((sum, [, dayEntries]) => {
+    const sorted = [...dayEntries].sort((a, b) => a.timestamp - b.timestamp);
+    const inE = sorted.find((e) => e.type === "in");
+    const outE = sorted.find((e) => e.type === "out");
+    if (inE && outE) return sum + (outE.timestamp - inE.timestamp);
+    return sum;
+  }, 0);
+  const totalPeriodHours = totalPeriodMs / (1000 * 60 * 60);
+  const rateNum = parseFloat(hourlyRate.replace(/,/g, ".")) || 0;
+  const totalPay = totalPeriodHours * rateNum;
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
@@ -201,10 +344,10 @@ export function GPSClockModal({ onClose }: Props) {
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-6 space-y-6">
-          {/* Month + Board filter */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wider block mb-2">Month</label>
+          {/* Month / Year + Board in one row (flex-row) */}
+          <div className="flex flex-row flex-wrap items-end gap-3">
+            <div className="flex-1 min-w-[140px]">
+              <label className="text-xs font-medium text-gray-500 uppercase tracking-wider block mb-2">Month / Year</label>
               <input
                 type="month"
                 value={monthFilter}
@@ -212,7 +355,7 @@ export function GPSClockModal({ onClose }: Props) {
                 className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm"
               />
             </div>
-            <div>
+            <div className="flex-1 min-w-[140px]">
               <label className="text-xs font-medium text-gray-500 uppercase tracking-wider block mb-2">Board</label>
               <select
                 value={boardFilter}
@@ -309,7 +452,7 @@ export function GPSClockModal({ onClose }: Props) {
             {adminOpen && (
               <div className="px-5 pb-5 pt-1 space-y-4 border-t border-gray-200">
                 <h3 className="text-sm font-semibold text-gray-800">Assign location to board</h3>
-                <p className="text-xs text-gray-500">Set an address and radius (meters) for each board. Clock entries can be associated with a board when within range.</p>
+                <p className="text-xs text-gray-500">Set an address and radius for each board. Clock entries can be associated with a board when within range.</p>
                 {boardLocations.map((b) => (
                   <div key={b.boardId} className="space-y-3 rounded-xl bg-white p-4 border border-gray-100 shadow-sm">
                     <div>
@@ -323,44 +466,86 @@ export function GPSClockModal({ onClose }: Props) {
                       />
                     </div>
                     <div>
-                      <label className="text-xs font-medium text-gray-500 flex items-center gap-1 mb-1">
-                        <User className="w-3.5 h-3.5" />
-                        Assign to user
-                      </label>
-                      <select
-                        value={b.assignedUserId ?? ""}
-                        onChange={(e) => updateBoardLocation(b.boardId, "assignedUserId", e.target.value)}
-                        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 bg-white"
-                      >
-                        <option value="">— None —</option>
-                        {contacts.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name || c.email}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-gray-500 block mb-1">Address</label>
+                      <label className="text-xs font-medium text-gray-500 block mb-1">Address (with Google Places)</label>
                       <input
+                        ref={(el) => { addressInputRefs.current[b.boardId] = el; }}
                         type="text"
                         value={b.address}
                         onChange={(e) => updateBoardLocation(b.boardId, "address", e.target.value)}
-                        placeholder="Address or place name"
+                        placeholder="Start typing address…"
                         className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900"
                       />
                     </div>
-                    <div className="flex items-center gap-2">
-                      <MapPin className="w-4 h-4 text-gray-400" />
-                      <input
-                        type="number"
-                        min={100}
-                        max={5000}
-                        value={b.radiusMeters}
-                        onChange={(e) => updateBoardLocation(b.boardId, "radiusMeters", parseInt(e.target.value, 10) || 500)}
-                        className="w-24 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900"
-                      />
-                      <span className="text-xs text-gray-500">m radius</span>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-gray-400" />
+                        <select
+                          value={b.radiusMeters}
+                          onChange={(e) => updateBoardLocation(b.boardId, "radiusMeters", Number(e.target.value) as 100 | 250 | 500 | 1000)}
+                          className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 bg-white"
+                        >
+                          {RADIUS_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={b.restrictLocation}
+                          onChange={(e) => updateBoardLocation(b.boardId, "restrictLocation", e.target.checked)}
+                          className="rounded border-gray-300 text-[#0d9488] focus:ring-[#0d9488]"
+                        />
+                        <span className="text-xs font-medium text-gray-700">{t(locale, "tools.restrictLocation")}</span>
+                      </label>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-500 flex items-center gap-1 mb-1">
+                        <User className="w-3.5 h-3.5" />
+                        {t(locale, "tools.assignContacts")}
+                      </label>
+                      <div className="space-y-2 max-h-40 overflow-y-auto rounded-lg border border-gray-200 p-2 bg-gray-50">
+                        {contacts.map((c) => {
+                          const selected = b.assignedUserIds.includes(c.id);
+                          const hasAccount = Boolean(c.userId);
+                          return (
+                            <div key={c.id} className="flex items-center justify-between gap-2 flex-wrap">
+                              <label className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={selected}
+                                  onChange={() => toggleBoardContact(b.boardId, c.id)}
+                                  className="rounded border-gray-300 text-[#0d9488] focus:ring-[#0d9488]"
+                                />
+                                <span className="text-sm text-gray-900 truncate">{c.name || c.email}</span>
+                              </label>
+                              {selected && (
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => sendWhatsAppBoardInvite(c)}
+                                    className="text-xs font-medium text-green-600 hover:text-green-700 whitespace-nowrap"
+                                  >
+                                    {t(locale, "tools.inviteBoardWhatsApp")}
+                                  </button>
+                                  {!hasAccount && (
+                                    <span className="text-gray-300">|</span>
+                                  )}
+                                  {!hasAccount && (
+                                    <button
+                                      type="button"
+                                      onClick={() => sendWhatsAppSignup(c)}
+                                      className="text-xs font-medium text-green-600 hover:text-green-700 whitespace-nowrap"
+                                    >
+                                      {t(locale, "tools.sendSignupWhatsApp")}
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -450,6 +635,30 @@ export function GPSClockModal({ onClose }: Props) {
             )}
           </div>
 
+          {/* Bottom summary: Total Hours + Hourly Rate = Total Pay */}
+          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 space-y-3">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t(locale, "tools.totalHours")} / {t(locale, "tools.totalPay")}</h3>
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="tabular-nums text-lg font-semibold text-gray-900">
+                {totalPeriodHours.toFixed(1)} h
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-gray-600">{t(locale, "tools.hourlyRate")}</label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={hourlyRate}
+                  onChange={(e) => setHourlyRate(e.target.value)}
+                  placeholder="0"
+                  className="w-24 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900"
+                />
+              </div>
+              <div className="tabular-nums text-lg font-semibold text-[#0d9488]">
+                = {rateNum > 0 ? totalPay.toFixed(2) : "—"}
+              </div>
+            </div>
+          </div>
+
           {/* Export */}
           <div className="flex gap-3 pt-2 border-t border-gray-100">
             <button
@@ -471,6 +680,76 @@ export function GPSClockModal({ onClose }: Props) {
           </div>
         </div>
       </div>
+
+      {/* Clock-out summary modal: Total time, total hours × rate = pay, Entry/Exit address, Notes, Confirm */}
+      {clockOutSummary && (() => {
+        const shiftHours = clockOutSummary.totalMs / (1000 * 60 * 60);
+        const rateNum = parseFloat(hourlyRate.replace(/,/g, ".")) || 0;
+        const shiftPay = rateNum > 0 ? shiftHours * rateNum : null;
+        const summaryLine = [clockOutSummary.startAddress, clockOutSummary.endAddress]
+          .filter(Boolean)
+          .join(" → ");
+        return (
+          <div
+            className="absolute inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
+            onClick={() => setClockOutSummary(null)}
+          >
+            <div
+              className="w-full max-w-sm rounded-2xl bg-white shadow-xl border border-gray-200 p-5 space-y-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-sm font-semibold text-gray-900">{t(locale, "tools.clockOutSummary")}</h3>
+              <div className="space-y-2 text-sm">
+                <p className="tabular-nums font-medium text-gray-900">
+                  {formatClock(clockOutSummary.totalMs)}
+                </p>
+                <p className="text-gray-700">
+                  {t(locale, "tools.totalHours")}: {shiftHours.toFixed(1)} h
+                  {rateNum > 0 && shiftPay != null && (
+                    <> × {t(locale, "tools.hourlyRate")} = {t(locale, "tools.totalPay")}: {shiftPay.toFixed(2)}</>
+                  )}
+                </p>
+                {summaryLine && (
+                  <div>
+                    <span className="text-xs text-gray-500 block">Summary</span>
+                    <p className="text-gray-700 text-xs">{summaryLine}</p>
+                  </div>
+                )}
+                <div>
+                  <span className="text-xs text-gray-500 block">{t(locale, "tools.startAddress")}</span>
+                  <p className="text-gray-700">{clockOutSummary.startAddress}</p>
+                </div>
+                <div>
+                  <span className="text-xs text-gray-500 block">{t(locale, "tools.endAddress")}</span>
+                  <p className="text-gray-700">{clockOutSummary.endAddress}</p>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">Notes</label>
+                  <textarea
+                    value={clockOutPopupNotes}
+                    onChange={(e) => setClockOutPopupNotes(e.target.value)}
+                    placeholder="Add notes for this shift…"
+                    rows={3}
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 resize-none"
+                  />
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (clockOutSummary.outEntryId) {
+                    updateEntryNote(clockOutSummary.outEntryId, clockOutPopupNotes.trim());
+                  }
+                  setClockOutSummary(null);
+                }}
+                className="w-full rounded-xl py-3 text-sm font-medium bg-[#0d9488] text-white hover:bg-[#0f766e] transition-colors"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

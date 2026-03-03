@@ -21,10 +21,13 @@ import {
   Send,
   ListTodo,
   Brain,
+  Clock,
   ChevronUp,
   Menu,
   MessageSquare,
 } from "lucide-react";
+import { t } from "@/lib/translations";
+import { GPSClockModal } from "@/components/tools/GPSClockModal";
 
 const EASE_SMOOTH = [0.32, 0.72, 0, 1];
 const TRANSITION_MS = 300;
@@ -65,6 +68,7 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard: _onOpenBoard }:
   const [expanded, setExpanded] = useState(false);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [brainMenuOpen, setBrainMenuOpen] = useState(false);
+  const [gpsOpen, setGpsOpen] = useState(false);
   const [placeholderDots, setPlaceholderDots] = useState("");
   const [topicsSidebarOpen, setTopicsSidebarOpen] = useState(false);
   const [topics, setTopics] = useState<{ id: string; title: string }[]>([]);
@@ -148,6 +152,9 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard: _onOpenBoard }:
             </>
           )}
         </div>
+        <button type="button" onClick={() => setGpsOpen(true)} className="w-11 h-11 rounded-xl border-2 border-[#008080]/25 bg-white text-[#008080] hover:bg-[#008080]/10 flex items-center justify-center transition-colors shadow-sm" aria-label={t(locale, "dashboard.gpsClock")}>
+          <Clock className="w-5 h-5" strokeWidth={2} />
+        </button>
       </div>
       <input
         type="text"
@@ -235,6 +242,9 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard: _onOpenBoard }:
                         </>
                       )}
                     </div>
+                    <button type="button" onClick={(e) => { e.stopPropagation(); setGpsOpen(true); }} className="w-11 h-11 rounded-xl border-2 border-[#008080]/25 bg-white text-[#008080] hover:bg-[#008080]/10 flex items-center justify-center transition-colors shadow-sm" aria-label={t(locale, "dashboard.gpsClock")}>
+                      <Clock className="w-5 h-5" strokeWidth={2} />
+                    </button>
                   </div>
                   <motion.button type="button" onClick={(e) => { e.stopPropagation(); handleSend(); }} className="w-11 h-11 rounded-xl bg-[#008080] text-white hover:bg-[#006666] transition-colors flex items-center justify-center shadow-[0_2px_12px_rgba(0,128,128,0.28)]" whileTap={{ scale: 0.95 }} aria-label="Send">
                     <Send className="w-5 h-5" strokeWidth={2} />
@@ -387,6 +397,7 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard: _onOpenBoard }:
           </motion.div>
         )}
       </AnimatePresence>
+      {gpsOpen && <GPSClockModal onClose={() => setGpsOpen(false)} />}
     </div>
   );
 }
