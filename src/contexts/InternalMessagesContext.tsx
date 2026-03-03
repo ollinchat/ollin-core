@@ -34,10 +34,13 @@ function saveMessages(messages: InternalMessage[]) {
   } catch (_) {}
 }
 
+export type ConversationMeta = { contactId: string; lastMessage: string; lastTime: number };
+
 type InternalMessagesContextType = {
   messages: InternalMessage[];
   groups: GroupConversation[];
   getConversation: (contactId: string) => InternalMessage[];
+  getConversationsWithMeta: (currentUserId: string) => ConversationMeta[];
   getGroupConversation: (groupId: string) => InternalMessage[];
   sendText: (contactId: string, text: string, currentUserId?: string) => void;
   sendTextToGroup: (groupId: string, text: string, currentUserId?: string) => void;
@@ -96,6 +99,30 @@ export function InternalMessagesProvider({ children }: { children: React.ReactNo
     (contactId: string) => {
       const cid = conversationId("me", contactId);
       return messages.filter((m) => m.conversationId === cid).sort((a, b) => a.createdAt - b.createdAt);
+    },
+    [messages]
+  );
+
+  const getConversationsWithMeta = useCallback(
+    (currentUserId: string) => {
+      const byCid = new Map<string, { last: string; time: number }>();
+      for (const m of messages) {
+        const parts = m.conversationId.split("--");
+        const otherId = parts.find((p) => p !== currentUserId);
+        if (!otherId) continue;
+        const text = m.parts.find((p) => p.type === "text")?.content ?? (m.parts[0]?.type === "voice" ? "🎤" : "📎");
+        const existing = byCid.get(m.conversationId);
+        if (!existing || m.createdAt > existing.time) {
+          byCid.set(m.conversationId, { last: text, time: m.createdAt });
+        }
+      }
+      return Array.from(byCid.entries())
+        .map(([cid, { last, time }]) => {
+          const parts = cid.split("--");
+          const contactId = parts.find((p) => p !== currentUserId) ?? parts[0];
+          return { contactId, lastMessage: last, lastTime: time };
+        })
+        .sort((a, b) => b.lastTime - a.lastTime);
     },
     [messages]
   );
@@ -232,6 +259,7 @@ export function InternalMessagesProvider({ children }: { children: React.ReactNo
       messages,
       groups,
       getConversation,
+      getConversationsWithMeta,
       getGroupConversation,
       sendText,
       sendTextToGroup,
@@ -246,6 +274,7 @@ export function InternalMessagesProvider({ children }: { children: React.ReactNo
       messages,
       groups,
       getConversation,
+      getConversationsWithMeta,
       getGroupConversation,
       sendText,
       sendTextToGroup,

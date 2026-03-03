@@ -1,32 +1,35 @@
-import React, { useState } from 'react';
-import { Send, Brain, Sparkles } from 'lucide-react';
+import React, { useState } from "react";
+import { Send, Brain, Sparkles } from "lucide-react";
 
-const InternalChatPanel = () => {
-  const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<{role: string, content: string}[]>([]);
+export function InternalChatPanel() {
+  const [input, setInput] = useState("");
+  const [messages, setMessages] = useState<{ role: string; content: string }[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSend = async () => {
     if (!input.trim()) return;
 
     const userMessage = input;
-    setInput('');
-    setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+    setInput("");
+    setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
     setIsLoading(true);
 
     try {
       // This sends the message to your Gemini route
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: userMessage }),
       });
 
       const data = await response.json();
-      setMessages(prev => [...prev, { role: 'assistant', content: data.text }]);
+      setMessages((prev) => [...prev, { role: "assistant", content: data.text }]);
     } catch (error) {
       console.error("Gemini Error:", error);
-      setMessages(prev => [...prev, { role: 'assistant', content: "Error: Make sure your API key is correct in .env.local" }]);
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "Error: Make sure your API key is correct in .env.local" },
+      ]);
     } finally {
       setIsLoading(false);
     }
@@ -59,11 +62,11 @@ const InternalChatPanel = () => {
         )}
         
         {messages.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+          <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
             <div className={`max-w-[85%] p-4 rounded-[1.5rem] text-sm leading-relaxed shadow-sm ${
-              msg.role === 'user' 
-                ? 'bg-blue-600 text-white rounded-tr-none' 
-                : 'bg-white text-gray-800 rounded-tl-none border border-gray-100'
+              msg.role === "user"
+                ? "bg-blue-600 text-white rounded-tr-none"
+                : "bg-white text-gray-800 rounded-tl-none border border-gray-100"
             }`}>
               {msg.content}
             </div>
@@ -79,10 +82,10 @@ const InternalChatPanel = () => {
 
       {/* Input Field */}
       <div className="p-4 bg-white border-t flex gap-2 items-center">
-        <input 
+        <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+          onKeyDown={(e) => e.key === "Enter" && handleSend()}
           placeholder="Message Gemini..."
           className="flex-1 p-4 bg-gray-100 rounded-2xl outline-none text-sm font-medium focus:ring-2 ring-blue-500/10 transition-all"
         />
@@ -96,6 +99,6 @@ const InternalChatPanel = () => {
       </div>
     </div>
   );
-};
+}
 
 export default InternalChatPanel;
