@@ -20,7 +20,6 @@ import {
   FileOutput,
   Send,
   ListTodo,
-  Brain,
   Clock,
   ChevronUp,
   Menu,
@@ -67,7 +66,6 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard: _onOpenBoard }:
   const [input, setInput] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
-  const [brainMenuOpen, setBrainMenuOpen] = useState(false);
   const [gpsOpen, setGpsOpen] = useState(false);
   const [placeholderDots, setPlaceholderDots] = useState("");
   const [topicsSidebarOpen, setTopicsSidebarOpen] = useState(false);
@@ -133,24 +131,6 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard: _onOpenBoard }:
               </>
             )}
           </AnimatePresence>
-        </div>
-        <div className="relative">
-          <button type="button" onClick={() => setBrainMenuOpen((o) => !o)} className="w-11 h-11 rounded-xl border-2 border-[#008080]/25 bg-white text-[#008080] hover:bg-[#008080]/10 flex items-center justify-center transition-colors shadow-sm" aria-label={isHe ? "מודל AI" : "AI model"}>
-            <Brain className="w-5 h-5" strokeWidth={2} />
-          </button>
-          {brainMenuOpen && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setBrainMenuOpen(false)} aria-hidden />
-              <div className="absolute bottom-full left-0 mb-2 rounded-xl bg-white/95 backdrop-blur-md border border-[#008080]/15 py-2 z-50 w-48 shadow-lg">
-                <p className="px-3 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">{isHe ? "מודל" : "Model"}</p>
-                {["Ollin", "GPT-4", "Claude"].map((name) => (
-                  <button key={name} type="button" onClick={() => setBrainMenuOpen(false)} className="w-full px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-[#008080]/10 rounded-lg">
-                    {name}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
         </div>
         <button type="button" onClick={() => setGpsOpen(true)} className="w-11 h-11 rounded-xl border-2 border-[#008080]/25 bg-white text-[#008080] hover:bg-[#008080]/10 flex items-center justify-center transition-colors shadow-sm" aria-label={t(locale, "dashboard.gpsClock")}>
           <Clock className="w-5 h-5" strokeWidth={2} />
@@ -223,24 +203,6 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard: _onOpenBoard }:
                           </>
                         )}
                       </AnimatePresence>
-                    </div>
-                    <div className="relative">
-                      <button type="button" onClick={(e) => { e.stopPropagation(); setBrainMenuOpen((o) => !o); }} className="w-11 h-11 rounded-xl border-2 border-[#008080]/25 bg-white text-[#008080] hover:bg-[#008080]/10 flex items-center justify-center transition-colors shadow-sm" aria-label={isHe ? "מודל AI" : "AI model"}>
-                        <Brain className="w-5 h-5" strokeWidth={2} />
-                      </button>
-                      {brainMenuOpen && (
-                        <>
-                          <div className="fixed inset-0 z-40" onClick={() => setBrainMenuOpen(false)} aria-hidden />
-                          <div className="absolute bottom-full left-0 mb-2 rounded-xl bg-white/95 backdrop-blur-md border border-[#008080]/15 py-2 z-50 w-48 shadow-lg">
-                            <p className="px-3 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">{isHe ? "מודל" : "Model"}</p>
-                            {["Ollin", "GPT-4", "Claude"].map((name) => (
-                              <button key={name} type="button" onClick={() => setBrainMenuOpen(false)} className="w-full px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-[#008080]/10 rounded-lg">
-                                {name}
-                              </button>
-                            ))}
-                          </div>
-                        </>
-                      )}
                     </div>
                     <button type="button" onClick={(e) => { e.stopPropagation(); setGpsOpen(true); }} className="w-11 h-11 rounded-xl border-2 border-[#008080]/25 bg-white text-[#008080] hover:bg-[#008080]/10 flex items-center justify-center transition-colors shadow-sm" aria-label={t(locale, "dashboard.gpsClock")}>
                       <Clock className="w-5 h-5" strokeWidth={2} />

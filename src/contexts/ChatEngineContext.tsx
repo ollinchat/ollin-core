@@ -8,7 +8,6 @@ import {
   type QuoteCardPayload,
   type EventCardPayload,
   detectLanguage,
-  generateReply,
   getLastMessageIsTaskIntent,
   shouldUseSearchTool,
   loadAIMessages,
@@ -16,8 +15,6 @@ import {
   loadInternalMessages,
   saveInternalMessages,
   conversationId,
-  buildBoardSummary,
-  buildFinanceSummary,
   parseTaskTitleFromIntent,
   isEventIntent,
   isPollIntent,
@@ -397,74 +394,46 @@ export function ChatEngineProvider({ children }: { children: React.ReactNode }) 
       return;
     }
 
-    // Analyze Board and Finances on every message for proactive, world-class partner replies
-    setTimeout(() => {
-      const boardSummary = buildBoardSummary();
-      const financeSummary = buildFinanceSummary();
-      const givenPending = board.given.filter((t) => !t.done).length;
-      const receivedPending = board.received.filter((t) => !t.done).length;
-      const pendingGiven = board.given.filter((t) => !t.done);
-      const pendingReceived = board.received.filter((t) => !t.done);
-      const pendingTaskTitles = [
-        ...pendingGiven.slice(0, 2).map((t) => t.title || "Task"),
-        ...pendingReceived.slice(0, 1).map((t) => t.title || "Task"),
-      ].filter(Boolean);
-      const activeInvoices = finance.invoices.filter((i) => i.status === "active");
-      const unpaidInvoiceCount = activeInvoices.length;
-      const firstUnpaidInvoiceNumber = activeInvoices[0]?.number;
-      const checklistBrief = profile?.userId
-        ? checklists.getChecklistBrief(profile.userId)
-        : undefined;
-      const today = new Date().toISOString().slice(0, 10);
-      const overdueList = finance.overdueInvoices || [];
-      const overdueBrief =
-        overdueList.length > 0
-          ? overdueList
-              .slice(0, 2)
-              .map((inv) => {
-                const due = inv.dueDate || today;
-                const days = Math.floor((new Date(today).getTime() - new Date(due).getTime()) / 86400000);
-                return `Invoice #${inv.number} for '${inv.clientName}' is ${days} day${days !== 1 ? "s" : ""} overdue.`;
-              })
-              .join(" ") + " Should I send a reminder or mark as handled?"
-          : undefined;
-      const quotesWaiting = finance.quotes.filter((q) => (q.status as string) !== "canceled").length;
-      const financeProactiveBrief =
-        quotesWaiting > 0 || overdueList.length > 0
-          ? [
-              quotesWaiting > 0 ? `We have ${quotesWaiting} Price Quote${quotesWaiting !== 1 ? "s" : ""} waiting for approval` : null,
-              overdueList.length > 0 ? `${overdueList.length} Overdue Invoice${overdueList.length !== 1 ? "s" : ""}` : null,
-            ]
-              .filter(Boolean)
-              .join(" and ") + ". Want me to send a reminder to the clients?"
-          : undefined;
-      const ctx = {
-        userName: profile?.name?.split(/\s+/)[0] || "Emil",
-        boardSummary,
-        financeSummary,
-        pendingTaskCount: givenPending + receivedPending,
-        unpaidInvoiceCount,
-        firstUnpaidInvoiceNumber,
-        founderId: profile?.userId,
-        addedTaskTitle,
-        markedTaskTitle,
-        clearedLabel,
-        suggestedTaskTitle,
-        pendingTaskTitles: pendingTaskTitles.length > 0 ? pendingTaskTitles : undefined,
-        offerFollowUp: !!(markedTaskTitle || clearedLabel),
-        checklistBrief,
-        overdueBrief,
-        financeProactiveBrief,
-      };
-      const reply = generateReply(content, ctx);
-      const assistantMsg: AIMessage = { id: crypto.randomUUID(), role: "assistant", content: reply };
-      setAiMessages((prev) => {
-        const next = [...prev, assistantMsg];
-        saveAIMessages(next);
-        return next;
+    // Send to /api/chat (Gemini) for assistant reply
+    const placeholderId = crypto.randomUUID();
+    const loadingMsg: AIMessage = {
+      id: placeholderId,
+      role: "assistant",
+      content: lang === "he" ? "מחפש תשובה…" : "Thinking…",
+    };
+    setAiMessages((prev) => {
+      const next = [...prev, loadingMsg];
+      saveAIMessages(next);
+      return next;
+    });
+    fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: content }),
+    })
+      .then((r) => r.json())
+      .then((data: { text?: string; error?: string }) => {
+        const reply = data?.text?.trim() || data?.error || (lang === "he" ? "שגיאה בחיבור. נסה שוב." : "Connection error. Try again.");
+        const assistantMsg: AIMessage = { id: crypto.randomUUID(), role: "assistant", content: reply };
+        setAiMessages((prev) => {
+          const next = prev.map((m) =>
+            "role" in m && m.id === placeholderId ? assistantMsg : m
+          ) as AIMessage[];
+          saveAIMessages(next);
+          return next;
+        });
+      })
+      .catch(() => {
+        const fallback = lang === "he" ? "שגיאה. בדוק את חיבור האינטרנט או את מפתח ה-API ב-.env.local" : "Error. Check your connection or API key in .env.local.";
+        setAiMessages((prev) => {
+          const next = prev.map((m) =>
+            "role" in m && m.id === placeholderId ? { ...m, content: fallback } : m
+          ) as AIMessage[];
+          saveAIMessages(next);
+          return next;
+        });
       });
-    }, 400);
-  }, [profile?.userId, profile?.name, board, finance, checklists]);
+  }, []);
 
   const addFormMessage = useCallback((formType: "poll" | "event" | "task" | "converter") => {
     const formMsg: AIMessage = { id: crypto.randomUUID(), type: "form", formType };

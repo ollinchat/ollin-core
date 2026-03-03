@@ -22,7 +22,6 @@ import {
   Send,
   CircleCheck,
   ListTodo,
-  Brain,
   ChevronLeft,
 } from "lucide-react";
 
@@ -61,7 +60,6 @@ export function ConversationsView({ locale, onSelectedContactChange }: Conversat
   const [slideMode, setSlideMode] = useState<"tools" | "chat">("tools");
   const [input, setInput] = useState("");
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
-  const [brainMenuOpen, setBrainMenuOpen] = useState(false);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const topInputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -117,24 +115,6 @@ export function ConversationsView({ locale, onSelectedContactChange }: Conversat
                     </>
                   )}
                 </AnimatePresence>
-              </div>
-              <div className="relative">
-                <button type="button" onClick={() => setBrainMenuOpen((o) => !o)} className="w-12 h-12 rounded-xl border border-gray-200 bg-white text-[#008080] hover:bg-[#008080]/10 flex items-center justify-center transition-colors shadow-sm" aria-label={isHe ? "מודל AI" : "AI model"}>
-                  <Brain className="w-6 h-6" strokeWidth={2} />
-                </button>
-                {brainMenuOpen && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setBrainMenuOpen(false)} aria-hidden />
-                    <div className="absolute bottom-full left-0 mb-2 rounded-xl bg-white border border-gray-200 py-2 z-50 w-48 shadow-lg">
-                      <p className="px-3 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">{isHe ? "מודל" : "Model"}</p>
-                      {["Ollin", "GPT-4", "Claude"].map((name) => (
-                        <button key={name} type="button" onClick={() => setBrainMenuOpen(false)} className="w-full px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-[#008080]/10 rounded-lg">
-                          {name}
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
               </div>
             </div>
             <textarea
@@ -254,24 +234,6 @@ export function ConversationsView({ locale, onSelectedContactChange }: Conversat
                       </>
                     )}
                   </AnimatePresence>
-                </div>
-                <div className="relative">
-                  <button type="button" onClick={() => setBrainMenuOpen((o) => !o)} className="w-11 h-11 rounded-xl border border-gray-200 bg-gray-50 text-[#008080] hover:bg-[#008080]/10 flex items-center justify-center transition-colors" aria-label={isHe ? "מודל AI" : "AI model"}>
-                    <Brain className="w-5 h-5" strokeWidth={2} />
-                  </button>
-                  {brainMenuOpen && (
-                    <>
-                      <div className="fixed inset-0 z-40" onClick={() => setBrainMenuOpen(false)} aria-hidden />
-                      <div className="absolute bottom-full left-0 mb-2 rounded-xl bg-white border border-gray-200 py-2 z-50 w-48 shadow-lg">
-                        <p className="px-3 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">{isHe ? "מודל" : "Model"}</p>
-                        {["Ollin", "GPT-4", "Claude"].map((name) => (
-                          <button key={name} type="button" onClick={() => setBrainMenuOpen(false)} className="w-full px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-[#008080]/10 rounded-lg">
-                            {name}
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  )}
                 </div>
               </div>
             </div>
