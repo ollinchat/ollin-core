@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import type { TimeClockEntry } from "@/lib/timeclock-types";
 
-type Props = { onClose: () => void };
+type Props = { onClose: () => void; defaultScrollToSummary?: boolean };
 
 const RADIUS_OPTIONS = [
   { value: 100, label: "100m" },
@@ -64,7 +64,22 @@ function formatClock(ms: number): string {
   return [h, m, s].map((n) => n.toString().padStart(2, "0")).join(":");
 }
 
-export function GPSClockModal({ onClose }: Props) {
+function formatHoursMinutes(ms: number): string {
+  const totalMins = Math.floor(ms / (1000 * 60));
+  const h = Math.floor(totalMins / 60);
+  const m = totalMins % 60;
+  if (h > 0 && m > 0) return `${h}h ${m}m`;
+  if (h > 0) return `${h}h`;
+  return `${m}m`;
+}
+
+const CURRENCIES = [
+  { id: "ILS", symbol: "₪" },
+  { id: "USD", symbol: "$" },
+  { id: "EUR", symbol: "€" },
+] as const;
+
+export function GPSClockModal({ onClose, defaultScrollToSummary }: Props) {
   const { locale } = useLocale();
   const { contacts } = useContacts();
   const { entries, clockIn, clockOut, updateEntryNote } = useTimeClock();
@@ -90,6 +105,9 @@ export function GPSClockModal({ onClose }: Props) {
     }
   });
   const [hourlyRate, setHourlyRate] = useState("");
+  const [currency, setCurrency] = useState<"ILS" | "USD" | "EUR">("ILS");
+  const [contactSearch, setContactSearch] = useState<Record<string, string>>({});
+  const summaryBlockRef = useRef<HTMLDivElement>(null);
   const [clockOutSummary, setClockOutSummary] = useState<{
     totalMs: number;
     startAddress: string;
@@ -113,6 +131,14 @@ export function GPSClockModal({ onClose }: Props) {
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [isClockedIn, clockInTime]);
+
+  useEffect(() => {
+    if (!defaultScrollToSummary || !summaryBlockRef.current) return;
+    const t = setTimeout(() => {
+      summaryBlockRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 300);
+    return () => clearTimeout(t);
+  }, [defaultScrollToSummary]);
 
   const handleToggle = async () => {
     const noteVal = note.trim() || undefined;
@@ -404,27 +430,15 @@ export function GPSClockModal({ onClose }: Props) {
             />
           </div>
 
-          {/* Single toggle button */}
+          {/* Clock In: solid green. Clock Out: solid red — clearly different. */}
           <motion.button
             type="button"
             onClick={handleToggle}
-            className={`w-full flex items-center justify-center gap-3 rounded-2xl px-6 py-4 text-base font-semibold shadow-md transition-shadow ${
+            className={`w-full flex items-center justify-center gap-3 rounded-2xl px-6 py-4 text-base font-semibold text-white shadow-md transition-colors ${
               isClockedIn
-                ? "bg-red-500 text-white hover:bg-red-600"
-                : "bg-accent text-white hover:bg-accent-hover"
+                ? "bg-red-600 hover:bg-red-700"
+                : "bg-green-600 hover:bg-green-700"
             }`}
-            animate={
-              isClockedIn
-                ? {
-                    boxShadow: [
-                      "0 0 20px rgba(239,68,68,0.5), 0 4px 14px rgba(239,68,68,0.4)",
-                      "0 0 32px rgba(239,68,68,0.6), 0 4px 20px rgba(239,68,68,0.5)",
-                      "0 0 20px rgba(239,68,68,0.5), 0 4px 14px rgba(239,68,68,0.4)",
-                    ],
-                  }
-                : {}
-            }
-            transition={{ duration: 1.8, repeat: isClockedIn ? Infinity : 0, ease: "easeInOut" }}
           >
             {isClockedIn ? (
               <>
@@ -439,7 +453,7 @@ export function GPSClockModal({ onClose }: Props) {
             )}
           </motion.button>
 
-          {/* Admin — single expandable block (no duplicate box) */}
+          {/* Admin — single "Assign location to board" block */}
           <div className="rounded-2xl border border-gray-200 bg-gray-50 overflow-hidden">
             <button
               type="button"
@@ -453,7 +467,12 @@ export function GPSClockModal({ onClose }: Props) {
               <div className="px-5 pb-5 pt-1 space-y-4 border-t border-gray-200">
                 <h3 className="text-sm font-semibold text-gray-800">Assign location to board</h3>
                 <p className="text-xs text-gray-500">Set an address and radius for each board. Clock entries can be associated with a board when within range.</p>
-                {boardLocations.map((b) => (
+                {boardLocations.map((b) => {
+                  const search = (contactSearch[b.boardId] ?? "").toLowerCase();
+                  const filteredContacts = search.trim()
+                    ? contacts.filter((c) => (c.name || "").toLowerCase().includes(search) || (c.email || "").toLowerCase().includes(search))
+                    : contacts;
+                  return (
                   <div key={b.boardId} className="space-y-3 rounded-xl bg-white p-4 border border-gray-100 shadow-sm">
                     <div>
                       <label className="text-xs font-medium text-gray-500 block mb-1">Board name</label>
@@ -504,8 +523,15 @@ export function GPSClockModal({ onClose }: Props) {
                         <User className="w-3.5 h-3.5" />
                         {t(locale, "tools.assignContacts")}
                       </label>
+                      <input
+                        type="search"
+                        value={contactSearch[b.boardId] ?? ""}
+                        onChange={(e) => setContactSearch((prev) => ({ ...prev, [b.boardId]: e.target.value }))}
+                        placeholder="Search users…"
+                        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 mb-2"
+                      />
                       <div className="space-y-2 max-h-40 overflow-y-auto rounded-lg border border-gray-200 p-2 bg-gray-50">
-                        {contacts.map((c) => {
+                        {filteredContacts.map((c) => {
                           const selected = b.assignedUserIds.includes(c.id);
                           const hasAccount = Boolean(c.userId);
                           return (
@@ -548,7 +574,8 @@ export function GPSClockModal({ onClose }: Props) {
                       </div>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -571,7 +598,7 @@ export function GPSClockModal({ onClose }: Props) {
                   const inTime = inEntry ? new Date(inEntry.timestamp).toLocaleTimeString(locale === "he" ? "he-IL" : "en-US", { timeStyle: "short" }) : "—";
                   const outTime = outEntry ? new Date(outEntry.timestamp).toLocaleTimeString(locale === "he" ? "he-IL" : "en-US", { timeStyle: "short" }) : "—";
                   const totalMs = inEntry && outEntry ? outEntry.timestamp - inEntry.timestamp : 0;
-                  const totalHours = totalMs > 0 ? (totalMs / (1000 * 60 * 60)).toFixed(1) : "—";
+                  const totalHoursDisplay = totalMs > 0 ? formatHoursMinutes(totalMs) : "—";
                   const note = (inEntry?.note || outEntry?.note || "").trim() || null;
                   const noteEntry = outEntry ?? inEntry ?? null;
                   return (
@@ -582,7 +609,7 @@ export function GPSClockModal({ onClose }: Props) {
                       <div className="flex items-center justify-between gap-2 mb-3">
                         <span className="font-semibold text-gray-900 tabular-nums">{day}</span>
                         <span className="text-sm font-medium text-gray-600 tabular-nums">
-                          {totalHours !== "—" ? `${totalHours}h` : "—"}
+                          {totalHoursDisplay}
                         </span>
                       </div>
                       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
@@ -635,26 +662,37 @@ export function GPSClockModal({ onClose }: Props) {
             )}
           </div>
 
-          {/* Bottom summary: Total Hours + Hourly Rate = Total Pay */}
-          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 space-y-3">
+          {/* Bottom summary: Total Hours + Hourly Rate + Currency = Total Pay */}
+          <div ref={summaryBlockRef} className="rounded-2xl border border-gray-200 bg-gray-50 p-4 space-y-3">
             <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t(locale, "tools.totalHours")} / {t(locale, "tools.totalPay")}</h3>
-            <div className="flex flex-wrap items-center gap-4">
+            <div className="flex flex-wrap items-center gap-3">
               <div className="tabular-nums text-lg font-semibold text-gray-900">
-                {totalPeriodHours.toFixed(1)} h
+                {formatHoursMinutes(totalPeriodMs)}
               </div>
               <div className="flex items-center gap-2">
                 <label className="text-sm text-gray-600">{t(locale, "tools.hourlyRate")}</label>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={hourlyRate}
-                  onChange={(e) => setHourlyRate(e.target.value)}
-                  placeholder="0"
-                  className="w-24 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900"
-                />
+                <div className="flex items-center rounded-lg border border-gray-200 overflow-hidden">
+                  <select
+                    value={currency}
+                    onChange={(e) => setCurrency(e.target.value as "ILS" | "USD" | "EUR")}
+                    className="rounded-l-lg border-0 border-r border-gray-200 px-2 py-2 text-sm font-medium text-gray-700 bg-gray-100"
+                  >
+                    {CURRENCIES.map((c) => (
+                      <option key={c.id} value={c.id}>{c.symbol}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={hourlyRate}
+                    onChange={(e) => setHourlyRate(e.target.value)}
+                    placeholder="0"
+                    className="w-20 px-3 py-2 text-sm text-gray-900"
+                  />
+                </div>
               </div>
               <div className="tabular-nums text-lg font-semibold text-[#0d9488]">
-                = {rateNum > 0 ? totalPay.toFixed(2) : "—"}
+                = {rateNum > 0 ? `${CURRENCIES.find((c) => c.id === currency)?.symbol ?? ""}${totalPay.toFixed(2)}` : "—"}
               </div>
             </div>
           </div>
@@ -686,9 +724,8 @@ export function GPSClockModal({ onClose }: Props) {
         const shiftHours = clockOutSummary.totalMs / (1000 * 60 * 60);
         const rateNum = parseFloat(hourlyRate.replace(/,/g, ".")) || 0;
         const shiftPay = rateNum > 0 ? shiftHours * rateNum : null;
-        const summaryLine = [clockOutSummary.startAddress, clockOutSummary.endAddress]
-          .filter(Boolean)
-          .join(" → ");
+        const currencySymbol = CURRENCIES.find((c) => c.id === currency)?.symbol ?? "";
+        const summaryLine = (clockOutSummary.startAddress || clockOutSummary.endAddress) ? true : false;
         return (
           <div
             className="absolute inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
@@ -704,25 +741,24 @@ export function GPSClockModal({ onClose }: Props) {
                   {formatClock(clockOutSummary.totalMs)}
                 </p>
                 <p className="text-gray-700">
-                  {t(locale, "tools.totalHours")}: {shiftHours.toFixed(1)} h
+                  {t(locale, "tools.totalHours")}: {formatHoursMinutes(clockOutSummary.totalMs)}
                   {rateNum > 0 && shiftPay != null && (
-                    <> × {t(locale, "tools.hourlyRate")} = {t(locale, "tools.totalPay")}: {shiftPay.toFixed(2)}</>
+                    <> × {t(locale, "tools.hourlyRate")} = {t(locale, "tools.totalPay")}: {currencySymbol}{shiftPay.toFixed(2)}</>
                   )}
                 </p>
+                <div>
+                  <span className="text-xs font-medium text-gray-500 block">{t(locale, "tools.entryLocation")}</span>
+                  <p className="text-gray-900 font-medium">{clockOutSummary.startAddress || "—"}</p>
+                </div>
+                <div>
+                  <span className="text-xs font-medium text-gray-500 block">{t(locale, "tools.exitLocation")}</span>
+                  <p className="text-gray-900 font-medium">{clockOutSummary.endAddress || "—"}</p>
+                </div>
                 {summaryLine && (
-                  <div>
-                    <span className="text-xs text-gray-500 block">Summary</span>
-                    <p className="text-gray-700 text-xs">{summaryLine}</p>
+                  <div className="rounded-lg bg-gray-50 px-3 py-2">
+                    <p className="text-gray-600 text-xs">{clockOutSummary.startAddress} → {clockOutSummary.endAddress}</p>
                   </div>
                 )}
-                <div>
-                  <span className="text-xs text-gray-500 block">{t(locale, "tools.startAddress")}</span>
-                  <p className="text-gray-700">{clockOutSummary.startAddress}</p>
-                </div>
-                <div>
-                  <span className="text-xs text-gray-500 block">{t(locale, "tools.endAddress")}</span>
-                  <p className="text-gray-700">{clockOutSummary.endAddress}</p>
-                </div>
                 <div>
                   <label className="text-xs text-gray-500 block mb-1">Notes</label>
                   <textarea

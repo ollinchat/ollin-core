@@ -397,7 +397,7 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard: _onOpenBoard }:
           </motion.div>
         )}
       </AnimatePresence>
-      {gpsOpen && <GPSClockModal onClose={() => setGpsOpen(false)} />}
+      {gpsOpen && <GPSClockModal onClose={() => setGpsOpen(false)} defaultScrollToSummary />}
     </div>
   );
 }
