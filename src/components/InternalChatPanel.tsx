@@ -1,101 +1,932 @@
-import React, { useState } from "react";
-import { Send, Brain, Sparkles } from "lucide-react";
+"use client";
 
-export function InternalChatPanel() {
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import Link from "next/link";
+import { useLocale } from "@/contexts/LocaleContext";
+import { useContacts } from "@/contexts/ContactsContext";
+import { useInternalMessages } from "@/contexts/ChatEngineContext";
+import { useProfile } from "@/contexts/ProfileContext";
+import { useBoard } from "@/contexts/BoardContext";
+import { MessageSquare, Send, Trash2, Search, Camera, Plus, MapPin, FileText, ImagePlus, Forward, ListTodo, Instagram, Bot, Linkedin, ScanLine, BarChart3, Mic, ChevronLeft, Phone, Video, ClipboardList, CalendarDays, Users, Brain, Ban, UserPlus, Shield } from "lucide-react";
+import { SOURCE_ICONS, type ChatSourceId } from "@/components/dashboard/SourceBadge";
+import type { InternalMessageRecord } from "@/lib/chat-engine";
+import { formatOllinIdForDisplay } from "@/lib/user-id";
+
+const TEAL = "#008080";
+
+/** Channel tab id: social/bots only. Ollin AI lives in Home (OllinSlide), not here. */
+export type ChannelId = Exclude<ChatSourceId, "ollin"> | "instagram" | "bots" | "linkedin";
+
+/** Social channels only. Internal user list = contact list in list view. */
+const CHANNELS: { id: ChannelId; label: string; connected: boolean }[] = [
+  { id: "whatsapp", label: "WhatsApp", connected: true },
+  { id: "telegram", label: "Telegram", connected: true },
+  { id: "signal", label: "Signal", connected: false },
+  { id: "viber", label: "Viber", connected: false },
+  { id: "discord", label: "Discord", connected: false },
+  { id: "slack", label: "Slack", connected: false },
+  { id: "instagram", label: "Instagram", connected: false },
+  { id: "bots", label: "Bots", connected: false },
+  { id: "linkedin", label: "LinkedIn", connected: false },
+];
+
+type IconProps = { className?: string; strokeWidth?: number };
+function getChannelIcon(id: ChannelId): React.ComponentType<IconProps> | null {
+  if (id === "instagram") return Instagram as React.ComponentType<IconProps>;
+  if (id === "bots") return Bot as React.ComponentType<IconProps>;
+  if (id === "linkedin") return Linkedin as React.ComponentType<IconProps>;
+  return SOURCE_ICONS[id] ?? null;
+}
+
+type InternalChatPanelProps = {
+  locale: "en" | "he";
+  compact?: boolean;
+  onSelectedContactChange?: (id: string | null) => void;
+  preselectedContactId?: string | null;
+  threadOnly?: boolean;
+};
+
+/** Pro Messaging Suite: filters, search, media bar, message context menu (Convert to Task), typing indicator. */
+export function InternalChatPanel({ locale, compact, onSelectedContactChange, preselectedContactId, threadOnly }: InternalChatPanelProps) {
+  const { contacts, addContactWithId, updateContact } = useContacts();
+  const { profile } = useProfile();
+  const { addReceivedTask, given, received } = useBoard();
+  const { getConversation, getConversationsWithMeta, deleteConversation, sendText, sendVoice, sendFile, markConversationAsRead } = useInternalMessages();
+  const currentUserId = profile?.userId ?? "me";
+  const [selectedContactId, setSelectedContactId] = useState<string | null>(preselectedContactId ?? null);
+
+  React.useEffect(() => {
+    if (preselectedContactId !== undefined) setSelectedContactId(preselectedContactId);
+  }, [preselectedContactId]);
+  const [activeChannel, setActiveChannel] = useState<ChannelId>("whatsapp");
+  const [searchQuery, setSearchQuery] = useState("");
   const [input, setInput] = useState("");
-  const [messages, setMessages] = useState<{ role: string; content: string }[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [messageMenu, setMessageMenu] = useState<{ msgId: string; text: string; x: number; y: number } | null>(null);
+  const [plusMenuOpen, setPlusMenuOpen] = useState(false);
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
+  const [chatSearchQuery, setChatSearchQuery] = useState("");
+  const [chatSearchVisible, setChatSearchVisible] = useState(false);
+  const [tasksPanelOpen, setTasksPanelOpen] = useState(false);
+  const [tasksTab, setTasksTab] = useState<"given" | "received">("given");
+  const [taskHandshakeModal, setTaskHandshakeModal] = useState<{ contactId: string; contactName: string; text: string } | null>(null);
+  const [brainMenuOpen, setBrainMenuOpen] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [eventPopupOpen, setEventPopupOpen] = useState(false);
+  const [meetingPopupOpen, setMeetingPopupOpen] = useState(false);
+  const [eventMeetingTitle, setEventMeetingTitle] = useState("");
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const longPressRef = useRef<NodeJS.Timeout | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleSend = async () => {
-    if (!input.trim()) return;
+  const conversationsWithMeta = getConversationsWithMeta(currentUserId);
+  const contactIdsWithChats = conversationsWithMeta.map((c) => c.contactId);
+  const metaByContact = new Map(conversationsWithMeta.map((c) => [c.contactId, c]));
 
-    const userMessage = input;
+  const conversation = selectedContactId ? getConversation(selectedContactId) : [];
+  const sortedMessages = [...conversation].sort((a, b) => a.createdAt - b.createdAt);
+
+  useEffect(() => {
+    onSelectedContactChange?.(selectedContactId);
+  }, [selectedContactId, onSelectedContactChange]);
+
+  useEffect(() => {
+    if (selectedContactId) markConversationAsRead(selectedContactId, currentUserId);
+  }, [selectedContactId, currentUserId, markConversationAsRead]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [sortedMessages.length]);
+
+  const handleSend = () => {
+    const text = input.trim();
+    if (!text || !selectedContactId) return;
+    sendText(selectedContactId, text, currentUserId);
     setInput("");
-    setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
-    setIsLoading(true);
-
-    try {
-      // This sends the message to your Gemini route
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userMessage }),
-      });
-
-      const data = await response.json();
-      setMessages((prev) => [...prev, { role: "assistant", content: data.text }]);
-    } catch (error) {
-      console.error("Gemini Error:", error);
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "Error: Make sure your API key is correct in .env.local" },
-      ]);
-    } finally {
-      setIsLoading(false);
-    }
+    setIsTyping(true);
   };
 
-  return (
-    <div className="flex flex-col h-[500px] bg-white rounded-[2rem] shadow-2xl overflow-hidden border border-gray-100" dir="ltr">
-      {/* Clean Header - No Dropdowns */}
-      <div className="p-5 bg-gradient-to-r from-blue-600 to-indigo-700 text-white flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="bg-white/20 p-2 rounded-lg">
-            <Sparkles size={20} className="text-white" />
-          </div>
-          <div>
-            <h3 className="font-black text-sm tracking-tight">GEMINI AI</h3>
-            <p className="text-[10px] opacity-70 font-bold uppercase">System Active</p>
-          </div>
-        </div>
-      </div>
-      
-      {/* Chat Messages */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50/50">
-        {messages.length === 0 && (
-          <div className="text-center pt-10">
-            <div className="bg-blue-100 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3">
-              <Brain className="text-blue-600" size={24} />
-            </div>
-            <p className="text-gray-400 text-xs font-medium italic">How can I help you today, Emil?</p>
-          </div>
-        )}
-        
-        {messages.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-            <div className={`max-w-[85%] p-4 rounded-[1.5rem] text-sm leading-relaxed shadow-sm ${
-              msg.role === "user"
-                ? "bg-blue-600 text-white rounded-tr-none"
-                : "bg-white text-gray-800 rounded-tl-none border border-gray-100"
-            }`}>
-              {msg.content}
-            </div>
-          </div>
-        ))}
-        {isLoading && (
-          <div className="flex items-center gap-2 text-blue-600 font-black text-[10px] animate-pulse">
-            <div className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-bounce"></div>
-            THINKING...
-          </div>
-        )}
-      </div>
+  useEffect(() => {
+    if (!isTyping) return;
+    const t = setTimeout(() => setIsTyping(false), 1800);
+    return () => clearTimeout(t);
+  }, [isTyping]);
 
-      {/* Input Field */}
-      <div className="p-4 bg-white border-t flex gap-2 items-center">
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSend()}
-          placeholder="Message Gemini..."
-          className="flex-1 p-4 bg-gray-100 rounded-2xl outline-none text-sm font-medium focus:ring-2 ring-blue-500/10 transition-all"
-        />
-        <button 
-          onClick={handleSend}
-          disabled={isLoading}
-          className="p-4 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 active:scale-95 transition-all shadow-lg shadow-blue-200"
-        >
-          <Send size={20} />
-        </button>
+  const handleLongPressContact = (contactId: string) => {
+    setDeleteTargetId(contactId);
+  };
+
+  const handleDeleteChat = (contactId: string) => {
+    deleteConversation(contactId, currentUserId);
+    setDeleteTargetId(null);
+    if (selectedContactId === contactId) setSelectedContactId(null);
+  };
+
+  const handleConvertToTask = useCallback(
+    (text: string) => {
+      setMessageMenu(null);
+      const contact = selectedContactId ? contacts.find((c) => c.id === selectedContactId) : null;
+      if (!contact) return; // Unknown user: cannot send/receive tasks until added to contacts
+      const otherPartyName = (contact.name || contact.email || selectedContactId) ?? "—";
+      if (contact.allowTasksFrom === false) return; // blocked
+      if (contact.allowTasksFrom === undefined) {
+        setTaskHandshakeModal({ contactId: contact.id, contactName: otherPartyName, text });
+        return;
+      }
+      addReceivedTask({
+        title: text.slice(0, 200),
+        otherParty: otherPartyName,
+        senderContactId: selectedContactId ?? undefined,
+        checklist: [],
+        done: false,
+      });
+    },
+    [addReceivedTask, selectedContactId, contacts]
+  );
+
+  const handleTaskHandshakeAccept = useCallback(() => {
+    if (!taskHandshakeModal) return;
+    updateContact(taskHandshakeModal.contactId, { allowTasksFrom: true });
+    addReceivedTask({
+      title: taskHandshakeModal.text.slice(0, 200),
+      otherParty: taskHandshakeModal.contactName,
+      senderContactId: taskHandshakeModal.contactId,
+      checklist: [],
+      done: false,
+    });
+    setTaskHandshakeModal(null);
+  }, [taskHandshakeModal, updateContact, addReceivedTask]);
+
+  const handleTaskHandshakeDecline = useCallback(() => {
+    if (!taskHandshakeModal) return;
+    updateContact(taskHandshakeModal.contactId, { allowTasksFrom: false });
+    setTaskHandshakeModal(null);
+  }, [taskHandshakeModal, updateContact]);
+
+  const openFileInput = useCallback((accept: string, capture: "" | "environment" | "user" = "") => {
+    setAttachMenuOpen(false);
+    const el = fileInputRef.current;
+    if (el) {
+      el.accept = accept;
+      if (capture) el.setAttribute("capture", capture);
+      else el.removeAttribute("capture");
+      el.click();
+    }
+  }, []);
+
+  const handleFileChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = "";
+      if (!file || !selectedContactId) return;
+      sendFile(selectedContactId, file, currentUserId);
+    },
+    [selectedContactId, currentUserId, sendFile]
+  );
+
+  const handleSendLocation = useCallback(() => {
+    if (!selectedContactId) return;
+    sendText(selectedContactId, "📍 Current Location", currentUserId);
+    setAttachMenuOpen(false);
+  }, [selectedContactId, currentUserId, sendText]);
+
+  const handleCreateEventSubmit = useCallback(() => {
+    const title = eventMeetingTitle.trim();
+    if (!title || !selectedContactId) return;
+    sendText(selectedContactId, `📅 Event: ${title}`, currentUserId);
+    setEventMeetingTitle("");
+    setEventPopupOpen(false);
+  }, [eventMeetingTitle, selectedContactId, currentUserId, sendText]);
+
+  const handleCreateMeetingSubmit = useCallback(() => {
+    const title = eventMeetingTitle.trim();
+    if (!title || !selectedContactId) return;
+    sendText(selectedContactId, `📅 Meeting: ${title}`, currentUserId);
+    setEventMeetingTitle("");
+    setMeetingPopupOpen(false);
+  }, [eventMeetingTitle, selectedContactId, currentUserId, sendText]);
+
+  const selectedContact = selectedContactId ? contacts.find((c) => c.id === selectedContactId) : null;
+  const isUnknownContact = selectedContactId != null && selectedContact == null;
+  const receivedFiltered = received.filter((t) => {
+    if (!t.senderContactId) return true;
+    const c = contacts.find((x) => x.id === t.senderContactId);
+    return c?.allowTasksFrom !== false;
+  });
+  const isHe = locale === "he";
+
+  return (
+    <div className="flex flex-col h-full min-h-0 bg-[#f8f9fa] overflow-hidden">
+      <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
+      {!threadOnly && (
+        <>
+          {/* Row 1: Channel Tabs — full list, connected teal dot, horizontal scroll (scrollbar hidden) */}
+          <div className="flex-shrink-0 w-full bg-[#f8f9fa] rounded-t-xl overflow-hidden">
+            <div className="flex items-center gap-1 overflow-x-auto overflow-y-hidden py-1.5 px-1.5 min-h-[2.5rem] scrollbar-hide">
+              {CHANNELS.map(({ id, label, connected }) => {
+                const Icon = getChannelIcon(id);
+                const isActive = activeChannel === id;
+                if (!Icon) return null;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setActiveChannel(id)}
+                    className={`flex-shrink-0 flex items-center justify-center gap-1.5 py-1.5 px-3 text-xs font-medium transition-colors rounded-xl min-w-[4.5rem] ${
+                      isActive
+                        ? "bg-[#374151] text-white shadow-sm"
+                        : "text-gray-600 bg-gray-100/80 hover:bg-gray-200/90 border border-gray-200/50"
+                    }`}
+                    aria-label={label}
+                    aria-selected={isActive}
+                  >
+                    <Icon className="w-3.5 h-3.5 shrink-0" strokeWidth={2} />
+                    <span className="flex items-center gap-1 min-w-0">
+                      <span className="truncate max-w-[4rem]">{label}</span>
+                      {connected && (
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-[#008080]" title="Connected" aria-hidden />
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          {/* Row 2: Global search — ONLY in list view (not in active chat header) */}
+          {!selectedContactId && (
+          <div className="flex-shrink-0 px-2 py-1.5 bg-[#f8f9fa] relative">
+            <div className="flex items-center gap-1.5 w-full bg-white border border-gray-200/80 rounded-xl pl-2.5 pr-2 py-1.5 min-h-[32px]">
+              <Search className="w-3.5 h-3.5 text-gray-400 shrink-0" strokeWidth={2} />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={isHe ? "חיפוש שיחות" : "Search chats"}
+                className="flex-1 min-w-0 bg-transparent text-gray-900 placeholder-gray-400 text-xs outline-none"
+              />
+            </div>
+          </div>
+          )}
+        </>
+      )}
+
+      {!threadOnly && (
+        <>
+          {/* Full-width: list view or thread view (no sidebar) */}
+          {selectedContactId ? (
+            /* Thread view: Back + (contact header or unknown [Add to Contacts] | [Block/Report]) + messages + input */
+            <div className="flex-1 flex flex-col min-h-0 bg-[#f8f9fa]">
+              {isUnknownContact ? (
+                <div className="flex-shrink-0 flex items-center gap-2 px-2 py-1.5 border-b border-gray-200 bg-white">
+                  <button type="button" onClick={() => { setSelectedContactId(null); setTasksPanelOpen(false); setChatSearchVisible(false); }} className="p-1.5 rounded-xl text-gray-600 hover:bg-gray-100" aria-label={isHe ? "חזרה" : "Back"}>
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                  <Link href={`/dashboard/messages/contact/${selectedContactId}`} className="flex-shrink-0 w-9 h-9 rounded-xl bg-gray-200 flex items-center justify-center text-sm font-semibold text-gray-600 hover:bg-gray-300 transition-colors" aria-label={isHe ? "פרטי איש קשר" : "Contact info"}>
+                    ?
+                  </Link>
+                  <div className="flex-1 min-w-0 flex items-center justify-center gap-2 py-1">
+                    <span className="font-mono text-xs text-gray-600 truncate max-w-[120px]">{selectedContactId}</span>
+                  </div>
+                  {/* Chat header: only Add to Contacts icon for unknown sender */}
+                  <button type="button" onClick={() => { addContactWithId(selectedContactId!, { name: selectedContactId!, phone: /^[\d+-\s()]+$/.test(selectedContactId!) ? selectedContactId! : undefined }); }} className="p-2 rounded-xl text-white hover:opacity-90 transition-opacity flex items-center justify-center" style={{ backgroundColor: TEAL }} aria-label={isHe ? "הוסף לאנשי קשר" : "Add to Contacts"}>
+                    <UserPlus className="w-5 h-5" strokeWidth={2} />
+                  </button>
+                </div>
+              ) : selectedContact ? (
+              <div className="flex-shrink-0 flex items-center gap-2 px-2 py-1.5 border-b border-gray-100/80 bg-white/95">
+                <button type="button" onClick={() => { setSelectedContactId(null); setDeleteTargetId(null); setTasksPanelOpen(false); setChatSearchVisible(false); }} className="p-1.5 rounded-xl text-gray-600 hover:bg-gray-100" aria-label={isHe ? "חזרה" : "Back"}>
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <Link href={`/dashboard/messages/contact/${selectedContact.id}`} className="flex-shrink-0 w-9 h-9 rounded-xl bg-[#008080]/20 flex items-center justify-center text-sm font-semibold text-[#008080]" aria-label={isHe ? "פרטי איש קשר" : "Contact info"}>
+                  {(selectedContact.name || selectedContact.email || "?").slice(0, 1).toUpperCase()}
+                </Link>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-gray-900 truncate text-[11px]">{selectedContact.name || selectedContact.email}</p>
+                  <p className="text-[9px] text-gray-500 font-mono">ID: {formatOllinIdForDisplay(selectedContact.userId ?? selectedContact.id)}</p>
+                </div>
+                <div className="flex items-center gap-0.5">
+                  <button type="button" className="p-2 rounded-xl text-[#008080] hover:bg-[#008080]/10" aria-label={isHe ? "שיחת אודיו" : "Voice call"}><Phone className="w-4 h-4" strokeWidth={2} /></button>
+                  <button type="button" className="p-2 rounded-xl text-[#008080] hover:bg-[#008080]/10" aria-label={isHe ? "שיחת וידאו" : "Video call"}><Video className="w-4 h-4" strokeWidth={2} /></button>
+                  <button type="button" onClick={() => setChatSearchVisible((v) => !v)} className={`p-2 rounded-xl ${chatSearchVisible ? "bg-[#008080]/10 text-[#008080]" : "text-[#008080] hover:bg-[#008080]/10"}`} aria-label={isHe ? "חיפוש בשיחה" : "Search in chat"}><Search className="w-4 h-4" strokeWidth={2} /></button>
+                  <button type="button" onClick={() => setTasksPanelOpen((v) => !v)} className={`p-2 rounded-xl ${tasksPanelOpen ? "bg-[#008080]/10 text-[#008080]" : "text-[#008080] hover:bg-[#008080]/10"}`} aria-label={isHe ? "משימות" : "Tasks"}><ClipboardList className="w-4 h-4" strokeWidth={2} /></button>
+                </div>
+              </div>
+              ) : null}
+              {chatSearchVisible && (
+                <div className="flex-shrink-0 flex items-center gap-2 px-2 py-1.5 bg-white border-b border-gray-100">
+                  <Search className="w-3.5 h-3.5 text-gray-400" strokeWidth={2} />
+                  <input type="text" value={chatSearchQuery} onChange={(e) => setChatSearchQuery(e.target.value)} placeholder={isHe ? "חיפוש בהודעות" : "Search in messages"} className="flex-1 min-w-0 py-1.5 text-xs bg-transparent outline-none placeholder-gray-400" />
+                </div>
+              )}
+              {tasksPanelOpen && (
+                <div className="flex-shrink-0 border-b border-gray-100 bg-white">
+                  <div className="flex gap-0.5 p-1.5">
+                    <button type="button" onClick={() => setTasksTab("given")} className={`flex-1 py-2 rounded-xl text-xs font-medium ${tasksTab === "given" ? "bg-[#008080] text-white" : "text-gray-600 hover:bg-gray-100"}`}>{isHe ? "נתתי" : "Given"}</button>
+                    <button type="button" onClick={() => setTasksTab("received")} className={`flex-1 py-2 rounded-xl text-xs font-medium ${tasksTab === "received" ? "bg-[#008080] text-white" : "text-gray-600 hover:bg-gray-100"}`}>{isHe ? "קיבלתי" : "Received"}</button>
+                  </div>
+                  <div className="max-h-32 overflow-y-auto px-2 pb-2">
+                    {(tasksTab === "given" ? given : receivedFiltered).filter((t) => !t.archived).slice(0, 20).map((t) => (
+                      <div key={t.id} className="py-1.5 px-2 rounded-xl hover:bg-gray-50 text-xs text-gray-800 border-b border-gray-50 last:border-0">{t.title || "—"}</div>
+                    ))}
+                    {(tasksTab === "given" ? given : receivedFiltered).filter((t) => !t.archived).length === 0 && <p className="py-2 text-xs text-gray-500 text-center">{isHe ? "אין משימות" : "No tasks"}</p>}
+                  </div>
+                </div>
+              )}
+                  <div className="flex-1 overflow-y-auto p-1.5 space-y-1">
+                    {/* Unified onboarding card: single glass card for unknown sender. Vanishes when added to contacts. */}
+                    {isUnknownContact && (
+                      <div className="flex flex-col items-center py-3 px-2">
+                        <div className="w-full max-w-[90%] rounded-2xl overflow-hidden backdrop-blur-xl bg-white/80 border border-[#008080]/10 shadow-[0_8px_32px_rgba(0,128,128,0.08)]">
+                          {/* Row 1: Identity — Unknown Sender + [Add to Contacts] + [Safety Tools] link */}
+                          <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-[#008080]/10">
+                            <span className="text-sm font-semibold text-gray-900">{isHe ? "שולח לא מוכר" : "Unknown Sender"}</span>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => addContactWithId(selectedContactId!, { name: selectedContactId!, phone: /^[\d+-\s()]+$/.test(selectedContactId!) ? selectedContactId! : undefined })}
+                                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white hover:opacity-90 transition-opacity"
+                                style={{ backgroundColor: TEAL }}
+                              >
+                                <UserPlus className="w-4 h-4" strokeWidth={2} />
+                                {isHe ? "הוסף לאנשי קשר" : "Add to Contacts"}
+                              </button>
+                              <Link href={`/dashboard/messages/contact/${selectedContactId}`} className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl text-xs font-medium text-gray-600 hover:bg-[#008080]/10 hover:text-[#008080] transition-colors">
+                                <Shield className="w-4 h-4" strokeWidth={2} />
+                                {isHe ? "כלי בטיחות" : "Safety Tools"}
+                              </Link>
+                            </div>
+                          </div>
+                          {/* Row 2: Social proof — Mutual Contacts, Groups in Common */}
+                          <div className="flex items-center gap-4 px-4 py-2.5 border-b border-[#008080]/10 bg-white/50">
+                            <span className="flex items-center gap-1.5 text-xs text-gray-600">
+                              <Users className="w-4 h-4 text-[#008080]" strokeWidth={2} />
+                              {isHe ? "אנשי קשר משותפים" : "Mutual Contacts"}: <span className="font-semibold text-gray-900 tabular-nums">0</span>
+                            </span>
+                            <span className="flex items-center gap-1.5 text-xs text-gray-600">
+                              <MessageSquare className="w-4 h-4 text-[#008080]" strokeWidth={2} />
+                              {isHe ? "קבוצות במשותף" : "Groups in Common"}: <span className="font-semibold text-gray-900 tabular-nums">0</span>
+                            </span>
+                          </div>
+                          {/* Row 3: Task logic — Assign tasks to my board? [Allow] [Decline] */}
+                          <div className="px-4 py-3 border-b border-[#008080]/10">
+                            <p className="text-xs text-gray-600 mb-2">{isHe ? "להקצות משימות ללוח שלי?" : "Assign tasks to my board?"}</p>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  addContactWithId(selectedContactId!, { name: selectedContactId!, phone: /^[\d+-\s()]+$/.test(selectedContactId!) ? selectedContactId! : undefined });
+                                  updateContact(selectedContactId!, { allowTasksFrom: true });
+                                }}
+                                className="px-4 py-2 rounded-xl text-xs font-semibold text-white hover:opacity-90 transition-opacity"
+                                style={{ backgroundColor: TEAL }}
+                              >
+                                {isHe ? "אפשר" : "Allow"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  addContactWithId(selectedContactId!, { name: selectedContactId! });
+                                  updateContact(selectedContactId!, { allowTasksFrom: false });
+                                }}
+                                className="px-4 py-2 rounded-xl text-xs font-medium text-gray-500 bg-gray-200/80 hover:bg-gray-300/80 border border-gray-300/80 transition-colors"
+                              >
+                                {isHe ? "דחה" : "Decline"}
+                              </button>
+                            </div>
+                          </div>
+                          {/* Footer: Red [Block] button */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              addContactWithId(selectedContactId!, { name: selectedContactId! });
+                              updateContact(selectedContactId!, { blocked: true });
+                              setSelectedContactId(null);
+                            }}
+                            className="w-full flex items-center justify-center gap-2 py-3 text-red-600 text-xs font-semibold hover:bg-red-50 transition-colors border-t border-red-100"
+                          >
+                            <Ban className="w-4 h-4" strokeWidth={2} />
+                            {isHe ? "חסום" : "Block"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {/* Known contact (isSaved): title = Contact Name; no Add to Contacts, no Safety Tools, no Unknown Sender. Keep Mutual Contacts, Groups, Allow Tasks, Block. */}
+                    {selectedContact && !isUnknownContact && sortedMessages.length === 0 && (
+                      <div className="flex flex-col items-center py-3 px-2">
+                        <div className="w-full max-w-[90%] rounded-2xl overflow-hidden backdrop-blur-xl bg-white/80 border border-[#008080]/10 shadow-[0_8px_32px_rgba(0,128,128,0.08)]">
+                          <div className="px-4 py-3 border-b border-[#008080]/10">
+                            <h3 className="text-sm font-semibold text-gray-900">{selectedContact.name || selectedContact.email || selectedContactId}</h3>
+                          </div>
+                          <div className="flex items-center gap-4 px-4 py-2.5 border-b border-[#008080]/10 bg-white/50">
+                            <span className="flex items-center gap-1.5 text-xs text-gray-600">
+                              <Users className="w-4 h-4 text-[#008080]" strokeWidth={2} />
+                              {isHe ? "אנשי קשר משותפים" : "Mutual Contacts"}: <span className="font-semibold text-gray-900 tabular-nums">0</span>
+                            </span>
+                            <span className="flex items-center gap-1.5 text-xs text-gray-600">
+                              <MessageSquare className="w-4 h-4 text-[#008080]" strokeWidth={2} />
+                              {isHe ? "קבוצות במשותף" : "Groups in Common"}: <span className="font-semibold text-gray-900 tabular-nums">0</span>
+                            </span>
+                          </div>
+                          <div className="px-4 py-3 border-b border-[#008080]/10">
+                            <p className="text-xs text-gray-600 mb-2">{isHe ? "להקצות משימות ללוח שלי?" : "Assign tasks to my board?"}</p>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => updateContact(selectedContactId!, { allowTasksFrom: true })}
+                                className="px-4 py-2 rounded-xl text-xs font-semibold text-white hover:opacity-90 transition-opacity"
+                                style={{ backgroundColor: TEAL }}
+                              >
+                                {isHe ? "אפשר" : "Allow"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => updateContact(selectedContactId!, { allowTasksFrom: false })}
+                                className="px-4 py-2 rounded-xl text-xs font-medium text-gray-500 bg-gray-200/80 hover:bg-gray-300/80 border border-gray-300/80 transition-colors"
+                              >
+                                {isHe ? "דחה" : "Decline"}
+                              </button>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => { updateContact(selectedContactId!, { blocked: true }); setSelectedContactId(null); }}
+                            className="w-full flex items-center justify-center gap-2 py-2.5 text-red-600 text-[11px] font-medium hover:bg-red-50 transition-colors border-t border-red-100"
+                          >
+                            <Ban className="w-3.5 h-3.5" strokeWidth={2} />
+                            {isHe ? "חסום" : "Block"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {(chatSearchQuery.trim() ? sortedMessages.filter((m) => { const text = m.parts.find((p) => p.type === "text")?.content ?? ""; return text.toLowerCase().includes(chatSearchQuery.trim().toLowerCase()); }) : sortedMessages).map((m) => (
+                      <MessageBubble
+                        key={m.id}
+                        msg={m}
+                        isMe={m.senderId === currentUserId}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          const text = m.parts.find((p) => p.type === "text")?.content ?? "";
+                          setMessageMenu({ msgId: m.id, text, x: e.clientX, y: e.clientY });
+                        }}
+                        onTouchEnd={() => {
+                          if (longPressRef.current) clearTimeout(longPressRef.current);
+                          longPressRef.current = null;
+                        }}
+                        onTouchStart={() => {
+                          const text = m.parts.find((p) => p.type === "text")?.content ?? "";
+                          longPressRef.current = setTimeout(
+                            () => setMessageMenu({ msgId: m.id, text, x: 120, y: 200 }),
+                            500
+                          );
+                        }}
+                      />
+                    ))}
+                    {isTyping && (
+                      <div className="flex justify-start">
+                        <div className="px-2.5 py-1.5 rounded-xl bg-white border border-gray-200 text-[#008080] text-[11px] font-medium flex items-center gap-1">
+                          <span className="inline-flex gap-0.5">
+                            <span className="w-1 h-1 rounded-full bg-[#008080] animate-pulse" style={{ animationDelay: "0ms" }} />
+                            <span className="w-1 h-1 rounded-full bg-[#008080] animate-pulse" style={{ animationDelay: "200ms" }} />
+                            <span className="w-1 h-1 rounded-full bg-[#008080] animate-pulse" style={{ animationDelay: "400ms" }} />
+                          </span>
+                          Typing...
+                        </div>
+                      </div>
+                    )}
+                    <div ref={messagesEndRef} />
+                  </div>
+                  {/* Message input: Teal [+] [Mic] [Brain] + input + [Send]; + menu = Camera, Gallery, Document, Location, Event, Meeting, Poll, Scan */}
+                  <div className="flex-shrink-0 p-2 border-t border-gray-100/80 bg-white/95 relative">
+                    <div className="flex items-center gap-1 rounded-xl border border-gray-200/80 bg-white pl-1.5 pr-1.5 py-2 min-h-[44px]">
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <button type="button" onClick={() => setAttachMenuOpen((o) => !o)} className="p-2 rounded-xl text-[#008080] hover:bg-[#008080]/10 shrink-0" aria-label={isHe ? "פעולות" : "Actions"} aria-expanded={attachMenuOpen}>
+                          <Plus className="w-5 h-5" strokeWidth={2.5} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsRecording((r) => !r)}
+                          className={`p-2 rounded-xl shrink-0 ${isRecording ? "bg-[#008080] text-white" : "text-[#008080] hover:bg-[#008080]/10"}`}
+                          aria-label={isHe ? "הערת קול" : "Voice note"}
+                          aria-pressed={isRecording}
+                        >
+                          <Mic className="w-5 h-5" strokeWidth={2} />
+                        </button>
+                        <div className="relative">
+                          <button type="button" onClick={() => setBrainMenuOpen((o) => !o)} className="p-2 rounded-xl text-[#008080] hover:bg-[#008080]/10 shrink-0" aria-label={isHe ? "AI" : "AI"}>
+                            <Brain className="w-5 h-5" strokeWidth={2} />
+                          </button>
+                          {brainMenuOpen && (
+                            <>
+                              <div className="fixed inset-0 z-40" onClick={() => setBrainMenuOpen(false)} aria-hidden />
+                              <div className="absolute left-0 bottom-full mb-1 z-50 w-48 py-2 rounded-xl bg-white border border-gray-200 shadow-lg">
+                                <p className="px-3 py-1 text-[10px] font-semibold text-gray-500 uppercase">{isHe ? "מודל AI" : "AI Model"}</p>
+                                <button type="button" onClick={() => setBrainMenuOpen(false)} className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-[#008080]/10 rounded-lg">Ollin</button>
+                                <button type="button" onClick={() => setBrainMenuOpen(false)} className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-[#008080]/10 rounded-lg">GPT-4</button>
+                                <button type="button" onClick={() => setBrainMenuOpen(false)} className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-[#008080]/10 rounded-lg">Claude</button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      {isRecording && (
+                        <div className="flex items-center gap-2 shrink-0 px-2 py-1 rounded-xl bg-[#008080]/10 text-[#008080]">
+                          <span className="inline-flex gap-0.5 items-center">
+                            <span className="w-1 h-2 rounded-full bg-[#008080] animate-pulse" style={{ animationDelay: "0ms" }} />
+                            <span className="w-1 h-3 rounded-full bg-[#008080] animate-pulse" style={{ animationDelay: "150ms" }} />
+                            <span className="w-1 h-2.5 rounded-full bg-[#008080] animate-pulse" style={{ animationDelay: "300ms" }} />
+                            <span className="w-1 h-3.5 rounded-full bg-[#008080] animate-pulse" style={{ animationDelay: "450ms" }} />
+                            <span className="w-1 h-2 rounded-full bg-[#008080] animate-pulse" style={{ animationDelay: "600ms" }} />
+                          </span>
+                          <span className="text-[11px] font-medium">{isHe ? "מקליט..." : "Recording..."}</span>
+                        </div>
+                      )}
+                      <input type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()} placeholder={isHe ? "הודעה..." : "Message..."} className="flex-1 min-w-0 bg-transparent px-2 py-1.5 text-sm text-gray-900 placeholder-gray-400 outline-none" />
+                      <button type="button" onClick={handleSend} disabled={!input.trim()} className="p-2.5 bg-[#008080] text-white disabled:opacity-50 rounded-xl shrink-0" aria-label="Send">
+                        <Send className="w-4 h-4" strokeWidth={2} />
+                      </button>
+                    </div>
+                    {attachMenuOpen && (
+                      <>
+                        <div className="fixed inset-0 z-40" onClick={() => setAttachMenuOpen(false)} aria-hidden />
+                        <div className="absolute left-2 right-2 bottom-full mb-1 z-50 py-2.5 px-2.5 bg-white border border-gray-200 rounded-xl shadow-lg">
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <button type="button" onClick={() => openFileInput("image/*", "environment")} className="flex items-center gap-2 py-2.5 px-3 text-left text-xs font-medium text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl">
+                              <Camera className="w-4 h-4 shrink-0 text-[#008080]" strokeWidth={2} />
+                              {isHe ? "מצלמה" : "Camera"}
+                            </button>
+                            <button type="button" onClick={() => openFileInput("image/*")} className="flex items-center gap-2 py-2.5 px-3 text-left text-xs font-medium text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl">
+                              <ImagePlus className="w-4 h-4 shrink-0 text-[#008080]" strokeWidth={2} />
+                              {isHe ? "גלריה" : "Gallery"}
+                            </button>
+                            <button type="button" onClick={() => openFileInput("application/pdf,.doc,.docx,image/*,*/*")} className="flex items-center gap-2 py-2.5 px-3 text-left text-xs font-medium text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl">
+                              <FileText className="w-4 h-4 shrink-0 text-[#008080]" strokeWidth={2} />
+                              {isHe ? "מסמך" : "Document"}
+                            </button>
+                            <button type="button" onClick={handleSendLocation} className="flex items-center gap-2 py-2.5 px-3 text-left text-xs font-medium text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl">
+                              <MapPin className="w-4 h-4 shrink-0 text-[#008080]" strokeWidth={2} />
+                              {isHe ? "מיקום" : "Location"}
+                            </button>
+                            <button type="button" onClick={() => { setEventPopupOpen(true); setAttachMenuOpen(false); }} className="flex items-center gap-2 py-2.5 px-3 text-left text-xs font-medium text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl">
+                              <CalendarDays className="w-4 h-4 shrink-0 text-[#008080]" strokeWidth={2} />
+                              {isHe ? "צור אירוע" : "Create Event"}
+                            </button>
+                            <button type="button" onClick={() => { setMeetingPopupOpen(true); setAttachMenuOpen(false); }} className="flex items-center gap-2 py-2.5 px-3 text-left text-xs font-medium text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl">
+                              <Users className="w-4 h-4 shrink-0 text-[#008080]" strokeWidth={2} />
+                              {isHe ? "צור פגישה" : "Create Meeting"}
+                            </button>
+                            <button type="button" onClick={() => setAttachMenuOpen(false)} className="flex items-center gap-2 py-2.5 px-3 text-left text-xs font-medium text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl">
+                              <BarChart3 className="w-4 h-4 shrink-0 text-[#008080]" strokeWidth={2} />
+                              {isHe ? "צור סקר" : "Create Poll"}
+                            </button>
+                            <button type="button" onClick={() => setAttachMenuOpen(false)} className="flex items-center gap-2 py-2.5 px-3 text-left text-xs font-medium text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl">
+                              <ScanLine className="w-4 h-4 shrink-0 text-[#008080]" strokeWidth={2} />
+                              {isHe ? "סריקה (AI)" : "Scan (AI)"}
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                    {eventPopupOpen && (
+                      <>
+                        <div className="fixed inset-0 z-40 bg-black/40" onClick={() => setEventPopupOpen(false)} aria-hidden />
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                          <div className="w-full max-w-sm rounded-xl bg-white shadow-xl border border-gray-200 p-4" onClick={(e) => e.stopPropagation()}>
+                            <p className="text-sm font-semibold text-gray-900 mb-3">{isHe ? "צור אירוע" : "Create Event"}</p>
+                            <input type="text" value={eventMeetingTitle} onChange={(e) => setEventMeetingTitle(e.target.value)} placeholder={isHe ? "שם האירוע" : "Event title"} className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm mb-3 outline-none focus:ring-2 focus:ring-[#008080]/30" />
+                            <div className="flex gap-2">
+                              <button type="button" onClick={() => { setEventPopupOpen(false); setEventMeetingTitle(""); }} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50">{isHe ? "ביטול" : "Cancel"}</button>
+                              <button type="button" onClick={handleCreateEventSubmit} className="flex-1 py-2.5 rounded-xl text-white text-sm font-medium" style={{ backgroundColor: TEAL }}>{isHe ? "צור" : "Create"}</button>
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                    {meetingPopupOpen && (
+                      <>
+                        <div className="fixed inset-0 z-40 bg-black/40" onClick={() => setMeetingPopupOpen(false)} aria-hidden />
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                          <div className="w-full max-w-sm rounded-xl bg-white shadow-xl border border-gray-200 p-4" onClick={(e) => e.stopPropagation()}>
+                            <p className="text-sm font-semibold text-gray-900 mb-3">{isHe ? "צור פגישה" : "Create Meeting"}</p>
+                            <input type="text" value={eventMeetingTitle} onChange={(e) => setEventMeetingTitle(e.target.value)} placeholder={isHe ? "שם הפגישה" : "Meeting title"} className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm mb-3 outline-none focus:ring-2 focus:ring-[#008080]/30" />
+                            <div className="flex gap-2">
+                              <button type="button" onClick={() => { setMeetingPopupOpen(false); setEventMeetingTitle(""); }} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50">{isHe ? "ביטול" : "Cancel"}</button>
+                              <button type="button" onClick={handleCreateMeetingSubmit} className="flex-1 py-2.5 rounded-xl text-white text-sm font-medium" style={{ backgroundColor: TEAL }}>{isHe ? "צור" : "Create"}</button>
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  {messageMenu && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setMessageMenu(null)} aria-hidden />
+                      <div
+                        className="fixed z-50 min-w-[160px] py-0.5 bg-white border border-gray-200 rounded-xl shadow-lg"
+                        style={{ left: Math.min(messageMenu.x, typeof window !== "undefined" ? window.innerWidth - 180 : messageMenu.x), top: messageMenu.y }}
+                      >
+                        <button type="button" onClick={() => !isUnknownContact && handleConvertToTask(messageMenu.text)} className={`w-full flex items-center gap-1.5 px-2.5 py-1.5 text-left text-[11px] rounded-xl ${isUnknownContact ? "text-gray-400 cursor-not-allowed" : "text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080]"}`} title={isUnknownContact ? (isHe ? "הוסף לאנשי קשר קודם" : "Add to contacts first") : undefined}>
+                          <ListTodo className={`w-3.5 h-3.5 ${isUnknownContact ? "text-gray-400" : "text-[#008080]"}`} strokeWidth={2} />
+                          {isUnknownContact ? (isHe ? "המר למשימה (הוסף קודם)" : "Convert to Task (add first)") : (isHe ? "המר למשימה" : "Convert to Task")}
+                        </button>
+                        <button type="button" className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-left text-[11px] text-gray-700 hover:bg-gray-100 rounded-xl" onClick={() => setMessageMenu(null)}>
+                          <Forward className="w-3.5 h-3.5" />
+                          {isHe ? "העבר" : "Forward"}
+                        </button>
+                        <button type="button" className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-left text-[11px] text-red-600 hover:bg-red-50 rounded-xl" onClick={() => setMessageMenu(null)}>
+                          <Trash2 className="w-3.5 h-3.5" />
+                          {isHe ? "מחק" : "Delete"}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                  {taskHandshakeModal && (
+                    <>
+                      <div className="fixed inset-0 z-40 bg-black/40" onClick={() => setTaskHandshakeModal(null)} aria-hidden />
+                      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                        <div className="w-full max-w-sm rounded-xl bg-white shadow-xl border border-gray-200 p-4" onClick={(e) => e.stopPropagation()}>
+                          <p className="text-sm font-medium text-gray-900 mb-2">{isHe ? "האם לאפשר למשתמש זה לשלוח אליך משימות?" : "Do you agree to receive tasks from this user?"}</p>
+                          <p className="text-xs text-gray-500 mb-4">{taskHandshakeModal.contactName}</p>
+                          <div className="flex gap-2">
+                            <button type="button" onClick={handleTaskHandshakeDecline} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50">
+                              {isHe ? "לא" : "No"}
+                            </button>
+                            <button type="button" onClick={handleTaskHandshakeAccept} className="flex-1 py-2.5 rounded-xl text-white text-sm font-medium hover:bg-[#006666]" style={{ backgroundColor: TEAL }}>
+                              {isHe ? "כן" : "Yes"}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+            </div>
+          ) : (
+            /* List view: full-width conversation list (no sidebar) */
+            <ul className="flex-1 overflow-y-auto px-2 py-1 space-y-0.5 bg-[#f8f9fa]">
+              {conversationsWithMeta.length === 0 && (
+                <li className="px-2 py-1.5 text-[11px] text-gray-500 rounded-xl">{isHe ? "אין שיחות. הוסף אנשי קשר וכתוב הודעה." : "No chats. Add contacts and send a message."}</li>
+              )}
+              {conversationsWithMeta
+                .filter(({ contactId }) => {
+                  const contact = contacts.find((c) => c.id === contactId);
+                  if (contact?.blocked) return false;
+                  if (!searchQuery.trim()) return true;
+                  const name = (contact?.name || contact?.email || contactId).toLowerCase();
+                  return name.includes(searchQuery.trim().toLowerCase());
+                })
+                .map(({ contactId, lastMessage, lastTime }) => {
+                  const contact = contacts.find((c) => c.id === contactId);
+                  const name = contact?.name || contact?.email || contactId;
+                  return (
+                    <li key={contactId}>
+                      <button
+                        type="button"
+                        onClick={() => { setSelectedContactId(contactId); setDeleteTargetId(null); }}
+                        onContextMenu={(e) => { e.preventDefault(); handleLongPressContact(contactId); }}
+                        onTouchStart={() => { longPressRef.current = setTimeout(() => handleLongPressContact(contactId), 500); }}
+                        onTouchEnd={() => { if (longPressRef.current) clearTimeout(longPressRef.current); longPressRef.current = null; }}
+                        className="w-full text-left flex items-center gap-2 px-3 py-2 rounded-xl transition-colors text-gray-800 hover:bg-white/80 bg-white/60 border border-gray-100"
+                      >
+                        <div className="w-9 h-9 flex-shrink-0 rounded-full bg-[#008080]/20 flex items-center justify-center text-sm font-semibold text-[#008080]">
+                          {(name || "?").slice(0, 1).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate text-sm">{name}</p>
+                          <p className="text-xs truncate text-gray-500">{lastMessage || "—"}</p>
+                        </div>
+                        <span className="text-[10px] flex-shrink-0 text-gray-400">{formatTime(lastTime)}</span>
+                      </button>
+                      {deleteTargetId === contactId && (
+                        <div className="flex items-center gap-1.5 px-2 py-1 mt-0.5 bg-red-50 rounded-lg">
+                          <span className="text-[10px] text-red-700 flex-1">{isHe ? "מחיקת שיחה" : "Delete chat"}</span>
+                          <button type="button" onClick={() => handleDeleteChat(contactId)} className="p-1 text-red-600 hover:bg-red-100 rounded-md" aria-label="Delete"><Trash2 className="w-3 h-3" /></button>
+                          <button type="button" onClick={() => setDeleteTargetId(null)} className="text-[10px] text-gray-600 hover:underline">{isHe ? "ביטול" : "Cancel"}</button>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              {conversationsWithMeta.length > 0 && contacts.some((c) => !contactIdsWithChats.includes(c.id) && !c.blocked) && (
+                <li className="pt-2 mt-2 border-t border-gray-200">
+                  <p className="text-[10px] text-gray-500 px-2 mb-1">{isHe ? "אנשי קשר ללא שיחה" : "Contacts (no chat yet)"}</p>
+                  {contacts.filter((c) => !c.blocked && !contactIdsWithChats.includes(c.id)).map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => setSelectedContactId(c.id)}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-white/80 rounded-xl"
+                    >
+                      <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs text-gray-600">{(c.name || c.email || c.id).slice(0, 1).toUpperCase()}</div>
+                      <span className="text-sm truncate text-gray-700">{c.name || c.email || c.id}</span>
+                    </button>
+                  ))}
+                </li>
+              )}
+            </ul>
+          )}
+        </>
+      )}
+
+      {threadOnly && selectedContact && (
+        <>
+          <div className="flex-shrink-0 flex items-center gap-2 px-2 py-1.5 border-b border-gray-100/80 bg-white/95">
+            <Link href={`/dashboard/messages/contact/${selectedContact.id}`} className="flex-shrink-0 w-9 h-9 rounded-full bg-[#008080]/20 flex items-center justify-center text-sm font-semibold text-[#008080]" aria-label={isHe ? "פרטי איש קשר" : "Contact info"}>
+              {(selectedContact.name || selectedContact.email || "?").slice(0, 1).toUpperCase()}
+            </Link>
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-gray-900 truncate text-[11px]">{selectedContact.name || selectedContact.email}</p>
+              <p className="text-[9px] text-gray-500">{isHe ? "שיחה דו-כיוונית" : "Two-way chat"}</p>
+            </div>
+            <div className="flex items-center gap-0.5">
+              <button type="button" className="p-2 rounded-xl text-gray-500 hover:bg-gray-100" aria-label={isHe ? "שיחת אודיו" : "Voice call"}><Phone className="w-4 h-4" strokeWidth={2} /></button>
+              <button type="button" className="p-2 rounded-xl text-gray-500 hover:bg-gray-100" aria-label={isHe ? "שיחת וידאו" : "Video call"}><Video className="w-4 h-4" strokeWidth={2} /></button>
+              <button type="button" onClick={() => setChatSearchVisible((v) => !v)} className={`p-2 rounded-xl ${chatSearchVisible ? "bg-[#008080]/10 text-[#008080]" : "text-gray-500 hover:bg-gray-100"}`} aria-label={isHe ? "חיפוש בשיחה" : "Search in chat"}><Search className="w-4 h-4" strokeWidth={2} /></button>
+              <button type="button" onClick={() => setTasksPanelOpen((v) => !v)} className={`p-2 rounded-xl ${tasksPanelOpen ? "bg-[#008080]/10 text-[#008080]" : "text-gray-500 hover:bg-gray-100"}`} aria-label={isHe ? "משימות" : "Tasks"}><ClipboardList className="w-4 h-4" strokeWidth={2} /></button>
+            </div>
+          </div>
+          {chatSearchVisible && (
+            <div className="flex-shrink-0 flex items-center gap-2 px-2 py-1.5 bg-white border-b border-gray-100">
+              <Search className="w-3.5 h-3.5 text-gray-400" strokeWidth={2} />
+              <input type="text" value={chatSearchQuery} onChange={(e) => setChatSearchQuery(e.target.value)} placeholder={isHe ? "חיפוש בהודעות" : "Search in messages"} className="flex-1 min-w-0 py-1.5 text-xs bg-transparent outline-none placeholder-gray-400" />
+            </div>
+          )}
+          {tasksPanelOpen && (
+            <div className="flex-shrink-0 border-b border-gray-100 bg-white">
+              <div className="flex gap-0.5 p-1.5">
+                <button type="button" onClick={() => setTasksTab("given")} className={`flex-1 py-2 rounded-xl text-xs font-medium ${tasksTab === "given" ? "bg-[#008080] text-white" : "text-gray-600 hover:bg-gray-100"}`}>{isHe ? "נתתי" : "Given"}</button>
+                <button type="button" onClick={() => setTasksTab("received")} className={`flex-1 py-2 rounded-xl text-xs font-medium ${tasksTab === "received" ? "bg-[#008080] text-white" : "text-gray-600 hover:bg-gray-100"}`}>{isHe ? "קיבלתי" : "Received"}</button>
+              </div>
+              <div className="max-h-32 overflow-y-auto px-2 pb-2">
+                {(tasksTab === "given" ? given : receivedFiltered).filter((t) => !t.archived).slice(0, 20).map((t) => (
+                  <div key={t.id} className="py-1.5 px-2 rounded-xl hover:bg-gray-50 text-xs text-gray-800 border-b border-gray-50 last:border-0">{t.title || "—"}</div>
+                ))}
+                {(tasksTab === "given" ? given : receivedFiltered).filter((t) => !t.archived).length === 0 && <p className="py-2 text-xs text-gray-500 text-center">{isHe ? "אין משימות" : "No tasks"}</p>}
+              </div>
+            </div>
+          )}
+          <div className="flex-1 overflow-y-auto p-1.5 space-y-1">
+            {(chatSearchQuery.trim() ? sortedMessages.filter((m) => { const text = m.parts.find((p) => p.type === "text")?.content ?? ""; return text.toLowerCase().includes(chatSearchQuery.trim().toLowerCase()); }) : sortedMessages).map((m) => (
+              <MessageBubble
+                key={m.id}
+                msg={m}
+                isMe={m.senderId === currentUserId}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  const text = m.parts.find((p) => p.type === "text")?.content ?? "";
+                  setMessageMenu({ msgId: m.id, text, x: e.clientX, y: e.clientY });
+                }}
+                onTouchEnd={() => { if (longPressRef.current) clearTimeout(longPressRef.current); longPressRef.current = null; }}
+                onTouchStart={() => {
+                  const text = m.parts.find((p) => p.type === "text")?.content ?? "";
+                  longPressRef.current = setTimeout(() => setMessageMenu({ msgId: m.id, text, x: 120, y: 200 }), 500);
+                }}
+              />
+            ))}
+            {isTyping && (
+              <div className="flex justify-start">
+                <div className="px-2.5 py-1.5 rounded-xl bg-white border border-gray-200 text-[#008080] text-[11px] font-medium flex items-center gap-1">
+                  <span className="inline-flex gap-0.5">
+                    <span className="w-1 h-1 rounded-full bg-[#008080] animate-pulse" style={{ animationDelay: "0ms" }} />
+                    <span className="w-1 h-1 rounded-full bg-[#008080] animate-pulse" style={{ animationDelay: "200ms" }} />
+                    <span className="w-1 h-1 rounded-full bg-[#008080] animate-pulse" style={{ animationDelay: "400ms" }} />
+                  </span>
+                  Typing...
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+          <div className="flex-shrink-0 p-2 border-t border-gray-100/80 bg-white/95 relative">
+            <div className="flex items-center gap-1 rounded-xl border border-gray-200/80 bg-white pl-1.5 pr-1.5 py-2 min-h-[44px]">
+              <div className="flex items-center gap-0.5 shrink-0">
+                <button type="button" onClick={() => setAttachMenuOpen((o) => !o)} className="p-2 rounded-xl text-[#008080] hover:bg-[#008080]/10" aria-expanded={attachMenuOpen}><Plus className="w-5 h-5" strokeWidth={2.5} /></button>
+                <button type="button" onClick={() => setIsRecording((r) => !r)} className={`p-2 rounded-xl shrink-0 ${isRecording ? "bg-[#008080] text-white" : "text-[#008080] hover:bg-[#008080]/10"}`} aria-label={isHe ? "הערת קול" : "Voice note"} aria-pressed={isRecording}><Mic className="w-5 h-5" strokeWidth={2} /></button>
+                <div className="relative">
+                  <button type="button" onClick={() => setBrainMenuOpen((o) => !o)} className="p-2 rounded-xl text-[#008080] hover:bg-[#008080]/10"><Brain className="w-5 h-5" strokeWidth={2} /></button>
+                  {brainMenuOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setBrainMenuOpen(false)} aria-hidden />
+                      <div className="absolute left-0 bottom-full mb-1 z-50 w-48 py-2 rounded-xl bg-white border border-gray-200 shadow-lg">
+                        <p className="px-3 py-1 text-[10px] font-semibold text-gray-500 uppercase">{isHe ? "מודל AI" : "AI Model"}</p>
+                        <button type="button" onClick={() => setBrainMenuOpen(false)} className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-[#008080]/10 rounded-xl">Ollin</button>
+                        <button type="button" onClick={() => setBrainMenuOpen(false)} className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-[#008080]/10 rounded-xl">GPT-4</button>
+                        <button type="button" onClick={() => setBrainMenuOpen(false)} className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-[#008080]/10 rounded-xl">Claude</button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+              {isRecording && (
+                <div className="flex items-center gap-2 shrink-0 px-2 py-1 rounded-xl bg-[#008080]/10 text-[#008080]">
+                  <span className="inline-flex gap-0.5 items-center">
+                    <span className="w-1 h-2 rounded-full bg-[#008080] animate-pulse" style={{ animationDelay: "0ms" }} />
+                    <span className="w-1 h-3 rounded-full bg-[#008080] animate-pulse" style={{ animationDelay: "150ms" }} />
+                    <span className="w-1 h-2.5 rounded-full bg-[#008080] animate-pulse" style={{ animationDelay: "300ms" }} />
+                    <span className="w-1 h-3.5 rounded-full bg-[#008080] animate-pulse" style={{ animationDelay: "450ms" }} />
+                    <span className="w-1 h-2 rounded-full bg-[#008080] animate-pulse" style={{ animationDelay: "600ms" }} />
+                  </span>
+                  <span className="text-[11px] font-medium">{isHe ? "מקליט..." : "Recording..."}</span>
+                </div>
+              )}
+              <input type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()} placeholder={isHe ? "הודעה..." : "Message..."} className="flex-1 min-w-0 bg-transparent px-2 py-1.5 text-sm text-gray-900 placeholder-gray-400 outline-none" />
+              <button type="button" onClick={handleSend} disabled={!input.trim()} className="p-2.5 bg-[#008080] text-white disabled:opacity-50 rounded-xl shrink-0" aria-label="Send"><Send className="w-4 h-4" strokeWidth={2} /></button>
+            </div>
+            {attachMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setAttachMenuOpen(false)} aria-hidden />
+                <div className="absolute left-2 right-2 bottom-full mb-1 z-50 py-2.5 px-2.5 bg-white border border-gray-200 rounded-xl shadow-lg">
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <button type="button" onClick={() => openFileInput("image/*", "environment")} className="flex items-center gap-2 py-2.5 px-3 text-left text-xs font-medium text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl"><Camera className="w-4 h-4 shrink-0 text-[#008080]" strokeWidth={2} />{isHe ? "מצלמה" : "Camera"}</button>
+                    <button type="button" onClick={() => openFileInput("image/*")} className="flex items-center gap-2 py-2.5 px-3 text-left text-xs font-medium text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl"><ImagePlus className="w-4 h-4 shrink-0 text-[#008080]" strokeWidth={2} />{isHe ? "גלריה" : "Gallery"}</button>
+                    <button type="button" onClick={() => openFileInput("application/pdf,.doc,.docx,image/*,*/*")} className="flex items-center gap-2 py-2.5 px-3 text-left text-xs font-medium text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl"><FileText className="w-4 h-4 shrink-0 text-[#008080]" strokeWidth={2} />{isHe ? "מסמך" : "Document"}</button>
+                    <button type="button" onClick={handleSendLocation} className="flex items-center gap-2 py-2.5 px-3 text-left text-xs font-medium text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl"><MapPin className="w-4 h-4 shrink-0 text-[#008080]" strokeWidth={2} />{isHe ? "מיקום" : "Location"}</button>
+                    <button type="button" onClick={() => { setEventPopupOpen(true); setAttachMenuOpen(false); }} className="flex items-center gap-2 py-2.5 px-3 text-left text-xs font-medium text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl"><CalendarDays className="w-4 h-4 shrink-0 text-[#008080]" strokeWidth={2} />{isHe ? "צור אירוע" : "Create Event"}</button>
+                    <button type="button" onClick={() => { setMeetingPopupOpen(true); setAttachMenuOpen(false); }} className="flex items-center gap-2 py-2.5 px-3 text-left text-xs font-medium text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl"><Users className="w-4 h-4 shrink-0 text-[#008080]" strokeWidth={2} />{isHe ? "צור פגישה" : "Create Meeting"}</button>
+                    <button type="button" onClick={() => setAttachMenuOpen(false)} className="flex items-center gap-2 py-2.5 px-3 text-left text-xs font-medium text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl"><BarChart3 className="w-4 h-4 shrink-0 text-[#008080]" strokeWidth={2} />{isHe ? "צור סקר" : "Create Poll"}</button>
+                    <button type="button" onClick={() => setAttachMenuOpen(false)} className="flex items-center gap-2 py-2.5 px-3 text-left text-xs font-medium text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl"><ScanLine className="w-4 h-4 shrink-0 text-[#008080]" strokeWidth={2} />{isHe ? "סריקה (AI)" : "Scan (AI)"}</button>
+                  </div>
+                </div>
+              </>
+            )}
+            {eventPopupOpen && (
+              <>
+                <div className="fixed inset-0 z-40 bg-black/40" onClick={() => setEventPopupOpen(false)} aria-hidden />
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                  <div className="w-full max-w-sm rounded-xl bg-white shadow-xl border border-gray-200 p-4" onClick={(e) => e.stopPropagation()}>
+                    <p className="text-sm font-semibold text-gray-900 mb-3">{isHe ? "צור אירוע" : "Create Event"}</p>
+                    <input type="text" value={eventMeetingTitle} onChange={(e) => setEventMeetingTitle(e.target.value)} placeholder={isHe ? "שם האירוע" : "Event title"} className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm mb-3 outline-none focus:ring-2 focus:ring-[#008080]/30" />
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => { setEventPopupOpen(false); setEventMeetingTitle(""); }} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50">{isHe ? "ביטול" : "Cancel"}</button>
+                      <button type="button" onClick={handleCreateEventSubmit} className="flex-1 py-2.5 rounded-xl text-white text-sm font-medium" style={{ backgroundColor: TEAL }}>{isHe ? "צור" : "Create"}</button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+            {meetingPopupOpen && (
+              <>
+                <div className="fixed inset-0 z-40 bg-black/40" onClick={() => setMeetingPopupOpen(false)} aria-hidden />
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                  <div className="w-full max-w-sm rounded-xl bg-white shadow-xl border border-gray-200 p-4" onClick={(e) => e.stopPropagation()}>
+                    <p className="text-sm font-semibold text-gray-900 mb-3">{isHe ? "צור פגישה" : "Create Meeting"}</p>
+                    <input type="text" value={eventMeetingTitle} onChange={(e) => setEventMeetingTitle(e.target.value)} placeholder={isHe ? "שם הפגישה" : "Meeting title"} className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm mb-3 outline-none focus:ring-2 focus:ring-[#008080]/30" />
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => { setMeetingPopupOpen(false); setEventMeetingTitle(""); }} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50">{isHe ? "ביטול" : "Cancel"}</button>
+                      <button type="button" onClick={handleCreateMeetingSubmit} className="flex-1 py-2.5 rounded-xl text-white text-sm font-medium" style={{ backgroundColor: TEAL }}>{isHe ? "צור" : "Create"}</button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </>
+      )}
+
+      {threadOnly && !selectedContact && (
+        <div className="flex-1 flex items-center justify-center text-gray-500 text-xs p-3">
+          {isHe ? "בחר שיחה מרשימה" : "Select a chat from the list"}
+        </div>
+      )}
+
+    </div>
+  );
+}
+
+function formatTime(ts: number): string {
+  const d = new Date(ts);
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  if (sameDay) return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return d.toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+function MessageBubble({
+  msg,
+  isMe,
+  onContextMenu,
+  onTouchStart,
+  onTouchEnd,
+}: {
+  msg: InternalMessageRecord;
+  isMe: boolean;
+  onContextMenu?: (e: React.MouseEvent) => void;
+  onTouchStart?: () => void;
+  onTouchEnd?: () => void;
+}) {
+  const text = msg.parts.find((p) => p.type === "text")?.content;
+  if (!text) return null;
+  return (
+    <div className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
+      <div
+        className={`max-w-[85%] px-2.5 py-1.5 text-xs rounded-xl select-text ${isMe ? "bg-[#008080] text-white" : "bg-white border border-gray-200 text-gray-900"}`}
+        onContextMenu={onContextMenu}
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+      >
+        {text}
       </div>
     </div>
   );
