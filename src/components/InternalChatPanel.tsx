@@ -6,6 +6,7 @@ import { useLocale } from "@/contexts/LocaleContext";
 import { useContacts } from "@/contexts/ContactsContext";
 import { useInternalMessages } from "@/contexts/ChatEngineContext";
 import { useBoard } from "@/contexts/BoardContext";
+import { useBilling } from "@/contexts/BillingContext";
 import { MessageSquare, Send, Trash2, Search, Camera, Plus, MapPin, FileText, ImagePlus, Forward, ListTodo, Instagram, Bot, Linkedin, ScanLine, BarChart3, Mic, ChevronLeft, Phone, Video, ClipboardList, CalendarDays, Users, Brain, Ban, UserPlus, Shield, CheckCheck, Pencil } from "lucide-react";
 import { SOURCE_ICONS, type ChatSourceId } from "@/components/dashboard/SourceBadge";
 import type { InternalMessageRecord } from "@/lib/chat-engine";
@@ -50,6 +51,7 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
   const { contacts, addContactWithId, updateContact } = useContacts();
   const { addReceivedTask, given, received } = useBoard();
   const { getConversation, getConversationsWithMeta, deleteConversation, sendText, sendVoice, sendFile, markConversationAsRead, currentUserId } = useInternalMessages();
+  const { createDraft, getShareLink } = useBilling();
   const [selectedContactId, setSelectedContactId] = useState<string | null>(preselectedContactId ?? null);
 
   React.useEffect(() => {
@@ -634,6 +636,30 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
                           <ListTodo className={`w-3.5 h-3.5 ${isUnknownContact ? "text-gray-400" : "text-[#008080]"}`} strokeWidth={2} />
                           {isUnknownContact ? (isHe ? "המר למשימה (הוסף קודם)" : "Convert to Task (add first)") : (isHe ? "המר למשימה" : "Convert to Task")}
                         </button>
+                        {!isUnknownContact && selectedContactId && (
+                          <button
+                            type="button"
+                            className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-left text-[11px] text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl"
+                            onClick={() => {
+                              setMessageMenu(null);
+                              const contact = contacts.find((c) => c.id === selectedContactId);
+                              if (contact) {
+                                const doc = createDraft({
+                                  id: contact.id,
+                                  name: contact.name || contact.email || selectedContactId,
+                                  email: contact.email,
+                                  phone: contact.phone,
+                                });
+                                if (doc) {
+                                  sendText(selectedContactId, `Invoice: ${getShareLink(doc.id)}`, currentUserId);
+                                }
+                              }
+                            }}
+                          >
+                            <FileText className="w-3.5 h-3.5" strokeWidth={2} />
+                            {isHe ? "שלח חשבונית" : "Send Invoice"}
+                          </button>
+                        )}
                         <button type="button" className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-left text-[11px] text-gray-700 hover:bg-gray-100 rounded-xl" onClick={() => setMessageMenu(null)}>
                           <Forward className="w-3.5 h-3.5" strokeWidth={2} />
                           {isHe ? "העבר" : "Forward"}

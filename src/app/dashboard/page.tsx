@@ -6,11 +6,12 @@ import { useSearchParams } from "next/navigation";
 import { useLocale } from "@/contexts/LocaleContext";
 import { useProfile } from "@/contexts/ProfileContext";
 import { slugFromUsername } from "@/lib/profile-types";
-import { CreditCard, User, Settings } from "lucide-react";
+import { CreditCard, User, Settings, LayoutDashboard, FileText } from "lucide-react";
 import { DashboardPanels, BOARD_PANEL_INDEX } from "@/app/dashboard/DashboardPanels";
 import { LocaleSwitcher } from "@/components/LocaleSwitcher";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { DevUserSwitcher } from "@/components/DevUserSwitcher";
+import { useInternalMessages } from "@/contexts/ChatEngineContext";
 
 export default function DashboardPage() {
   return (
@@ -23,8 +24,10 @@ export default function DashboardPage() {
 function DashboardPageInner() {
   const { locale } = useLocale();
   const { profile } = useProfile();
+  const { currentUser } = useInternalMessages();
   const searchParams = useSearchParams();
   const cardSlug = profile?.username ? slugFromUsername(profile.username) : "card";
+  const displayName = currentUser?.name ?? profile?.name;
   const [panelIndex, setPanelIndex] = useState(2);
 
   useEffect(() => {
@@ -52,7 +55,7 @@ function DashboardPageInner() {
             aria-label={locale === "he" ? "לוח משימות" : "Task view / Board"}
             title={locale === "he" ? "לוח משימות" : "Tasks & Board"}
           >
-            <UserAvatar name={profile?.name} email={profile?.email} imageUrl={profile?.profileImage} size="sm" className="w-8 h-8 rounded-full" />
+            <UserAvatar name={displayName ?? undefined} email={profile?.email} imageUrl={profile?.profileImage} size="sm" className="w-8 h-8 rounded-full" />
           </button>
           <Link
             href={`/p/${encodeURIComponent(cardSlug)}`}
@@ -71,6 +74,24 @@ function DashboardPageInner() {
           >
             <CreditCard className="w-4 h-4" />
             {locale === "he" ? "כרטיס" : "Card"}
+          </Link>
+          {currentUser && (
+            <Link
+              href={`/mini/${encodeURIComponent(currentUser.id)}`}
+              className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-[#008080] transition-all"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <LayoutDashboard className="w-4 h-4" />
+              {locale === "he" ? "מיני-אתר" : "Mini-Site"}
+            </Link>
+          )}
+          <Link
+            href="/billing"
+            className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-[#008080] transition-all"
+          >
+            <FileText className="w-4 h-4" />
+            {locale === "he" ? "חשבוניות" : "Billing"}
           </Link>
           <Link
             href="/settings"

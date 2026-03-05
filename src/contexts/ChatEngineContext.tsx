@@ -5,7 +5,21 @@ import * as ChatLib from "@/lib/chat-engine";
 
 const DEV_USER_KEY = "ollin_dev_current_user";
 
-export type DevCurrentUser = { id: string; name: string; phone: string };
+/** Business/issuer identity for billing (From section on invoices). */
+export interface BusinessProfile {
+  legalName: string;
+  taxId: string;
+  address: string;
+  businessLogo: string;
+  bankDetails: { iban?: string; swift?: string; bitLink?: string };
+}
+
+export type DevCurrentUser = {
+  id: string;
+  name: string;
+  phone: string;
+  businessProfile?: BusinessProfile;
+};
 
 function loadDevCurrentUser(): DevCurrentUser | null {
   if (typeof window === "undefined") return null;
@@ -13,7 +27,9 @@ function loadDevCurrentUser(): DevCurrentUser | null {
     const raw = localStorage.getItem(DEV_USER_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as DevCurrentUser;
-    if (parsed?.id && parsed?.name != null) return parsed;
+    if (parsed?.id && parsed?.name != null) {
+      return { ...parsed, businessProfile: parsed.businessProfile };
+    }
     return null;
   } catch {
     return null;
@@ -89,6 +105,15 @@ export function ChatEngineProvider({ children }: { children: React.ReactNode }) 
   const setCurrentUser = useCallback((user: DevCurrentUser | null) => {
     setCurrentUserState(user);
     saveDevCurrentUser(user);
+  }, []);
+
+  const updateBusinessProfile = useCallback((updater: (prev: BusinessProfile | undefined) => BusinessProfile) => {
+    setCurrentUserState((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, businessProfile: updater(prev.businessProfile) };
+      saveDevCurrentUser(next);
+      return next;
+    });
   }, []);
 
   const currentUserId = currentUser?.id ?? "me";
@@ -382,6 +407,7 @@ export function ChatEngineProvider({ children }: { children: React.ReactNode }) 
       // Dev identity (for testing chat between two users)
       currentUser,
       setCurrentUser,
+      updateBusinessProfile,
       currentUserId,
       // AI chat (Gemini)
       messages,
@@ -399,6 +425,7 @@ export function ChatEngineProvider({ children }: { children: React.ReactNode }) 
     [
       currentUser,
       setCurrentUser,
+      updateBusinessProfile,
       currentUserId,
       messages,
       sendMessage,

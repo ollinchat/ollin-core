@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useLocale } from "@/contexts/LocaleContext";
 import { useProfile } from "@/contexts/ProfileContext";
+import { useInternalMessages } from "@/contexts/ChatEngineContext";
 import { t } from "@/lib/translations";
 import { ChevronLeft, BadgeCheck, Star } from "lucide-react";
 import { ModularProfileGrid } from "@/components/profile/ModularProfileGrid";
@@ -10,12 +11,15 @@ import { ModularProfileGrid } from "@/components/profile/ModularProfileGrid";
 export default function FullProfilePage() {
   const { locale } = useLocale();
   const { profile } = useProfile();
+  const { currentUser } = useInternalMessages();
   const blocks = profile?.blocks ?? [];
   const useModular = blocks.length > 0;
   const reviewsBlock = blocks.find((b) => b.type === "reviewsRatings");
   const reviews = reviewsBlock?.config?.reviewsRatings?.items ?? [];
   const ratingAvg = reviews.length ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0;
-  const isEmil = profile?.name?.toLowerCase().includes("emil");
+  const displayName = currentUser?.name ?? profile?.name ?? "—";
+  const displayId = currentUser?.id ?? profile?.userId;
+  const isVerified = Boolean(displayId);
 
   return (
     <div className="min-h-screen bg-background">
@@ -49,7 +53,7 @@ export default function FullProfilePage() {
                 <img src={profile.profileImage} alt="" className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-[#008080] text-3xl font-bold">
-                  {profile?.name?.slice(0, 1)?.toUpperCase() || "E"}
+                  {displayName.slice(0, 1).toUpperCase() || "?"}
                 </div>
               )}
             </div>
@@ -58,19 +62,25 @@ export default function FullProfilePage() {
 
         <section className="flex flex-col items-center pt-16 px-4">
           <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold text-gray-900">{profile?.name || "Emil"}</h2>
-            {(profile?.userId || isEmil) && (
+            <h2 className="text-xl font-bold text-gray-900">{displayName}</h2>
+            {isVerified && (
               <span className="flex items-center gap-0.5 text-[#008080]" title="Verified">
                 <BadgeCheck className="w-5 h-5" />
               </span>
             )}
           </div>
+          {currentUser?.phone && (
+            <p className="text-gray-600 text-sm mt-0.5 font-mono">{currentUser.phone}</p>
+          )}
           {profile?.professionalTitle && (
             <p className="text-[#008080] font-medium mt-0.5">{profile.professionalTitle}</p>
           )}
+          {displayId && (
+            <p className="text-xs font-mono text-gray-500 mt-1 tracking-widest">Ollin ID: {displayId}</p>
+          )}
 
           {/* Social proof: verified ratings & reviews */}
-          {(reviews.length > 0 || isEmil) && (
+          {(reviews.length > 0 || isVerified) && (
             <div className="mt-4 w-full max-w-md rounded-md border border-[#008080]/20 bg-white/80 p-4 shadow-soft">
               <div className="flex items-center justify-center gap-2 mb-2">
                 <Star className="w-5 h-5 fill-amber-400 text-amber-400" />

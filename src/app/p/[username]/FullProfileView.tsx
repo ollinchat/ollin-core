@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import Link from "next/link";
 import { useLocale } from "@/contexts/LocaleContext";
+import { useInternalMessages } from "@/contexts/ChatEngineContext";
 import { t } from "@/lib/translations";
 import type { Profile, ProjectPosition, ProfileBlock } from "@/lib/profile-types";
 import { slugFromUsername } from "@/lib/profile-types";
@@ -258,9 +259,14 @@ function ProjectCard({
 /** Premium full profile – large typography, glassmorphism, project cards, CV download. */
 export function FullProfileView({ profile }: { profile: Profile }) {
   const { dir, locale } = useLocale();
+  const { currentUser } = useInternalMessages();
   const [copied, setCopied] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [carouselIndex, setCarouselIndex] = useState<Record<string, number>>({});
+
+  const isOwnProfile = Boolean(currentUser && profile.userId === currentUser.id);
+  const displayName = isOwnProfile ? currentUser!.name : (profile.name || "—");
+  const displayOllinId = isOwnProfile ? currentUser!.id : profile.userId;
 
   const slug = slugFromUsername(profile.username);
   const profileUrl =
@@ -339,19 +345,19 @@ export function FullProfileView({ profile }: { profile: Profile }) {
                 <img src={profile.profileImage} alt="" className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full bg-[#008080]/15 flex items-center justify-center text-[#008080] text-5xl font-bold font-serif">
-                  {profile.name?.slice(0, 1)?.toUpperCase() || "?"}
+                  {displayName?.slice(0, 1)?.toUpperCase() || "?"}
                 </div>
               )}
             </div>
             <div className="flex-1 text-center sm:text-left">
               <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-gray-900 tracking-tight leading-tight" style={{ fontFamily: "var(--font-cormorant), Georgia, serif" }}>
-                {profile.name || "—"}
+                {displayName}
               </h1>
               {profile.professionalTitle && (
                 <p className="mt-4 text-xl sm:text-2xl md:text-3xl font-semibold text-[#008080] tracking-wide" style={{ fontFamily: "var(--font-cormorant), Georgia, serif" }}>{profile.professionalTitle}</p>
               )}
-              {profile.userId && (
-                <p className="mt-3 text-base font-mono font-semibold text-gray-600 tracking-widest">Ollin ID: {profile.userId}</p>
+              {displayOllinId && (
+                <p className="mt-3 text-base font-mono font-semibold text-gray-600 tracking-widest">Ollin ID: {displayOllinId}</p>
               )}
               {socialLinks.length > 0 && (
                 <div className="mt-6 flex flex-wrap gap-3 justify-center sm:justify-start">

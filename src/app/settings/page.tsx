@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useLocale } from "@/contexts/LocaleContext";
 import { useProfile } from "@/contexts/ProfileContext";
+import { useInternalMessages, type DevCurrentUser } from "@/contexts/ChatEngineContext";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -17,10 +18,69 @@ import {
   LogOut,
   Hash,
   Mail,
+  UserCircle,
 } from "lucide-react";
 
 const ONBOARDED_KEY = "ollin_onboarded";
 const EMAIL_SUMMARY_KEY = "ollin_email_summary";
+
+function IdentityEditCard({
+  currentUser,
+  setCurrentUser,
+  locale,
+  className = "",
+}: {
+  currentUser: DevCurrentUser;
+  setCurrentUser: (u: DevCurrentUser) => void;
+  locale: "en" | "he";
+  className?: string;
+}) {
+  const [name, setName] = useState(currentUser.name);
+  const [phone, setPhone] = useState(currentUser.phone);
+  const handleSave = () => {
+    const n = name.trim();
+    const p = phone.trim();
+    const id = p || n || currentUser.id;
+    setCurrentUser({ id, name: n || id, phone: p });
+  };
+  return (
+    <div className={`rounded-2xl bg-white shadow-soft border border-gray-100 overflow-hidden ${className}`}>
+      <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-3">
+        <UserCircle className="w-5 h-5 text-[#008080]" />
+        <span className="text-sm font-medium text-gray-900">{locale === "he" ? "זהות (פיתוח)" : "Identity (dev)"}</span>
+      </div>
+      <div className="p-4 space-y-3">
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-1">{locale === "he" ? "שם" : "Name"}</label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#008080]/20 focus:border-[#008080]"
+            placeholder={locale === "he" ? "שם" : "Name"}
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-1">{locale === "he" ? "טלפון" : "Phone"}</label>
+          <input
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#008080]/20 focus:border-[#008080]"
+            placeholder={locale === "he" ? "טלפון" : "Phone"}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={handleSave}
+          className="w-full py-2.5 rounded-xl bg-[#008080] text-white text-sm font-medium hover:bg-[#006666] transition-colors"
+        >
+          {locale === "he" ? "שמור" : "Save"}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export type EmailSummarySchedule = "weekly" | "monthly" | "disabled";
 
@@ -55,9 +115,11 @@ const SETTINGS_ITEMS: {
 export default function SettingsPage() {
   const { locale, setLocale } = useLocale();
   const { profile } = useProfile();
+  const { currentUser, setCurrentUser } = useInternalMessages();
   const router = useRouter();
   const isRtl = locale === "he";
   const [emailSummary, setEmailSummary] = useState<EmailSummarySchedule>("disabled");
+  const displayId = currentUser?.id ?? profile?.userId;
 
   useEffect(() => {
     setEmailSummary(loadEmailSummary());
@@ -93,16 +155,19 @@ export default function SettingsPage() {
       </header>
 
       <div className="flex-1 p-4 max-w-lg mx-auto w-full">
-        {profile.userId && (
+        {displayId && (
           <div className="rounded-2xl bg-[#008080]/10 border border-[#008080]/20 p-4 mb-4 flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-[#008080]/20 flex items-center justify-center">
               <Hash className="w-5 h-5 text-[#008080]" />
             </div>
             <div>
               <p className="text-xs font-medium text-[#006666] uppercase tracking-wider">{locale === "he" ? "מזהה Ollin" : "Ollin ID"}</p>
-              <p className="text-lg font-mono font-semibold text-gray-900 tracking-widest">{profile.userId ?? "—"}</p>
+              <p className="text-lg font-mono font-semibold text-gray-900 tracking-widest">{displayId}</p>
             </div>
           </div>
+        )}
+        {currentUser && (
+          <IdentityEditCard currentUser={currentUser} setCurrentUser={setCurrentUser} locale={locale} className="mb-4" />
         )}
         <ul className="rounded-2xl bg-white shadow-soft border border-gray-100 overflow-hidden divide-y divide-gray-100">
           {SETTINGS_ITEMS.map((item) => {

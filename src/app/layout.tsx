@@ -18,6 +18,8 @@ import { ChecklistsProvider } from "@/contexts/ChecklistsContext";
 import { LiveCallProvider } from "@/contexts/LiveCallContext";
 import { SetDir } from "@/components/SetDir";
 import { ArchitectProvider } from "@/contexts/ArchitectContext";
+import { MiniSiteProvider } from "@/contexts/MiniSiteContext";
+import { BillingProvider } from "@/contexts/BillingContext";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -67,6 +69,8 @@ export default function RootLayout({
                         <BillsProvider>
                           <ChecklistsProvider>
                             <ChatEngineProvider>
+                              <MiniSiteProvider>
+                              <BillingProvider>
                               <ArchitectProvider>
                                 <FoldersProvider>
                                   <NotesProvider>
@@ -77,6 +81,8 @@ export default function RootLayout({
                                   </NotesProvider>
                                 </FoldersProvider>
                               </ArchitectProvider>
+                              </BillingProvider>
+                              </MiniSiteProvider>
                             </ChatEngineProvider>
                           </ChecklistsProvider>
                         </BillsProvider>
