@@ -4,7 +4,6 @@ import React, { useState } from "react";
 import { useLocale } from "@/contexts/LocaleContext";
 import { useContacts } from "@/contexts/ContactsContext";
 import { useInternalMessages } from "@/contexts/ChatEngineContext";
-import { useProfile } from "@/contexts/ProfileContext";
 import { Camera, Plus, Search, Mail } from "lucide-react";
 import { InternalChatPanel } from "@/components/InternalChatPanel";
 import { SourceBadge, SOURCE_ICONS, type ChatSourceId } from "./SourceBadge";
@@ -29,9 +28,7 @@ function formatTime(ts: number): string {
 
 export function ConversationsView({ locale, onSelectedContactChange }: ConversationsViewProps) {
   const { contacts } = useContacts();
-  const { getConversationsWithMeta } = useInternalMessages();
-  const { profile } = useProfile();
-  const currentUserId = profile?.userId ?? "me";
+  const { getConversationsWithMeta, currentUserId } = useInternalMessages();
   const [filterChip, setFilterChip] = useState<FilterChipId>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [showManageChannels, setShowManageChannels] = useState(false);

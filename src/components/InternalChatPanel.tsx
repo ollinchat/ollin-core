@@ -5,9 +5,8 @@ import Link from "next/link";
 import { useLocale } from "@/contexts/LocaleContext";
 import { useContacts } from "@/contexts/ContactsContext";
 import { useInternalMessages } from "@/contexts/ChatEngineContext";
-import { useProfile } from "@/contexts/ProfileContext";
 import { useBoard } from "@/contexts/BoardContext";
-import { MessageSquare, Send, Trash2, Search, Camera, Plus, MapPin, FileText, ImagePlus, Forward, ListTodo, Instagram, Bot, Linkedin, ScanLine, BarChart3, Mic, ChevronLeft, Phone, Video, ClipboardList, CalendarDays, Users, Brain, Ban, UserPlus, Shield } from "lucide-react";
+import { MessageSquare, Send, Trash2, Search, Camera, Plus, MapPin, FileText, ImagePlus, Forward, ListTodo, Instagram, Bot, Linkedin, ScanLine, BarChart3, Mic, ChevronLeft, Phone, Video, ClipboardList, CalendarDays, Users, Brain, Ban, UserPlus, Shield, CheckCheck, Pencil } from "lucide-react";
 import { SOURCE_ICONS, type ChatSourceId } from "@/components/dashboard/SourceBadge";
 import type { InternalMessageRecord } from "@/lib/chat-engine";
 import { formatOllinIdForDisplay } from "@/lib/user-id";
@@ -49,10 +48,8 @@ type InternalChatPanelProps = {
 /** Pro Messaging Suite: filters, search, media bar, message context menu (Convert to Task), typing indicator. */
 export function InternalChatPanel({ locale, compact, onSelectedContactChange, preselectedContactId, threadOnly }: InternalChatPanelProps) {
   const { contacts, addContactWithId, updateContact } = useContacts();
-  const { profile } = useProfile();
   const { addReceivedTask, given, received } = useBoard();
-  const { getConversation, getConversationsWithMeta, deleteConversation, sendText, sendVoice, sendFile, markConversationAsRead } = useInternalMessages();
-  const currentUserId = profile?.userId ?? "me";
+  const { getConversation, getConversationsWithMeta, deleteConversation, sendText, sendVoice, sendFile, markConversationAsRead, currentUserId } = useInternalMessages();
   const [selectedContactId, setSelectedContactId] = useState<string | null>(preselectedContactId ?? null);
 
   React.useEffect(() => {
@@ -62,7 +59,7 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
   const [searchQuery, setSearchQuery] = useState("");
   const [input, setInput] = useState("");
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
-  const [messageMenu, setMessageMenu] = useState<{ msgId: string; text: string; x: number; y: number } | null>(null);
+  const [messageMenu, setMessageMenu] = useState<{ msgId: string; text: string; x: number; y: number; isMe: boolean } | null>(null);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
@@ -459,29 +456,31 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
                         </div>
                       </div>
                     )}
-                    {(chatSearchQuery.trim() ? sortedMessages.filter((m) => { const text = m.parts.find((p) => p.type === "text")?.content ?? ""; return text.toLowerCase().includes(chatSearchQuery.trim().toLowerCase()); }) : sortedMessages).map((m) => (
-                      <MessageBubble
-                        key={m.id}
-                        msg={m}
-                        isMe={m.senderId === currentUserId}
-                        onContextMenu={(e) => {
-                          e.preventDefault();
-                          const text = m.parts.find((p) => p.type === "text")?.content ?? "";
-                          setMessageMenu({ msgId: m.id, text, x: e.clientX, y: e.clientY });
-                        }}
-                        onTouchEnd={() => {
-                          if (longPressRef.current) clearTimeout(longPressRef.current);
-                          longPressRef.current = null;
-                        }}
-                        onTouchStart={() => {
-                          const text = m.parts.find((p) => p.type === "text")?.content ?? "";
-                          longPressRef.current = setTimeout(
-                            () => setMessageMenu({ msgId: m.id, text, x: 120, y: 200 }),
-                            500
-                          );
-                        }}
-                      />
-                    ))}
+                    {(chatSearchQuery.trim() ? sortedMessages.filter((m) => { const text = m.parts.find((p) => p.type === "text")?.content ?? ""; return text.toLowerCase().includes(chatSearchQuery.trim().toLowerCase()); }) : sortedMessages).map((m) => {
+                      const isMe = m.senderId === currentUserId;
+                      const text = m.parts.find((p) => p.type === "text")?.content ?? "";
+                      return (
+                        <MessageBubble
+                          key={m.id}
+                          msg={m}
+                          isMe={isMe}
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            setMessageMenu({ msgId: m.id, text, x: e.clientX, y: e.clientY, isMe });
+                          }}
+                          onClick={(e) => setMessageMenu({ msgId: m.id, text, x: e.clientX, y: e.clientY, isMe })}
+                          onTouchEnd={() => {
+                            if (longPressRef.current) clearTimeout(longPressRef.current);
+                            longPressRef.current = null;
+                          }}
+                          onTouchStart={() => {
+                            longPressRef.current = setTimeout(() => {
+                              if (!isUnknownContact) handleConvertToTask(text);
+                            }, 500);
+                          }}
+                        />
+                      );
+                    })}
                     {isTyping && (
                       <div className="flex justify-start">
                         <div className="px-2.5 py-1.5 rounded-xl bg-white border border-gray-200 text-[#008080] text-[11px] font-medium flex items-center gap-1">
@@ -625,16 +624,22 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
                         className="fixed z-50 min-w-[160px] py-0.5 bg-white border border-gray-200 rounded-xl shadow-lg"
                         style={{ left: Math.min(messageMenu.x, typeof window !== "undefined" ? window.innerWidth - 180 : messageMenu.x), top: messageMenu.y }}
                       >
-                        <button type="button" onClick={() => !isUnknownContact && handleConvertToTask(messageMenu.text)} className={`w-full flex items-center gap-1.5 px-2.5 py-1.5 text-left text-[11px] rounded-xl ${isUnknownContact ? "text-gray-400 cursor-not-allowed" : "text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080]"}`} title={isUnknownContact ? (isHe ? "הוסף לאנשי קשר קודם" : "Add to contacts first") : undefined}>
+                        {messageMenu.isMe && (
+                          <button type="button" className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-left text-[11px] text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl" onClick={() => setMessageMenu(null)}>
+                            <Pencil className="w-3.5 h-3.5 text-[#008080]" strokeWidth={2} />
+                            {isHe ? "ערוך" : "Edit"}
+                          </button>
+                        )}
+                        <button type="button" onClick={() => { setMessageMenu(null); !isUnknownContact && handleConvertToTask(messageMenu.text); }} className={`w-full flex items-center gap-1.5 px-2.5 py-1.5 text-left text-[11px] rounded-xl ${isUnknownContact ? "text-gray-400 cursor-not-allowed" : "text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080]"}`} title={isUnknownContact ? (isHe ? "הוסף לאנשי קשר קודם" : "Add to contacts first") : undefined}>
                           <ListTodo className={`w-3.5 h-3.5 ${isUnknownContact ? "text-gray-400" : "text-[#008080]"}`} strokeWidth={2} />
                           {isUnknownContact ? (isHe ? "המר למשימה (הוסף קודם)" : "Convert to Task (add first)") : (isHe ? "המר למשימה" : "Convert to Task")}
                         </button>
                         <button type="button" className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-left text-[11px] text-gray-700 hover:bg-gray-100 rounded-xl" onClick={() => setMessageMenu(null)}>
-                          <Forward className="w-3.5 h-3.5" />
+                          <Forward className="w-3.5 h-3.5" strokeWidth={2} />
                           {isHe ? "העבר" : "Forward"}
                         </button>
                         <button type="button" className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-left text-[11px] text-red-600 hover:bg-red-50 rounded-xl" onClick={() => setMessageMenu(null)}>
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-3.5 h-3.5" strokeWidth={2} />
                           {isHe ? "מחק" : "Delete"}
                         </button>
                       </div>
@@ -765,23 +770,26 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
             </div>
           )}
           <div className="flex-1 overflow-y-auto p-1.5 space-y-1">
-            {(chatSearchQuery.trim() ? sortedMessages.filter((m) => { const text = m.parts.find((p) => p.type === "text")?.content ?? ""; return text.toLowerCase().includes(chatSearchQuery.trim().toLowerCase()); }) : sortedMessages).map((m) => (
-              <MessageBubble
-                key={m.id}
-                msg={m}
-                isMe={m.senderId === currentUserId}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  const text = m.parts.find((p) => p.type === "text")?.content ?? "";
-                  setMessageMenu({ msgId: m.id, text, x: e.clientX, y: e.clientY });
-                }}
-                onTouchEnd={() => { if (longPressRef.current) clearTimeout(longPressRef.current); longPressRef.current = null; }}
-                onTouchStart={() => {
-                  const text = m.parts.find((p) => p.type === "text")?.content ?? "";
-                  longPressRef.current = setTimeout(() => setMessageMenu({ msgId: m.id, text, x: 120, y: 200 }), 500);
-                }}
-              />
-            ))}
+            {(chatSearchQuery.trim() ? sortedMessages.filter((m) => { const text = m.parts.find((p) => p.type === "text")?.content ?? ""; return text.toLowerCase().includes(chatSearchQuery.trim().toLowerCase()); }) : sortedMessages).map((m) => {
+              const isMe = m.senderId === currentUserId;
+              const text = m.parts.find((p) => p.type === "text")?.content ?? "";
+              return (
+                <MessageBubble
+                  key={m.id}
+                  msg={m}
+                  isMe={isMe}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setMessageMenu({ msgId: m.id, text, x: e.clientX, y: e.clientY, isMe });
+                  }}
+                  onClick={(e) => setMessageMenu({ msgId: m.id, text, x: e.clientX, y: e.clientY, isMe })}
+                  onTouchEnd={() => { if (longPressRef.current) clearTimeout(longPressRef.current); longPressRef.current = null; }}
+                  onTouchStart={() => {
+                    longPressRef.current = setTimeout(() => { if (!isUnknownContact) handleConvertToTask(text); }, 500);
+                  }}
+                />
+              );
+            })}
             {isTyping && (
               <div className="flex justify-start">
                 <div className="px-2.5 py-1.5 rounded-xl bg-white border border-gray-200 text-[#008080] text-[11px] font-medium flex items-center gap-1">
@@ -903,30 +911,44 @@ function formatTime(ts: number): string {
   return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
+function formatMessageTime(ts: number): string {
+  return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 function MessageBubble({
   msg,
   isMe,
   onContextMenu,
+  onClick,
   onTouchStart,
   onTouchEnd,
 }: {
   msg: InternalMessageRecord;
   isMe: boolean;
   onContextMenu?: (e: React.MouseEvent) => void;
+  onClick?: (e: React.MouseEvent) => void;
   onTouchStart?: () => void;
   onTouchEnd?: () => void;
 }) {
   const text = msg.parts.find((p) => p.type === "text")?.content;
   if (!text) return null;
+  const timeStr = formatMessageTime(msg.createdAt);
   return (
     <div className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
       <div
-        className={`max-w-[85%] px-2.5 py-1.5 text-xs rounded-xl select-text ${isMe ? "bg-[#008080] text-white" : "bg-white border border-gray-200 text-gray-900"}`}
+        role="button"
+        tabIndex={0}
+        className={`max-w-[85%] px-2.5 py-1.5 text-xs rounded-xl select-text cursor-pointer active:opacity-90 ${isMe ? "bg-[#008080] text-white" : "bg-white border border-gray-200 text-gray-900"}`}
         onContextMenu={onContextMenu}
+        onClick={onClick}
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
       >
-        {text}
+        <div className="pr-1">{text}</div>
+        <div className={`flex items-center gap-1 justify-end mt-0.5 ${isMe ? "text-white/80" : "text-gray-400"}`}>
+          <span className="text-[10px]">{timeStr}</span>
+          {isMe && <CheckCheck className="w-3 h-3 shrink-0" strokeWidth={2} />}
+        </div>
       </div>
     </div>
   );

@@ -583,7 +583,7 @@ const AIHubPanelInner = forwardRef<AIHubPanelHandle, { locale: "en" | "he"; pane
   const { addReceivedTask, addEvent } = useBoard();
   const { contacts } = useContacts();
   const { messages, sendMessage, addFormMessage, addCard } = useChat();
-  const { sendText } = useInternalMessages();
+  const { sendText, currentUserId } = useInternalMessages();
   const [chatViewActive, setChatViewActive] = useState(false);
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
@@ -828,7 +828,7 @@ const AIHubPanelInner = forwardRef<AIHubPanelHandle, { locale: "en" | "he"; pane
                     }}
                     onSendToContacts={(question, options, contactIds) => {
                       const text = `Poll: ${question}\n${options.map((o, i) => `${i + 1}. ${o}`).join("\n")}`;
-                      contactIds.forEach((id) => sendText(id, text));
+                      contactIds.forEach((id) => sendText(id, text, currentUserId));
                     }}
                   />
                 ) : "formType" in msg && msg.formType === "converter" ? (

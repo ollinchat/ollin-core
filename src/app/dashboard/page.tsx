@@ -10,6 +10,7 @@ import { CreditCard, User, Settings } from "lucide-react";
 import { DashboardPanels, BOARD_PANEL_INDEX } from "@/app/dashboard/DashboardPanels";
 import { LocaleSwitcher } from "@/components/LocaleSwitcher";
 import { UserAvatar } from "@/components/ui/UserAvatar";
+import { DevUserSwitcher } from "@/components/DevUserSwitcher";
 
 export default function DashboardPage() {
   return (
@@ -78,6 +79,7 @@ function DashboardPageInner() {
             <Settings className="w-4 h-4" />
             {locale === "he" ? "הגדרות" : "Settings"}
           </Link>
+          <DevUserSwitcher />
           <LocaleSwitcher />
         </div>
       </header>

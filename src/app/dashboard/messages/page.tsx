@@ -20,7 +20,7 @@ function lastMessagePreview(msgs: InternalMessageRecord[]): string {
 
 export default function MessagesPage() {
   const { contacts } = useContacts();
-  const { getConversation, sendText, sendVoice, sendFile, markConversationAsRead } = useInternalMessages();
+  const { getConversation, sendText, sendVoice, sendFile, markConversationAsRead, currentUserId } = useInternalMessages();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [recording, setRecording] = useState(false);
@@ -40,17 +40,17 @@ export default function MessagesPage() {
   // Simulate read receipts: when viewing the thread, mark our messages as "read" after a short delay
   useEffect(() => {
     if (!selectedId) return;
-    const t = setTimeout(() => markConversationAsRead(selectedId), 1500);
+    const t = setTimeout(() => markConversationAsRead(selectedId, currentUserId), 1500);
     return () => clearTimeout(t);
-  }, [selectedId, markConversationAsRead]);
+  }, [selectedId, markConversationAsRead, currentUserId]);
 
   const handleSend = useCallback(() => {
     const text = input.trim();
     if (!text || !selectedId) return;
-    sendText(selectedId, text);
+    sendText(selectedId, text, currentUserId);
     setInput("");
     setTypingIndicator(false);
-  }, [input, selectedId, sendText]);
+  }, [input, selectedId, sendText, currentUserId]);
 
   const startVoice = useCallback(() => {
     if (!selectedId) return;
@@ -63,12 +63,12 @@ export default function MessagesPage() {
       mr.onstop = () => {
         stream.getTracks().forEach((t) => t.stop());
         const blob = new Blob(chunks, { type: "audio/webm" });
-        sendVoice(selectedId, blob);
+        sendVoice(selectedId, blob, currentUserId);
       };
       mr.start();
       setRecording(true);
     });
-  }, [selectedId, sendVoice]);
+  }, [selectedId, sendVoice, currentUserId]);
 
   const stopVoice = useCallback(() => {
     mediaRecorderRef.current?.stop();
@@ -80,10 +80,10 @@ export default function MessagesPage() {
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file || !selectedId) return;
-      sendFile(selectedId, file);
+      sendFile(selectedId, file, currentUserId);
       e.target.value = "";
     },
-    [selectedId, sendFile]
+    [selectedId, sendFile, currentUserId]
   );
 
   const onInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -151,11 +151,11 @@ export default function MessagesPage() {
                       initial={{ opacity: 0, y: 8, scale: 0.96 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       transition={{ duration: 0.2 }}
-                      className={`flex ${m.senderId === "me" ? "justify-end" : "justify-start"}`}
+                      className={`flex ${m.senderId === currentUserId ? "justify-end" : "justify-start"}`}
                     >
                       <div
                         className={`rounded-2xl px-4 py-2.5 max-w-[85%] shadow-sm ${
-                          m.senderId === "me"
+                          m.senderId === currentUserId
                             ? "bg-gradient-to-br from-[#008080] to-[#006666] text-white rounded-br-md"
                             : "bg-white text-gray-900 border border-gray-100 rounded-bl-md"
                         }`}
@@ -164,7 +164,7 @@ export default function MessagesPage() {
                           if (p.type === "text") return <p key={i} className="text-sm leading-snug">{p.content}</p>;
                           if (p.type === "voice")
                             return (
-                              <div key={i} className={m.senderId === "me" ? "text-white" : "text-gray-800"}>
+                              <div key={i} className={m.senderId === currentUserId ? "text-white" : "text-gray-800"}>
                                 <VoiceWaveformPlayer src={p.url} />
                               </div>
                             );
@@ -178,7 +178,7 @@ export default function MessagesPage() {
                           <span className="text-[10px] opacity-80">
                             {new Date(m.createdAt).toLocaleTimeString(undefined, { timeStyle: "short" })}
                           </span>
-                          {m.senderId === "me" && (
+                          {m.senderId === currentUserId && (
                             <span className="opacity-90" title={m.status === "read" ? "Read" : "Sent"}>
                               {m.status === "read" ? (
                                 <span className="inline-flex">

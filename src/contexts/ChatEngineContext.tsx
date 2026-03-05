@@ -3,13 +3,99 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from "react";
 import * as ChatLib from "@/lib/chat-engine";
 
+const DEV_USER_KEY = "ollin_dev_current_user";
+
+export type DevCurrentUser = { id: string; name: string; phone: string };
+
+function loadDevCurrentUser(): DevCurrentUser | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(DEV_USER_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as DevCurrentUser;
+    if (parsed?.id && parsed?.name != null) return parsed;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function saveDevCurrentUser(user: DevCurrentUser | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (user) localStorage.setItem(DEV_USER_KEY, JSON.stringify(user));
+    else localStorage.removeItem(DEV_USER_KEY);
+  } catch (_) {}
+}
+
+function DevIdentityPrompt({ onSet }: { onSet: (u: DevCurrentUser) => void }) {
+  const [name, setName] = React.useState("");
+  const [phone, setPhone] = React.useState("");
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const n = name.trim();
+    const p = phone.trim();
+    const id = p || n || "me";
+    if (id) onSet({ id, name: n || id, phone: p });
+  };
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl dark:bg-zinc-900">
+        <h2 className="mb-2 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+          Who are you? (dev)
+        </h2>
+        <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-400">
+          Enter name and phone so you can test chat between two users.
+        </p>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <input
+            type="text"
+            placeholder="Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-900 placeholder-zinc-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
+            autoFocus
+          />
+          <input
+            type="tel"
+            placeholder="Phone number"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-900 placeholder-zinc-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
+          />
+          <button
+            type="submit"
+            className="rounded-lg bg-zinc-900 py-2 font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
+          >
+            Continue
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 const ChatEngineContext = createContext<any>(null);
 
 export function ChatEngineProvider({ children }: { children: React.ReactNode }) {
+  const [currentUser, setCurrentUserState] = useState<DevCurrentUser | null>(null);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    setCurrentUserState(loadDevCurrentUser());
+    setHydrated(true);
+  }, []);
+
+  const setCurrentUser = useCallback((user: DevCurrentUser | null) => {
+    setCurrentUserState(user);
+    saveDevCurrentUser(user);
+  }, []);
+
+  const currentUserId = currentUser?.id ?? "me";
+
   // AI assistant messages (Gemini-backed)
   const [messages, setMessages] = useState<ChatLib.AIMessage[]>([]);
   const [isThinking, setIsThinking] = useState(false);
-  // Simple tick so internal chats can trigger re-renders when they change
   const [internalVersion, setInternalVersion] = useState(0);
 
   // Restore assistant history from lib (if available)
@@ -92,6 +178,15 @@ export function ChatEngineProvider({ children }: { children: React.ReactNode }) 
     }
   }, []);
 
+  // Cross-tab sync: when another tab updates internal messages, refresh
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "ollin_internal_messages") setInternalVersion((v) => v + 1);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
   const getConversationsWithMeta = useCallback(
     (currentUserId: string) => {
       // Prefer lib implementation if it exists
@@ -135,11 +230,12 @@ export function ChatEngineProvider({ children }: { children: React.ReactNode }) 
   );
 
   const getConversation = useCallback(
-    (contactId: string) => {
+    (contactId: string, forUserId?: string) => {
+      const uid = forUserId ?? currentUserId;
       const anyLib = ChatLib as any;
       if (typeof anyLib.getConversation === "function") {
         try {
-          const thread = anyLib.getConversation(contactId);
+          const thread = anyLib.getConversation(contactId, uid);
           return Array.isArray(thread) ? thread : [];
         } catch {
           return [];
@@ -149,76 +245,79 @@ export function ChatEngineProvider({ children }: { children: React.ReactNode }) 
       const records = loadInternal();
       if (!records.length) return [];
       const cid = ChatLib.conversationId
-        ? ChatLib.conversationId("me", contactId)
-        : ["me", contactId].sort().join("--");
+        ? ChatLib.conversationId(uid, contactId)
+        : [uid, contactId].sort().join("--");
       return records
         .filter((m) => m.conversationId === cid)
         .sort((a, b) => a.createdAt - b.createdAt);
     },
-    [loadInternal, internalVersion]
+    [loadInternal, internalVersion, currentUserId]
   );
 
   const sendText = useCallback(
-    (contactId: string, text: string, currentUserId = "me") => {
+    (contactId: string, text: string, senderId?: string) => {
+      const uid = senderId ?? currentUserId;
       const trimmed = text.trim();
       if (!trimmed) return;
 
       const anyLib = ChatLib as any;
       if (typeof anyLib.sendText === "function") {
-        anyLib.sendText(contactId, trimmed, currentUserId);
+        anyLib.sendText(contactId, trimmed, uid);
         setInternalVersion((v) => v + 1);
         return;
       }
 
       const existing = loadInternal();
       const cid = ChatLib.conversationId
-        ? ChatLib.conversationId(currentUserId, contactId)
-        : [currentUserId, contactId].sort().join("--");
+        ? ChatLib.conversationId(uid, contactId)
+        : [uid, contactId].sort().join("--");
       const msg: ChatLib.InternalMessageRecord = {
         id: crypto.randomUUID(),
         conversationId: cid,
-        senderId: currentUserId,
+        senderId: uid,
         parts: [{ type: "text", content: trimmed }],
         createdAt: Date.now(),
         status: "sent",
       };
       saveInternal([msg, ...existing]);
     },
-    [loadInternal, saveInternal]
+    [loadInternal, saveInternal, currentUserId]
   );
 
   const sendVoice = useCallback(
-    (contactId: string, blob: Blob, currentUserId = "me") => {
+    (contactId: string, blob: Blob, senderId?: string) => {
+      const uid = senderId ?? currentUserId;
       const anyLib = ChatLib as any;
       if (typeof anyLib.sendVoice === "function") {
-        anyLib.sendVoice(contactId, blob, currentUserId);
+        anyLib.sendVoice(contactId, blob, uid);
         setInternalVersion((v) => v + 1);
         return;
       }
 
       const existing = loadInternal();
       const cid = ChatLib.conversationId
-        ? ChatLib.conversationId(currentUserId, contactId)
-        : [currentUserId, contactId].sort().join("--");
+        ? ChatLib.conversationId(uid, contactId)
+        : [uid, contactId].sort().join("--");
       const url = URL.createObjectURL(blob);
       const msg: ChatLib.InternalMessageRecord = {
         id: crypto.randomUUID(),
         conversationId: cid,
-        senderId: currentUserId,
+        senderId: uid,
         parts: [{ type: "voice", url }],
         createdAt: Date.now(),
         status: "sent",
       };
       saveInternal([msg, ...existing]);
     },
-    [loadInternal, saveInternal]
+    [loadInternal, saveInternal, currentUserId]
   );
 
   const sendFile = useCallback(
-    (contactId: string, file: File, currentUserId = "me") => {
+    (contactId: string, file: File, senderId?: string) => {
+      const uid = senderId ?? currentUserId;
       const anyLib = ChatLib as any;
       if (typeof anyLib.sendFile === "function") {
-        anyLib.sendFile(contactId, file, currentUserId);
+        anyLib.sendFile(contactId, file, uid);
         setInternalVersion((v) => v + 1);
         return;
       }
@@ -227,13 +326,13 @@ export function ChatEngineProvider({ children }: { children: React.ReactNode }) 
       reader.onload = () => {
         const existing = loadInternal();
         const cid = ChatLib.conversationId
-          ? ChatLib.conversationId(currentUserId, contactId)
-          : [currentUserId, contactId].sort().join("--");
+          ? ChatLib.conversationId(uid, contactId)
+          : [uid, contactId].sort().join("--");
         const url = reader.result as string;
         const msg: ChatLib.InternalMessageRecord = {
           id: crypto.randomUUID(),
           conversationId: cid,
-          senderId: currentUserId,
+          senderId: uid,
           parts: [{ type: "file", url, name: file.name }],
           createdAt: Date.now(),
           status: "sent",
@@ -242,30 +341,31 @@ export function ChatEngineProvider({ children }: { children: React.ReactNode }) 
       };
       reader.readAsDataURL(file);
     },
-    [loadInternal, saveInternal]
+    [loadInternal, saveInternal, currentUserId]
   );
 
   const markConversationAsRead = useCallback(
-    (contactId: string, currentUserId = "me") => {
+    (contactId: string, forUserId?: string) => {
+      const uid = forUserId ?? currentUserId;
       const anyLib = ChatLib as any;
       if (typeof anyLib.markConversationAsRead === "function") {
-        anyLib.markConversationAsRead(contactId, currentUserId);
+        anyLib.markConversationAsRead(contactId, uid);
         setInternalVersion((v) => v + 1);
         return;
       }
 
       const existing = loadInternal();
       const cid = ChatLib.conversationId
-        ? ChatLib.conversationId(currentUserId, contactId)
-        : [currentUserId, contactId].sort().join("--");
+        ? ChatLib.conversationId(uid, contactId)
+        : [uid, contactId].sort().join("--");
       const next = existing.map((m) =>
-        m.conversationId === cid && m.senderId === currentUserId
+        m.conversationId === cid && m.senderId === uid
           ? { ...m, status: "read" as const }
           : m
       );
       saveInternal(next);
     },
-    [loadInternal, saveInternal]
+    [loadInternal, saveInternal, currentUserId]
   );
 
   const clearMessages = useCallback(() => {
@@ -279,6 +379,10 @@ export function ChatEngineProvider({ children }: { children: React.ReactNode }) 
 
   const value = useMemo(
     () => ({
+      // Dev identity (for testing chat between two users)
+      currentUser,
+      setCurrentUser,
+      currentUserId,
       // AI chat (Gemini)
       messages,
       sendMessage,
@@ -293,6 +397,9 @@ export function ChatEngineProvider({ children }: { children: React.ReactNode }) 
       markConversationAsRead,
     }),
     [
+      currentUser,
+      setCurrentUser,
+      currentUserId,
       messages,
       sendMessage,
       isThinking,
@@ -306,7 +413,13 @@ export function ChatEngineProvider({ children }: { children: React.ReactNode }) 
     ]
   );
 
-  return <ChatEngineContext.Provider value={value}>{children}</ChatEngineContext.Provider>;
+  const content = !hydrated
+    ? null
+    : !currentUser
+      ? <DevIdentityPrompt onSet={setCurrentUser} />
+      : children;
+
+  return <ChatEngineContext.Provider value={value}>{content}</ChatEngineContext.Provider>;
 }
 
 export const useChat = () => useContext(ChatEngineContext) || {};
