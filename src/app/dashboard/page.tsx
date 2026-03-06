@@ -6,12 +6,11 @@ import { useSearchParams } from "next/navigation";
 import { useLocale } from "@/contexts/LocaleContext";
 import { useProfile } from "@/contexts/ProfileContext";
 import { slugFromUsername } from "@/lib/profile-types";
-import { CreditCard, User, Settings, LayoutDashboard, FileText } from "lucide-react";
+import { CreditCard, Settings } from "lucide-react";
 import { DashboardPanels, BOARD_PANEL_INDEX } from "@/app/dashboard/DashboardPanels";
 import { LocaleSwitcher } from "@/components/LocaleSwitcher";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { DevUserSwitcher } from "@/components/DevUserSwitcher";
-import { useInternalMessages } from "@/contexts/ChatEngineContext";
 
 export default function DashboardPage() {
   return (
@@ -24,10 +23,8 @@ export default function DashboardPage() {
 function DashboardPageInner() {
   const { locale } = useLocale();
   const { profile } = useProfile();
-  const { currentUser } = useInternalMessages();
   const searchParams = useSearchParams();
   const cardSlug = profile?.username ? slugFromUsername(profile.username) : "card";
-  const displayName = currentUser?.name ?? profile?.name;
   const [panelIndex, setPanelIndex] = useState(2);
 
   useEffect(() => {
@@ -47,58 +44,34 @@ function DashboardPageInner() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo-icon.png" alt="" className="h-8 w-8 object-contain" />
         </Link>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <button
-            type="button"
-            onClick={() => setPanelIndexSafe(BOARD_PANEL_INDEX)}
-            className="rounded-full p-0.5 text-gray-600 hover:bg-[#008080]/10 hover:text-[#008080] transition-all ring-2 ring-transparent hover:ring-[#008080]/30"
-            aria-label={locale === "he" ? "לוח משימות" : "Task view / Board"}
-            title={locale === "he" ? "לוח משימות" : "Tasks & Board"}
-          >
-            <UserAvatar name={displayName ?? undefined} email={profile?.email} imageUrl={profile?.profileImage} size="sm" className="w-8 h-8 rounded-full" />
-          </button>
-          <Link
-            href={`/p/${encodeURIComponent(cardSlug)}`}
-            className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-[#008080] transition-all"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <User className="w-4 h-4" />
-            {locale === "he" ? "פרופיל" : "Profile"}
-          </Link>
+        <div className="flex items-center gap-1 flex-shrink-0">
           <Link
             href={`/card/${encodeURIComponent(cardSlug)}`}
-            className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-[#008080] transition-all"
+            className="flex items-center justify-center w-9 h-9 rounded-xl text-gray-500 hover:bg-gray-100 hover:text-[#008080] transition-colors"
             target="_blank"
             rel="noopener noreferrer"
+            title={locale === "he" ? "כרטיס עסקי" : "Business Card"}
+            aria-label="Business Card"
           >
-            <CreditCard className="w-4 h-4" />
-            {locale === "he" ? "כרטיס" : "Card"}
+            <CreditCard className="w-5 h-5" />
           </Link>
-          {currentUser && (
-            <Link
-              href={`/mini/${encodeURIComponent(currentUser.id)}`}
-              className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-[#008080] transition-all"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <LayoutDashboard className="w-4 h-4" />
-              {locale === "he" ? "מיני-אתר" : "Mini-Site"}
-            </Link>
-          )}
           <Link
-            href="/billing"
-            className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-[#008080] transition-all"
+            href={`/p/${encodeURIComponent(cardSlug)}`}
+            className="flex items-center justify-center w-9 h-9 rounded-xl text-gray-500 hover:bg-gray-100 hover:text-[#008080] transition-colors ring-2 ring-transparent hover:ring-[#008080]/20"
+            target="_blank"
+            rel="noopener noreferrer"
+            title={locale === "he" ? "פרופיל" : "Profile"}
+            aria-label="Profile"
           >
-            <FileText className="w-4 h-4" />
-            {locale === "he" ? "חשבוניות" : "Billing"}
+            <UserAvatar name={profile?.name ?? undefined} email={profile?.email} imageUrl={profile?.profileImage} size="sm" className="w-8 h-8 rounded-full" />
           </Link>
           <Link
             href="/settings"
-            className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-[#008080] transition-all"
+            className="flex items-center justify-center w-9 h-9 rounded-xl text-gray-500 hover:bg-gray-100 hover:text-[#008080] transition-colors"
+            title={locale === "he" ? "הגדרות" : "Settings"}
+            aria-label="Settings"
           >
-            <Settings className="w-4 h-4" />
-            {locale === "he" ? "הגדרות" : "Settings"}
+            <Settings className="w-5 h-5" />
           </Link>
           <DevUserSwitcher />
           <LocaleSwitcher />
