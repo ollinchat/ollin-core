@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
 import { useLocale } from "@/contexts/LocaleContext";
 import { useFinance } from "@/contexts/FinanceContext";
 import { useBilling } from "@/contexts/BillingContext";
@@ -9,7 +10,7 @@ import { useInternalMessages } from "@/contexts/ChatEngineContext";
 import { useContacts } from "@/contexts/ContactsContext";
 import type { FinanceClient, TaxInvoice } from "@/lib/finance-types";
 import type { BillingDocument, BillingExpense } from "@/modules/billing/types";
-import { ChevronLeft, FileText, Receipt, FileStack, Plus, Package, Pencil, UserPlus, DollarSign, TrendingUp, Download, Trash2 } from "lucide-react";
+import { ChevronLeft, FileText, Receipt, FileStack, Plus, Package, Pencil, UserPlus, DollarSign, TrendingUp, Download, Trash2, ChevronDown, X, Loader2 } from "lucide-react";
 import { DocumentCard } from "@/components/finances/DocumentCard";
 import { EditProfileModal } from "@/components/finances/EditProfileModal";
 import { AddClientModal } from "@/components/finances/AddClientModal";
@@ -94,16 +95,16 @@ function formatMoney(n: number): string {
 function StatusBadge({ status }: { status: UiStatus }) {
   const cls =
     status === "paid"
-      ? "bg-green-100 text-green-800"
+      ? "bg-green-100/70 text-green-700 font-semibold"
       : status === "overdue"
-        ? "bg-red-100 text-red-800"
+        ? "bg-red-100/60 text-red-700 font-semibold"
         : status === "pending"
-          ? "bg-amber-100 text-amber-800"
+          ? "bg-amber-100/60 text-amber-700 font-semibold"
           : status === "canceled"
-            ? "bg-gray-200 text-gray-700"
-            : "bg-gray-100 text-gray-700";
+            ? "bg-gray-100/80 text-gray-600 font-medium"
+            : "bg-gray-100/70 text-gray-700 font-medium";
   const label = status === "overdue" ? "Overdue" : status.charAt(0).toUpperCase() + status.slice(1);
-  return <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>{label}</span>;
+  return <span className={`inline-flex px-2.5 py-1 rounded-full text-xs ${cls}`}>{label}</span>;
 }
 
 function docDateIso(doc: BillingDocument): string {
@@ -196,7 +197,19 @@ function ExpenseModal({
 
 export default function DocumentsPage() {
   const { locale } = useLocale();
-  const { documents, clients: billingClients, expenses, downloadPdf, addExpense, removeExpense } = useBilling();
+  const {
+    documents,
+    clients: billingClients,
+    expenses,
+    downloadPdf,
+    addExpense,
+    removeExpense,
+    convertQuoteToInvoice,
+    createReceipt,
+    markPaid,
+    issueCreditNote,
+    cancelQuote,
+  } = useBilling();
   const { getConversationsWithMeta, currentUserId } = useInternalMessages();
   const { contacts } = useContacts();
 
@@ -204,9 +217,57 @@ export default function DocumentsPage() {
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showAddClient, setShowAddClient] = useState(false);
   const [showAddExpense, setShowAddExpense] = useState(false);
+  const [snapshotOpen, setSnapshotOpen] = useState(false);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [filterClientId, setFilterClientId] = useState("");
+  const [loadingDocId, setLoadingDocId] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showSuccessToast = useCallback((message: string) => {
+    setToastMessage(message);
+    const t = setTimeout(() => setToastMessage(null), 3000);
+    return () => clearTimeout(t);
+  }, []);
+
+  const handleConvertToInvoice = useCallback(
+    (docId: string) => {
+      setLoadingDocId(docId);
+      setTimeout(() => {
+        if (convertQuoteToInvoice(docId)) {
+          setActiveTab("invoices");
+          showSuccessToast(locale === "he" ? "הצעת מחיר הומרה לחשבונית" : "Quote converted to invoice");
+        }
+        setLoadingDocId(null);
+      }, 400);
+    },
+    [convertQuoteToInvoice, showSuccessToast, locale]
+  );
+
+  const handleMarkPaid = useCallback(
+    (docId: string) => {
+      setLoadingDocId(docId);
+      setTimeout(() => {
+        if (markPaid(docId)) showSuccessToast(locale === "he" ? "החשבונית סומנה כשולמה" : "Invoice marked as paid");
+        setLoadingDocId(null);
+      }, 400);
+    },
+    [markPaid, showSuccessToast, locale]
+  );
+
+  const handleIssueReceipt = useCallback(
+    (docId: string) => {
+      setLoadingDocId(docId);
+      setTimeout(() => {
+        if (createReceipt(docId)) {
+          setActiveTab("receipts");
+          showSuccessToast(locale === "he" ? "קבלה נוצרה" : "Receipt issued");
+        }
+        setLoadingDocId(null);
+      }, 400);
+    },
+    [createReceipt, showSuccessToast, locale]
+  );
 
   const todayIso = new Date().toISOString().slice(0, 10);
 
@@ -271,101 +332,143 @@ export default function DocumentsPage() {
   ];
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#f8fafc]">
-      <header className="flex-shrink-0 flex items-center gap-2 px-4 py-3 border-b border-gray-200 bg-white">
-        <Link href="/dashboard" className="p-2 rounded-xl text-gray-600 hover:bg-gray-100 flex items-center gap-1">
+    <div className="min-h-screen flex flex-col bg-[#f8fafc] font-sans antialiased">
+      {/* Success toast */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -24 }}
+            transition={{ type: "tween", duration: 0.25 }}
+            className="fixed top-0 left-0 right-0 z-[200] flex justify-center pt-4 px-4 pointer-events-none"
+          >
+            <div className="bg-emerald-600 text-white px-4 py-3 rounded-xl shadow-lg font-medium text-sm flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center">✓</span>
+              {toastMessage}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <header className="flex-shrink-0 flex items-center gap-3 px-4 py-3.5 border-b border-gray-100 bg-white shadow-sm min-h-[56px]">
+        <Link
+          href="/dashboard"
+          className="flex items-center gap-1.5 py-2 pr-2 -ml-1 rounded-xl text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+        >
           <ChevronLeft className="w-5 h-5" />
-          Back
+          <span className="text-sm font-medium">Back</span>
         </Link>
-        <h1 className="flex-1 font-semibold text-gray-900 flex items-center gap-2">
-          <TrendingUp className="w-5 h-5" style={{ color: TEAL }} />
+        <h1 className="flex-1 min-w-0 font-semibold text-gray-900 text-lg flex items-center gap-2">
+          <TrendingUp className="w-5 h-5 shrink-0" style={{ color: TEAL }} />
           Documents
         </h1>
-        <button
-          type="button"
-          onClick={() => setShowEditProfile(true)}
-          className="hidden sm:inline-flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium text-white hover:opacity-90"
-          style={{ backgroundColor: TEAL }}
-        >
-          <Pencil className="w-4 h-4" />
-          Edit Profile
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowAddClient(true)}
-          className="hidden sm:inline-flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium border border-gray-200 text-gray-700 hover:bg-gray-50"
-        >
-          <UserPlus className="w-4 h-4" />
-          Add New Client
-        </button>
-      </header>
-
-      {/* Mobile header actions */}
-      <div className="sm:hidden px-4 pt-3 flex gap-2">
-        <button type="button" onClick={() => setShowEditProfile(true)} className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: TEAL }}>
-          <Pencil className="w-4 h-4" /> Edit Profile
-        </button>
-        <button type="button" onClick={() => setShowAddClient(true)} className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium border border-gray-200 bg-white text-gray-700">
-          <UserPlus className="w-4 h-4" /> Add Client
-        </button>
-      </div>
-
-      {/* Summary + Filters */}
-      <section className="px-4 pt-4 space-y-3">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <div className="rounded-2xl bg-white border border-gray-200 p-4">
-            <p className="text-xs text-gray-500">Total Paid (Receipts)</p>
-            <p className="text-xl font-semibold text-gray-900 mt-1">{formatMoney(metrics.totalPaid)}</p>
-          </div>
-          <div className="rounded-2xl bg-white border border-gray-200 p-4">
-            <p className="text-xs text-gray-500">Unpaid Invoices</p>
-            <p className="text-xl font-semibold text-gray-900 mt-1">{metrics.unpaidCount} · {formatMoney(metrics.unpaidAmount)}</p>
-          </div>
-          <div className="rounded-2xl bg-white border border-gray-200 p-4">
-            <p className="text-xs text-gray-500">Active Quotes</p>
-            <p className="text-xl font-semibold text-gray-900 mt-1">{metrics.activeQuotes}</p>
-          </div>
-          <div className="rounded-2xl bg-white border border-gray-200 p-4">
-            <p className="text-xs text-gray-500">Total Expenses</p>
-            <p className="text-xl font-semibold text-gray-900 mt-1">{formatMoney(metrics.totalExpenses)}</p>
-          </div>
-        </div>
-
-        <div className="rounded-2xl bg-white border border-gray-200 p-4 flex flex-col lg:flex-row gap-3">
-          <div className="flex gap-2 flex-1">
-            <div className="flex-1">
-              <label className="block text-xs font-medium text-gray-500 mb-1">From</label>
-              <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900" />
-            </div>
-            <div className="flex-1">
-              <label className="block text-xs font-medium text-gray-500 mb-1">To</label>
-              <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900" />
-            </div>
-          </div>
-          <div className="flex-1">
-            <label className="block text-xs font-medium text-gray-500 mb-1">Filter by Client</label>
-            <select value={filterClientId} onChange={(e) => setFilterClientId(e.target.value)} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 bg-white">
-              <option value="">All clients</option>
-              {clientOptions.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </div>
-          <button type="button" onClick={() => { setDateFrom(""); setDateTo(""); setFilterClientId(""); }} className="lg:self-end px-4 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-sm font-medium">
-            Clear
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowEditProfile(true)}
+            className="inline-flex items-center justify-center w-11 h-11 rounded-full text-white transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500/50"
+            style={{ backgroundColor: TEAL }}
+            title={locale === "he" ? "ערוך פרופיל" : "Edit Profile"}
+            aria-label="Edit Profile"
+          >
+            <Pencil className="w-5 h-5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowAddClient(true)}
+            className="inline-flex items-center justify-center w-11 h-11 rounded-full border border-gray-100 bg-white text-gray-600 transition-all hover:shadow-md hover:-translate-y-0.5 hover:bg-gray-50 hover:border-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-300/50"
+            title={locale === "he" ? "הוסף לקוח" : "Add Client"}
+            aria-label="Add Client"
+          >
+            <UserPlus className="w-5 h-5" />
           </button>
         </div>
+      </header>
+
+      {/* Collapsible Financial Snapshot */}
+      <section className="px-4 pt-3">
+        <button
+          type="button"
+          onClick={() => setSnapshotOpen((o) => !o)}
+          className="w-full flex items-center justify-between gap-2 py-3 px-4 rounded-xl border border-gray-100 bg-white shadow-sm text-left text-sm font-medium text-gray-700 hover:bg-gray-50/80 transition-colors"
+        >
+          <span>{locale === "he" ? "תצוגת סיכום פיננסי" : snapshotOpen ? "View Financial Snapshot ▴" : "View Financial Snapshot ▾"}</span>
+          <motion.span
+            animate={{ rotate: snapshotOpen ? 180 : 0 }}
+            transition={{ duration: 0.25, ease: "easeInOut" }}
+            className="shrink-0 text-gray-500"
+          >
+            <ChevronDown className="w-4 h-4" />
+          </motion.span>
+        </button>
+        <AnimatePresence initial={false}>
+          {snapshotOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
+              className="overflow-hidden"
+            >
+              <div className="mt-3 pt-4 pb-3 px-1 rounded-b-xl bg-gray-50/80 border border-t-0 border-gray-100 shadow-sm">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-4">
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Total Paid (Receipts)</p>
+                    <p className="text-lg font-semibold text-gray-900 mt-1">{formatMoney(metrics.totalPaid)}</p>
+                  </div>
+                  <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-4">
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Unpaid Invoices</p>
+                    <p className="text-lg font-semibold text-gray-900 mt-1">{metrics.unpaidCount} · {formatMoney(metrics.unpaidAmount)}</p>
+                  </div>
+                  <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-4">
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Active Quotes</p>
+                    <p className="text-lg font-semibold text-gray-900 mt-1">{metrics.activeQuotes}</p>
+                  </div>
+                  <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-4">
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Total Expenses</p>
+                    <p className="text-lg font-semibold text-gray-900 mt-1">{formatMoney(metrics.totalExpenses)}</p>
+                  </div>
+                </div>
+                <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-3 mt-3 flex flex-col sm:flex-row gap-3 flex-wrap">
+                  <div className="flex gap-2 flex-1 min-w-0">
+                    <div className="flex-1 min-w-0">
+                      <label className="block text-xs font-medium text-gray-500 mb-1">From</label>
+                      <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-full rounded-lg border border-gray-100 px-2.5 py-1.5 text-sm text-gray-900 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500/50" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <label className="block text-xs font-medium text-gray-500 mb-1">To</label>
+                      <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-full rounded-lg border border-gray-100 px-2.5 py-1.5 text-sm text-gray-900 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500/50" />
+                    </div>
+                  </div>
+                  <div className="flex-1 min-w-[140px]">
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Filter by Client</label>
+                    <select value={filterClientId} onChange={(e) => setFilterClientId(e.target.value)} className="w-full rounded-lg border border-gray-100 px-2.5 py-1.5 text-sm text-gray-900 bg-white focus:ring-2 focus:ring-teal-500/20">
+                      <option value="">All clients</option>
+                      {clientOptions.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <button type="button" onClick={() => { setDateFrom(""); setDateTo(""); setFilterClientId(""); }} className="self-end sm:self-auto px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600 text-sm font-medium hover:bg-gray-200 transition-colors">
+                    Clear
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </section>
 
       {/* Tabs */}
-      <div className="px-4 pt-4">
-        <div className="flex gap-1 p-1 rounded-2xl bg-gray-100/80 overflow-x-auto">
+      <div className="px-4 pt-3">
+        <div className="flex gap-1 p-1 rounded-2xl bg-gray-100/80 overflow-x-auto border border-gray-100 shadow-sm">
           {tabs.map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => setActiveTab(t.id)}
-              className={`flex-1 min-w-0 py-2 rounded-xl text-sm font-medium flex items-center justify-center gap-1.5 whitespace-nowrap ${activeTab === t.id ? "bg-white shadow-soft text-gray-900" : "text-gray-600"}`}
+              className={`flex-1 min-w-0 py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-1.5 whitespace-nowrap transition-colors ${activeTab === t.id ? "bg-white shadow-sm text-gray-900 border border-gray-100" : "text-gray-600 hover:text-gray-800"}`}
             >
               {t.icon}
               {t.label}
@@ -377,44 +480,102 @@ export default function DocumentsPage() {
       {/* Table */}
       <main className="flex-1 px-4 py-4">
         {activeTab !== "expenses" ? (
-          <div className="rounded-2xl bg-white border border-gray-200 overflow-hidden">
+          <div className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-100">
+              <thead className="bg-gray-50/80 border-b border-gray-100">
                 <tr>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Title / Type</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Client</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Date</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">Amount</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">Actions</th>
+                  <th className="text-left px-5 py-4 font-semibold text-gray-600">Type / Number</th>
+                  <th className="text-left px-5 py-4 font-semibold text-gray-600">Client</th>
+                  <th className="text-left px-5 py-4 font-semibold text-gray-600">Date</th>
+                  <th className="text-right px-5 py-4 font-semibold text-gray-600">Amount</th>
+                  <th className="text-left px-5 py-4 font-semibold text-gray-600">Status</th>
+                  <th className="text-right px-5 py-4 font-semibold text-gray-600">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredDocs.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-10 text-center text-gray-500">
+                    <td colSpan={6} className="px-5 py-12 text-center text-gray-500 font-medium">
                       No documents in this view.
                     </td>
                   </tr>
                 ) : (
                   filteredDocs.map((d) => {
                     const uiStatus = getInvoiceUiStatus(d, todayIso);
+                    const isQuote = d.type === "quote";
+                    const isInvoice = d.type === "invoice";
+                    const notCanceled = (d.status as string) !== "canceled";
+                    const canConvertQuote = isQuote && notCanceled;
+                    const canCancel = (isQuote || isInvoice) && notCanceled;
+                    const isLoading = loadingDocId === d.id;
                     return (
-                      <tr key={d.id} className="border-b border-gray-50 hover:bg-gray-50/50">
-                        <td className="px-4 py-3 font-medium text-gray-900">{docTypeLabel(d.type)} #{d.number}</td>
-                        <td className="px-4 py-3 text-gray-700">{d.clientName || "—"}</td>
-                        <td className="px-4 py-3 text-gray-700">{docDateIso(d)}</td>
-                        <td className="px-4 py-3 text-right font-medium text-gray-900">{formatMoney(d.total || 0)}</td>
-                        <td className="px-4 py-3"><StatusBadge status={uiStatus} /></td>
-                        <td className="px-4 py-3 text-right">
-                          <button
-                            type="button"
-                            onClick={() => downloadPdf(d.id)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
-                          >
-                            <Download className="w-4 h-4" />
-                            PDF
-                          </button>
+                      <tr key={d.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                        <td className="px-5 py-4 font-medium text-gray-900">{docTypeLabel(d.type)} #{d.number}</td>
+                        <td className="px-5 py-4 text-gray-700">{d.clientName || "—"}</td>
+                        <td className="px-5 py-4 text-gray-700">{docDateIso(d)}</td>
+                        <td className="px-5 py-4 text-right font-medium text-gray-900">{formatMoney(d.total || 0)}</td>
+                        <td className="px-5 py-4"><StatusBadge status={uiStatus} /></td>
+                        <td className="px-5 py-4">
+                          <div className="flex items-center justify-end gap-2 flex-wrap">
+                            <div className="inline-flex items-center rounded-lg border border-gray-100 bg-gray-50/50 p-0.5 gap-0.5">
+                              <button
+                                type="button"
+                                onClick={() => downloadPdf(d.id)}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-gray-600 hover:bg-white hover:text-gray-900 text-xs font-medium transition-colors border border-transparent shadow-sm"
+                                title="Download PDF"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                                PDF
+                              </button>
+                              {canConvertQuote && (
+                                <button
+                                  type="button"
+                                  disabled={isLoading}
+                                  onClick={() => handleConvertToInvoice(d.id)}
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-white text-xs font-medium hover:opacity-90 disabled:opacity-70 transition-opacity"
+                                  style={{ backgroundColor: TEAL }}
+                                  title="Convert to Invoice"
+                                >
+                                  {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
+                                  {locale === "he" ? "לחשבונית" : "To Invoice"}
+                                </button>
+                              )}
+                              {isInvoice && notCanceled && (d.status as string) !== "paid" && (
+                                <button
+                                  type="button"
+                                  disabled={isLoading}
+                                  onClick={() => handleMarkPaid(d.id)}
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-green-600 text-white text-xs font-medium hover:opacity-90 disabled:opacity-70 transition-opacity"
+                                  title="Mark Paid"
+                                >
+                                  {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : (locale === "he" ? "שולם" : "Mark Paid")}
+                                </button>
+                              )}
+                              {isInvoice && notCanceled && (d.status as string) === "paid" && (
+                                <button
+                                  type="button"
+                                  disabled={isLoading}
+                                  onClick={() => handleIssueReceipt(d.id)}
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-white text-xs font-medium hover:opacity-90 disabled:opacity-70 transition-opacity"
+                                  style={{ backgroundColor: TEAL }}
+                                  title="Issue Receipt"
+                                >
+                                  {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <><Receipt className="w-3.5 h-3.5" />{locale === "he" ? "הנפק קבלה" : "Issue Receipt"}</>}
+                                </button>
+                              )}
+                            </div>
+                            {canCancel && (
+                              <button
+                                type="button"
+                                onClick={() => { isQuote ? cancelQuote(d.id) : issueCreditNote(d.id); }}
+                                className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-red-100 text-red-400 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
+                                title={locale === "he" ? "ביטול" : "Cancel"}
+                                aria-label="Cancel"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -424,37 +585,37 @@ export default function DocumentsPage() {
             </table>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-4">
             <div className="flex justify-end">
-              <button type="button" onClick={() => setShowAddExpense(true)} className="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: TEAL }}>
+              <button type="button" onClick={() => setShowAddExpense(true)} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white shadow-sm hover:shadow transition-shadow" style={{ backgroundColor: TEAL }}>
                 <Plus className="w-4 h-4" /> Add Expense
               </button>
             </div>
-            <div className="rounded-2xl bg-white border border-gray-200 overflow-hidden">
+            <div className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-100">
+                <thead className="bg-gray-50/80 border-b border-gray-100">
                   <tr>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Vendor</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Category</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Date</th>
-                    <th className="text-right px-4 py-3 font-medium text-gray-600">Amount</th>
-                    <th className="text-right px-4 py-3 font-medium text-gray-600">Actions</th>
+                    <th className="text-left px-5 py-4 font-semibold text-gray-600">Vendor</th>
+                    <th className="text-left px-5 py-4 font-semibold text-gray-600">Category</th>
+                    <th className="text-left px-5 py-4 font-semibold text-gray-600">Date</th>
+                    <th className="text-right px-5 py-4 font-semibold text-gray-600">Amount</th>
+                    <th className="text-right px-5 py-4 font-semibold text-gray-600">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredExpenses.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-4 py-10 text-center text-gray-500">No expenses in this date range.</td>
+                      <td colSpan={5} className="px-5 py-12 text-center text-gray-500 font-medium">No expenses in this date range.</td>
                     </tr>
                   ) : (
                     filteredExpenses.map((e) => (
-                      <tr key={e.id} className="border-b border-gray-50 hover:bg-gray-50/50">
-                        <td className="px-4 py-3 font-medium text-gray-900">{e.vendor}</td>
-                        <td className="px-4 py-3 text-gray-700">{e.category}</td>
-                        <td className="px-4 py-3 text-gray-700">{expenseDateIso(e)}</td>
-                        <td className="px-4 py-3 text-right font-medium text-gray-900">{formatMoney(e.amount)}</td>
-                        <td className="px-4 py-3 text-right">
-                          <button type="button" onClick={() => removeExpense(e.id)} className="inline-flex items-center justify-center p-2 rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-600">
+                      <tr key={e.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                        <td className="px-5 py-4 font-medium text-gray-900">{e.vendor}</td>
+                        <td className="px-5 py-4 text-gray-700">{e.category}</td>
+                        <td className="px-5 py-4 text-gray-700">{expenseDateIso(e)}</td>
+                        <td className="px-5 py-4 text-right font-medium text-gray-900">{formatMoney(e.amount)}</td>
+                        <td className="px-5 py-4 text-right">
+                          <button type="button" onClick={() => removeExpense(e.id)} className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors" aria-label="Remove expense">
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </td>
