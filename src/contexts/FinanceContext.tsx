@@ -29,6 +29,7 @@ const STORAGE_KEYS = {
   receipts: "ollin_finance_receipts",
   deliveryNotes: "ollin_finance_delivery_notes",
   expenses: "ollin_finance_expenses",
+  seeded: "ollin_finance_seeded",
 } as const;
 
 function loadJson<T>(key: string, fallback: T): T {
@@ -235,8 +236,58 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   const [expenses, setExpenses] = useState<Expense[]>([]);
 
   useEffect(() => {
+    const rawClients = loadJson<FinanceClient[]>(STORAGE_KEYS.clients, []);
+    const alreadySeeded = typeof window !== "undefined" && localStorage.getItem(STORAGE_KEYS.seeded) === "1";
+
+    if (rawClients.length === 0 && !alreadySeeded && typeof window !== "undefined") {
+      const now = Date.now();
+      const t = (d: number) => new Date(now - d * 86400000).toISOString().slice(0, 10);
+      const c1 = crypto.randomUUID();
+      const c2 = crypto.randomUUID();
+      const c3 = crypto.randomUUID();
+      const seedClients: FinanceClient[] = [
+        { id: c1, name: "Acme Ltd", email: "billing@acme.com", clientType: "company", address: "123 Business St", createdAt: now },
+        { id: c2, name: "Beta Corp", email: "finance@beta.com", clientType: "company", createdAt: now },
+        { id: c3, name: "Jane Doe", email: "jane@example.com", clientType: "private", createdAt: now },
+      ];
+      const items1: LineItem[] = [{ id: crypto.randomUUID(), description: "Consulting", quantity: 10, unitPrice: 120 }];
+      const items2: LineItem[] = [{ id: crypto.randomUUID(), description: "License fee", quantity: 1, unitPrice: 2500 }];
+      const st1 = 1200; const vat1 = 216; const tot1 = 1416;
+      const st2 = 2500; const vat2 = 450; const tot2 = 2950;
+      const seedQuotes: Quote[] = [
+        { id: crypto.randomUUID(), number: "Q-1", status: "draft", clientId: c1, clientName: "Acme Ltd", items: items1, date: t(5), subtotal: st1, vatRate: 18, vatAmount: vat1, total: tot1, createdAt: now - 5 * 86400000 },
+        { id: crypto.randomUUID(), number: "Q-2", status: "sent", clientId: c2, clientName: "Beta Corp", items: items2, date: t(3), subtotal: st2, vatRate: 18, vatAmount: vat2, total: tot2, createdAt: now - 3 * 86400000 },
+      ];
+      const seedInvoices: TaxInvoice[] = [
+        { id: crypto.randomUUID(), number: "INV-1001", status: "paid", clientId: c1, clientName: "Acme Ltd", items: items1, date: t(10), subtotal: st1, vatRate: 18, vatAmount: vat1, total: tot1, createdAt: now - 10 * 86400000 },
+        { id: crypto.randomUUID(), number: "INV-1002", status: "sent", clientId: c2, clientName: "Beta Corp", items: items2, date: t(2), dueDate: t(30), subtotal: st2, vatRate: 18, vatAmount: vat2, total: tot2, createdAt: now - 2 * 86400000 },
+      ];
+      const seedReceipts: Receipt[] = [
+        { id: crypto.randomUUID(), number: "RCP-1", status: "paid", invoiceId: seedInvoices[0].id, clientId: c1, clientName: "Acme Ltd", items: items1, date: t(10), subtotal: st1, vatRate: 18, vatAmount: vat1, total: tot1, createdAt: now - 9 * 86400000 },
+      ];
+      const seedExpenses: Expense[] = [
+        { id: crypto.randomUUID(), vendor: "Office Supplies Co", amount: 340, category: "Office", date: t(1), createdAt: now },
+        { id: crypto.randomUUID(), vendor: "Cloud Hosting", amount: 99, category: "Infrastructure", date: t(7), createdAt: now - 7 * 86400000 },
+      ];
+      setCompanyProfileState({ ...defaultCompany, name: "My Company", nameEn: "My Company", vatRate: 18 });
+      setClients(seedClients);
+      setQuotes(seedQuotes);
+      setInvoices(seedInvoices);
+      setReceipts(seedReceipts);
+      setDeliveryNotes([]);
+      setExpenses(seedExpenses);
+      saveJson(STORAGE_KEYS.company, { ...defaultCompany, name: "My Company", nameEn: "My Company", vatRate: 18 });
+      saveJson(STORAGE_KEYS.clients, seedClients);
+      saveJson(STORAGE_KEYS.quotes, seedQuotes);
+      saveJson(STORAGE_KEYS.invoices, seedInvoices);
+      saveJson(STORAGE_KEYS.receipts, seedReceipts);
+      saveJson(STORAGE_KEYS.expenses, seedExpenses);
+      localStorage.setItem(STORAGE_KEYS.seeded, "1");
+      return;
+    }
+
     setCompanyProfileState(loadJson(STORAGE_KEYS.company, defaultCompany));
-    setClients(loadJson(STORAGE_KEYS.clients, []));
+    setClients(rawClients);
     const rawQuotes = loadJson<unknown[]>(STORAGE_KEYS.quotes, []);
     const rawInvoices = loadJson<unknown[]>(STORAGE_KEYS.invoices, []);
     const rawReceipts = loadJson<unknown[]>(STORAGE_KEYS.receipts, []);

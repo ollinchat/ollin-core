@@ -4,9 +4,15 @@ import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useLocale } from "@/contexts/LocaleContext";
 import { useFinance } from "@/contexts/FinanceContext";
+import { useBilling } from "@/contexts/BillingContext";
+import { useInternalMessages } from "@/contexts/ChatEngineContext";
+import { useContacts } from "@/contexts/ContactsContext";
 import type { FinanceClient, TaxInvoice } from "@/lib/finance-types";
-import { ChevronLeft, FileText, Receipt, FileStack, Plus, Package } from "lucide-react";
+import type { BillingDocument, BillingExpense } from "@/modules/billing/types";
+import { ChevronLeft, FileText, Receipt, FileStack, Plus, Package, Pencil, UserPlus, DollarSign, TrendingUp, Download, Trash2 } from "lucide-react";
 import { DocumentCard } from "@/components/finances/DocumentCard";
+import { EditProfileModal } from "@/components/finances/EditProfileModal";
+import { AddClientModal } from "@/components/finances/AddClientModal";
 import type { Quote, DeliveryNote, LineItem } from "@/lib/finance-types";
 import { TAX_INVOICE_HEADER_EN, TAX_INVOICE_HEADER_HE, QUOTE_HEADER_EN, QUOTE_HEADER_HE, DELIVERY_NOTE_HEADER_EN, DELIVERY_NOTE_HEADER_HE, DEFAULT_VAT_RATE } from "@/lib/finance-types";
 import { LiveDocumentEditor } from "@/components/finances/LiveDocumentEditor";
@@ -66,7 +72,410 @@ function companyDisplayName(profile: { name?: string; nameEn?: string; nameHe?: 
   return profile.name || "Company";
 }
 
+const TEAL = "#008080";
+
+type TabId = "quotes" | "invoices" | "receipts" | "delivery_notes" | "expenses";
+type UiStatus = "draft" | "pending" | "paid" | "canceled" | "overdue";
+
+function docTypeLabel(t: BillingDocument["type"]): string {
+  if (t === "invoice") return "Invoice";
+  if (t === "quote") return "Quote";
+  if (t === "receipt") return "Receipt";
+  if (t === "delivery_note") return "Delivery Note";
+  if (t === "credit_note") return "Credit Note";
+  return "Draft";
+}
+
+function formatMoney(n: number): string {
+  if (typeof n !== "number" || Number.isNaN(n)) return "0.00";
+  return n.toFixed(2);
+}
+
+function StatusBadge({ status }: { status: UiStatus }) {
+  const cls =
+    status === "paid"
+      ? "bg-green-100 text-green-800"
+      : status === "overdue"
+        ? "bg-red-100 text-red-800"
+        : status === "pending"
+          ? "bg-amber-100 text-amber-800"
+          : status === "canceled"
+            ? "bg-gray-200 text-gray-700"
+            : "bg-gray-100 text-gray-700";
+  const label = status === "overdue" ? "Overdue" : status.charAt(0).toUpperCase() + status.slice(1);
+  return <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>{label}</span>;
+}
+
+function docDateIso(doc: BillingDocument): string {
+  if (doc.date && /^\d{4}-\d{2}-\d{2}$/.test(doc.date)) return doc.date;
+  return new Date(doc.createdAt || Date.now()).toISOString().slice(0, 10);
+}
+
+function expenseDateIso(e: BillingExpense): string {
+  if (e.date && /^\d{4}-\d{2}-\d{2}$/.test(e.date)) return e.date;
+  return new Date(e.createdAt || Date.now()).toISOString().slice(0, 10);
+}
+
+function getInvoiceUiStatus(doc: BillingDocument, todayIso: string): UiStatus {
+  const s = doc.status as UiStatus;
+  if (doc.type !== "invoice") return s;
+  if (s === "paid" || s === "canceled" || s === "draft") return s;
+  if (s === "pending" && doc.dueDate && doc.dueDate < todayIso) return "overdue";
+  return "pending";
+}
+
+function ExpenseModal({
+  open,
+  onClose,
+  onSave,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSave: (e: Omit<BillingExpense, "id" | "createdAt">) => void;
+}) {
+  const [vendor, setVendor] = useState("");
+  const [amount, setAmount] = useState("");
+  const [category, setCategory] = useState("General");
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50">
+      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full">
+        <div className="flex items-center justify-between p-4 border-b border-gray-100">
+          <h2 className="font-semibold text-gray-900">Add Expense</h2>
+          <button type="button" onClick={onClose} className="p-2 rounded-xl text-gray-500 hover:bg-gray-100">
+            ✕
+          </button>
+        </div>
+        <div className="p-4 space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Vendor</label>
+            <input value={vendor} onChange={(e) => setVendor(e.target.value)} className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-gray-900" />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
+              <input type="number" min={0} step={0.01} value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-gray-900" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-gray-900" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+            <input value={category} onChange={(e) => setCategory(e.target.value)} className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-gray-900" />
+          </div>
+        </div>
+        <div className="flex gap-2 p-4 border-t border-gray-100">
+          <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-700 font-medium">Cancel</button>
+          <button
+            type="button"
+            onClick={() => {
+              const amt = parseFloat(amount) || 0;
+              onSave({ vendor: vendor.trim() || "Vendor", amount: amt, category: category.trim() || "General", date: date || new Date().toISOString().slice(0, 10) });
+              setVendor("");
+              setAmount("");
+              setCategory("General");
+              setDate(new Date().toISOString().slice(0, 10));
+              onClose();
+            }}
+            disabled={!vendor.trim()}
+            className="flex-1 py-2.5 rounded-xl text-white font-medium disabled:opacity-50"
+            style={{ backgroundColor: TEAL }}
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function DocumentsPage() {
+  const { locale } = useLocale();
+  const { documents, clients: billingClients, expenses, downloadPdf, addExpense, removeExpense } = useBilling();
+  const { getConversationsWithMeta, currentUserId } = useInternalMessages();
+  const { contacts } = useContacts();
+
+  const [activeTab, setActiveTab] = useState<TabId>("quotes");
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [showAddClient, setShowAddClient] = useState(false);
+  const [showAddExpense, setShowAddExpense] = useState(false);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [filterClientId, setFilterClientId] = useState("");
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+
+  const chatList = useMemo(() => getConversationsWithMeta(currentUserId), [getConversationsWithMeta, currentUserId]);
+  const clientOptions = useMemo(() => {
+    const byId = new Map<string, { id: string; name: string }>();
+    billingClients.forEach((c) => byId.set(c.id, { id: c.id, name: c.name }));
+    chatList.forEach(({ contactId }) => {
+      if (byId.has(contactId)) return;
+      const contact = contacts.find((c) => c.id === contactId || c.phone === contactId);
+      byId.set(contactId, { id: contactId, name: contact?.name ?? contactId });
+    });
+    // also include any clients present on documents
+    documents.forEach((d) => {
+      if (!byId.has(d.clientId)) byId.set(d.clientId, { id: d.clientId, name: d.clientName || d.clientId });
+    });
+    return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [billingClients, chatList, contacts, documents]);
+
+  const inRange = (iso: string) => {
+    if (dateFrom && iso < dateFrom) return false;
+    if (dateTo && iso > dateTo) return false;
+    return true;
+  };
+  const byClient = (clientId: string) => (!filterClientId ? true : clientId === filterClientId);
+
+  const filteredDocs = useMemo(() => {
+    return documents.filter((d) => {
+      const iso = docDateIso(d);
+      if (!inRange(iso)) return false;
+      if (!byClient(d.clientId)) return false;
+      if (activeTab === "quotes") return d.type === "quote";
+      if (activeTab === "invoices") return d.type === "invoice";
+      if (activeTab === "receipts") return d.type === "receipt";
+      if (activeTab === "delivery_notes") return d.type === "delivery_note";
+      return false;
+    });
+  }, [documents, activeTab, dateFrom, dateTo, filterClientId]);
+
+  const filteredExpenses = useMemo(() => expenses.filter((e) => inRange(expenseDateIso(e))), [expenses, dateFrom, dateTo]);
+
+  const metrics = useMemo(() => {
+    const receipts = documents.filter((d) => d.type === "receipt").filter((d) => inRange(docDateIso(d)) && byClient(d.clientId));
+    const invoices = documents.filter((d) => d.type === "invoice").filter((d) => inRange(docDateIso(d)) && byClient(d.clientId));
+    const quotes = documents.filter((d) => d.type === "quote").filter((d) => inRange(docDateIso(d)) && byClient(d.clientId));
+
+    const totalPaid = receipts.filter((r) => (r.status as string) === "paid").reduce((s, r) => s + (r.total || 0), 0);
+    const unpaidInvoices = invoices.filter((inv) => getInvoiceUiStatus(inv, todayIso) === "pending" || getInvoiceUiStatus(inv, todayIso) === "overdue");
+    const unpaidAmount = unpaidInvoices.reduce((s, inv) => s + (inv.total || 0), 0);
+    const activeQuotes = quotes.filter((q) => (q.status as string) !== "canceled").length;
+    const totalExpenses = filteredExpenses.reduce((s, e) => s + (e.amount || 0), 0);
+
+    return { totalPaid, unpaidAmount, unpaidCount: unpaidInvoices.length, activeQuotes, totalExpenses };
+  }, [documents, dateFrom, dateTo, filterClientId, filteredExpenses, todayIso]);
+
+  const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
+    { id: "quotes", label: locale === "he" ? "הצעות" : "Quotes", icon: <FileStack className="w-4 h-4" /> },
+    { id: "invoices", label: locale === "he" ? "חשבוניות" : "Invoices", icon: <FileText className="w-4 h-4" /> },
+    { id: "receipts", label: locale === "he" ? "קבלות" : "Receipts", icon: <Receipt className="w-4 h-4" /> },
+    { id: "delivery_notes", label: locale === "he" ? "תעודות משלוח" : "Delivery Notes", icon: <Package className="w-4 h-4" /> },
+    { id: "expenses", label: locale === "he" ? "הוצאות" : "Expenses", icon: <DollarSign className="w-4 h-4" /> },
+  ];
+
+  return (
+    <div className="min-h-screen flex flex-col bg-[#f8fafc]">
+      <header className="flex-shrink-0 flex items-center gap-2 px-4 py-3 border-b border-gray-200 bg-white">
+        <Link href="/dashboard" className="p-2 rounded-xl text-gray-600 hover:bg-gray-100 flex items-center gap-1">
+          <ChevronLeft className="w-5 h-5" />
+          Back
+        </Link>
+        <h1 className="flex-1 font-semibold text-gray-900 flex items-center gap-2">
+          <TrendingUp className="w-5 h-5" style={{ color: TEAL }} />
+          Documents
+        </h1>
+        <button
+          type="button"
+          onClick={() => setShowEditProfile(true)}
+          className="hidden sm:inline-flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium text-white hover:opacity-90"
+          style={{ backgroundColor: TEAL }}
+        >
+          <Pencil className="w-4 h-4" />
+          Edit Profile
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowAddClient(true)}
+          className="hidden sm:inline-flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium border border-gray-200 text-gray-700 hover:bg-gray-50"
+        >
+          <UserPlus className="w-4 h-4" />
+          Add New Client
+        </button>
+      </header>
+
+      {/* Mobile header actions */}
+      <div className="sm:hidden px-4 pt-3 flex gap-2">
+        <button type="button" onClick={() => setShowEditProfile(true)} className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: TEAL }}>
+          <Pencil className="w-4 h-4" /> Edit Profile
+        </button>
+        <button type="button" onClick={() => setShowAddClient(true)} className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium border border-gray-200 bg-white text-gray-700">
+          <UserPlus className="w-4 h-4" /> Add Client
+        </button>
+      </div>
+
+      {/* Summary + Filters */}
+      <section className="px-4 pt-4 space-y-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="rounded-2xl bg-white border border-gray-200 p-4">
+            <p className="text-xs text-gray-500">Total Paid (Receipts)</p>
+            <p className="text-xl font-semibold text-gray-900 mt-1">{formatMoney(metrics.totalPaid)}</p>
+          </div>
+          <div className="rounded-2xl bg-white border border-gray-200 p-4">
+            <p className="text-xs text-gray-500">Unpaid Invoices</p>
+            <p className="text-xl font-semibold text-gray-900 mt-1">{metrics.unpaidCount} · {formatMoney(metrics.unpaidAmount)}</p>
+          </div>
+          <div className="rounded-2xl bg-white border border-gray-200 p-4">
+            <p className="text-xs text-gray-500">Active Quotes</p>
+            <p className="text-xl font-semibold text-gray-900 mt-1">{metrics.activeQuotes}</p>
+          </div>
+          <div className="rounded-2xl bg-white border border-gray-200 p-4">
+            <p className="text-xs text-gray-500">Total Expenses</p>
+            <p className="text-xl font-semibold text-gray-900 mt-1">{formatMoney(metrics.totalExpenses)}</p>
+          </div>
+        </div>
+
+        <div className="rounded-2xl bg-white border border-gray-200 p-4 flex flex-col lg:flex-row gap-3">
+          <div className="flex gap-2 flex-1">
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-gray-500 mb-1">From</label>
+              <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900" />
+            </div>
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-gray-500 mb-1">To</label>
+              <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900" />
+            </div>
+          </div>
+          <div className="flex-1">
+            <label className="block text-xs font-medium text-gray-500 mb-1">Filter by Client</label>
+            <select value={filterClientId} onChange={(e) => setFilterClientId(e.target.value)} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 bg-white">
+              <option value="">All clients</option>
+              {clientOptions.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+          <button type="button" onClick={() => { setDateFrom(""); setDateTo(""); setFilterClientId(""); }} className="lg:self-end px-4 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-sm font-medium">
+            Clear
+          </button>
+        </div>
+      </section>
+
+      {/* Tabs */}
+      <div className="px-4 pt-4">
+        <div className="flex gap-1 p-1 rounded-2xl bg-gray-100/80 overflow-x-auto">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setActiveTab(t.id)}
+              className={`flex-1 min-w-0 py-2 rounded-xl text-sm font-medium flex items-center justify-center gap-1.5 whitespace-nowrap ${activeTab === t.id ? "bg-white shadow-soft text-gray-900" : "text-gray-600"}`}
+            >
+              {t.icon}
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Table */}
+      <main className="flex-1 px-4 py-4">
+        {activeTab !== "expenses" ? (
+          <div className="rounded-2xl bg-white border border-gray-200 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-100">
+                <tr>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Title / Type</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Client</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Date</th>
+                  <th className="text-right px-4 py-3 font-medium text-gray-600">Amount</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
+                  <th className="text-right px-4 py-3 font-medium text-gray-600">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredDocs.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-10 text-center text-gray-500">
+                      No documents in this view.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredDocs.map((d) => {
+                    const uiStatus = getInvoiceUiStatus(d, todayIso);
+                    return (
+                      <tr key={d.id} className="border-b border-gray-50 hover:bg-gray-50/50">
+                        <td className="px-4 py-3 font-medium text-gray-900">{docTypeLabel(d.type)} #{d.number}</td>
+                        <td className="px-4 py-3 text-gray-700">{d.clientName || "—"}</td>
+                        <td className="px-4 py-3 text-gray-700">{docDateIso(d)}</td>
+                        <td className="px-4 py-3 text-right font-medium text-gray-900">{formatMoney(d.total || 0)}</td>
+                        <td className="px-4 py-3"><StatusBadge status={uiStatus} /></td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => downloadPdf(d.id)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
+                          >
+                            <Download className="w-4 h-4" />
+                            PDF
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex justify-end">
+              <button type="button" onClick={() => setShowAddExpense(true)} className="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: TEAL }}>
+                <Plus className="w-4 h-4" /> Add Expense
+              </button>
+            </div>
+            <div className="rounded-2xl bg-white border border-gray-200 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-100">
+                  <tr>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">Vendor</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">Category</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">Date</th>
+                    <th className="text-right px-4 py-3 font-medium text-gray-600">Amount</th>
+                    <th className="text-right px-4 py-3 font-medium text-gray-600">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredExpenses.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-10 text-center text-gray-500">No expenses in this date range.</td>
+                    </tr>
+                  ) : (
+                    filteredExpenses.map((e) => (
+                      <tr key={e.id} className="border-b border-gray-50 hover:bg-gray-50/50">
+                        <td className="px-4 py-3 font-medium text-gray-900">{e.vendor}</td>
+                        <td className="px-4 py-3 text-gray-700">{e.category}</td>
+                        <td className="px-4 py-3 text-gray-700">{expenseDateIso(e)}</td>
+                        <td className="px-4 py-3 text-right font-medium text-gray-900">{formatMoney(e.amount)}</td>
+                        <td className="px-4 py-3 text-right">
+                          <button type="button" onClick={() => removeExpense(e.id)} className="inline-flex items-center justify-center p-2 rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-600">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </main>
+
+      <EditProfileModal open={showEditProfile} onClose={() => setShowEditProfile(false)} />
+      <AddClientModal open={showAddClient} onClose={() => setShowAddClient(false)} />
+      <ExpenseModal open={showAddExpense} onClose={() => setShowAddExpense(false)} onSave={(e) => addExpense(e)} />
+    </div>
+  );
+}
+
+function LegacyFinanceDocumentsPage() {
   const { locale } = useLocale();
   const {
     companyProfile,
@@ -75,6 +484,7 @@ export default function DocumentsPage() {
     invoices,
     receipts,
     deliveryNotes,
+    expenses,
     addQuote,
     addDeliveryNote,
     convertQuoteToInvoice,
@@ -85,7 +495,14 @@ export default function DocumentsPage() {
     updateInvoice,
     updateQuoteStatus,
   } = useFinance();
-  const [activeTab, setActiveTab] = useState<"quotes" | "invoices" | "receipts" | "delivery_notes">("quotes");
+  const { getConversationsWithMeta, currentUserId } = useInternalMessages();
+  const { contacts } = useContacts();
+  const [activeTab, setActiveTab] = useState<"quotes" | "invoices" | "receipts" | "delivery_notes" | "expenses">("quotes");
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [showAddClient, setShowAddClient] = useState(false);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [filterClientId, setFilterClientId] = useState("");
   const [showNewQuote, setShowNewQuote] = useState(false);
   const [showNewDeliveryNote, setShowNewDeliveryNote] = useState(false);
   const [quoteClientId, setQuoteClientId] = useState("");
@@ -103,6 +520,40 @@ export default function DocumentsPage() {
   const companies = useMemo(() => clients.filter((c) => c.clientType === "company" || !c.clientType), [clients]);
   const privateClients = useMemo(() => clients.filter((c) => c.clientType === "private"), [clients]);
   const selectedClient = useMemo(() => clients.find((c) => c.id === quoteClientId), [clients, quoteClientId]);
+
+  const chatList = useMemo(() => getConversationsWithMeta(currentUserId), [getConversationsWithMeta, currentUserId]);
+  const filterClientOptions = useMemo(() => {
+    const byId = new Map<string, { id: string; name: string }>();
+    clients.forEach((c) => byId.set(c.id, { id: c.id, name: c.name }));
+    chatList.forEach(({ contactId }) => {
+      if (byId.has(contactId)) return;
+      const contact = contacts.find((c) => c.id === contactId || c.phone === contactId);
+      byId.set(contactId, { id: contactId, name: contact?.name ?? contactId });
+    });
+    return Array.from(byId.values());
+  }, [clients, chatList, contacts]);
+
+  const inDateRange = (dateStr: string, createdAt?: number) => {
+    const d = dateStr || (createdAt ? new Date(createdAt).toISOString().slice(0, 10) : "");
+    if (dateFrom && d < dateFrom) return false;
+    if (dateTo && d > dateTo) return false;
+    return true;
+  };
+  const byClient = (clientId: string) => {
+    if (!filterClientId) return true;
+    return clientId === filterClientId;
+  };
+
+  const filteredReceipts = useMemo(() => receipts.filter((r) => (r.status as string) !== "canceled" && byClient(r.clientId) && inDateRange(r.date, r.createdAt)), [receipts, filterClientId, dateFrom, dateTo]);
+  const filteredInvoices = useMemo(() => invoices.filter((inv) => byClient(inv.clientId) && inDateRange(inv.date, inv.createdAt)), [invoices, filterClientId, dateFrom, dateTo]);
+  const filteredQuotes = useMemo(() => quotes.filter((q) => (q.status as string) !== "canceled" && byClient(q.clientId) && inDateRange(q.date, q.createdAt)), [quotes, filterClientId, dateFrom, dateTo]);
+  const filteredExpenses = useMemo(() => expenses.filter((e) => inDateRange(e.date, e.createdAt)), [expenses, dateFrom, dateTo]);
+
+  const totalPaid = useMemo(() => filteredReceipts.reduce((s, r) => s + r.total, 0), [filteredReceipts]);
+  const unpaidInvoices = useMemo(() => filteredInvoices.filter((inv) => inv.status !== "paid" && inv.status !== "canceled"), [filteredInvoices]);
+  const unpaidAmount = useMemo(() => unpaidInvoices.reduce((s, inv) => s + inv.total, 0), [unpaidInvoices]);
+  const activeQuotesCount = useMemo(() => filteredQuotes.filter((q) => (q.status as string) !== "canceled").length, [filteredQuotes]);
+  const totalExpenses = useMemo(() => filteredExpenses.reduce((s, e) => s + e.amount, 0), [filteredExpenses]);
 
   const handleNewQuote = () => {
     const client = clients.find((c) => c.id === quoteClientId);
