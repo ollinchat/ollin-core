@@ -229,7 +229,7 @@ export function updateDraftOrQuoteClient(
   }));
 }
 
-/** Cancel a quote (set status to canceled). */
+/** Cancel a quote (set status to canceled). Does not delete. */
 export function cancelQuote(userId: string, quoteId: string): BillingQuote | null {
   const quote = vault.getDocumentById(userId, quoteId) as BillingQuote | null;
   if (!quote || quote.type !== "quote") return null;
@@ -237,6 +237,20 @@ export function cancelQuote(userId: string, quoteId: string): BillingQuote | nul
     ...quote,
     status: "canceled",
     auditTrail: [...quote.auditTrail, { action: "canceled", at: Date.now() }],
+    updatedAt: Date.now(),
+  };
+  vault.replaceDocument(userId, updated);
+  return updated;
+}
+
+/** Cancel a delivery note (set status to canceled). Does not delete. */
+export function cancelDeliveryNote(userId: string, deliveryNoteId: string): BillingDeliveryNote | null {
+  const dn = vault.getDocumentById(userId, deliveryNoteId) as BillingDeliveryNote | null;
+  if (!dn || dn.type !== "delivery_note") return null;
+  const updated: BillingDeliveryNote = {
+    ...dn,
+    status: "canceled",
+    auditTrail: [...dn.auditTrail, { action: "canceled", at: Date.now() }],
     updatedAt: Date.now(),
   };
   vault.replaceDocument(userId, updated);

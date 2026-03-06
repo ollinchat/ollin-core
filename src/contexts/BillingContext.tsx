@@ -52,6 +52,7 @@ type BillingContextType = {
   createReceipt: (invoiceId: string) => BillingDocument | null;
   issueCreditNote: (invoiceId: string) => BillingDocument | null;
   cancelQuote: (quoteId: string) => BillingDocument | null;
+  cancelDeliveryNote: (deliveryNoteId: string) => BillingDocument | null;
   duplicateDoc: (docId: string) => BillingDocument | null;
   updateDocItems: (docId: string, items: BillingLineItem[]) => BillingDocument | null;
   updateDocClient: (docId: string, client: Partial<BillingClient>) => BillingDocument | null;
@@ -420,6 +421,16 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
     [userId, refreshDocuments]
   );
 
+  const cancelDeliveryNote = useCallback(
+    (deliveryNoteId: string) => {
+      if (!userId) return null;
+      const doc = documentService.cancelDeliveryNote(userId, deliveryNoteId);
+      refreshDocuments();
+      return doc;
+    },
+    [userId, refreshDocuments]
+  );
+
   const duplicateDoc = useCallback(
     (docId: string) => {
       if (!userId) return null;
@@ -511,6 +522,7 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
       createReceipt,
       issueCreditNote,
       cancelQuote,
+      cancelDeliveryNote,
       duplicateDoc,
       updateDocItems,
       updateDocClient,
@@ -538,6 +550,7 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
       createReceipt,
       issueCreditNote,
       cancelQuote,
+      cancelDeliveryNote,
       duplicateDoc,
       updateDocItems,
       updateDocClient,

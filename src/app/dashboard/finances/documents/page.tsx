@@ -12,8 +12,6 @@ import type { FinanceClient, TaxInvoice } from "@/lib/finance-types";
 import type { BillingDocument, BillingExpense } from "@/modules/billing/types";
 import { ChevronLeft, FileText, Receipt, FileStack, Plus, Package, Fingerprint, UserPlus, DollarSign, TrendingUp, Download, Trash2, ChevronDown, X, Loader2, MoreVertical, Share2, Settings, Upload, Camera } from "lucide-react";
 import { DocumentCard } from "@/components/finances/DocumentCard";
-import { EditProfileModal } from "@/components/finances/EditProfileModal";
-import { AddClientModal } from "@/components/finances/AddClientModal";
 import type { Quote, DeliveryNote, LineItem } from "@/lib/finance-types";
 import { TAX_INVOICE_HEADER_EN, TAX_INVOICE_HEADER_HE, QUOTE_HEADER_EN, QUOTE_HEADER_HE, DELIVERY_NOTE_HEADER_EN, DELIVERY_NOTE_HEADER_HE, DEFAULT_VAT_RATE } from "@/lib/finance-types";
 import { LiveDocumentEditor } from "@/components/finances/LiveDocumentEditor";
@@ -210,13 +208,12 @@ export default function DocumentsPage() {
     markPaid,
     issueCreditNote,
     cancelQuote,
+    cancelDeliveryNote,
   } = useBilling();
   const { getConversationsWithMeta, currentUserId } = useInternalMessages();
   const { contacts } = useContacts();
 
   const [activeTab, setActiveTab] = useState<TabId>("quotes");
-  const [showEditProfile, setShowEditProfile] = useState(false);
-  const [showAddClient, setShowAddClient] = useState(false);
   const [snapshotOpen, setSnapshotOpen] = useState(false);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -474,22 +471,20 @@ export default function DocumentsPage() {
           Documents
         </h1>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setShowEditProfile(true)}
+          <Link
+            href="/dashboard/finances/business-settings"
             className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-100 bg-gray-50/70 text-[13px] font-semibold text-gray-700 hover:bg-gray-100 transition-colors"
           >
             <Settings className="w-4 h-4 text-gray-600" />
             Business Settings
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowAddClient(true)}
+          </Link>
+          <Link
+            href="/dashboard/finances/clients"
             className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-100 bg-white text-[13px] font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
           >
             <UserPlus className="w-4 h-4 text-gray-600" />
-            Add New Client
-          </button>
+            Clients
+          </Link>
         </div>
       </header>
 
@@ -518,52 +513,54 @@ export default function DocumentsPage() {
               transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
               className="overflow-hidden"
             >
-              <div className="mt-3 pt-4 pb-3 px-1 rounded-b-xl bg-gray-50/80 border border-t-0 border-gray-100 shadow-sm">
-                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-                  <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-3.5">
-                    <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Total Paid (Receipts)</p>
-                    <p className="text-base font-semibold text-gray-900 mt-1 tabular-nums">{formatMoney(metrics.totalPaid)}</p>
-                  </div>
-                  <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-3.5">
-                    <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Unpaid Invoices</p>
-                    <p className="text-base font-semibold text-gray-900 mt-1 tabular-nums">{metrics.unpaidCount} · {formatMoney(metrics.unpaidAmount)}</p>
-                  </div>
-                  <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-3.5">
-                    <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Active Quotes</p>
-                    <p className="text-base font-semibold text-gray-900 mt-1 tabular-nums">{metrics.activeQuotes}</p>
-                  </div>
-                  <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-3.5">
-                    <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Cancellations</p>
-                    <p className="text-base font-semibold text-gray-900 mt-1 tabular-nums">{metrics.cancellationsCount} · {formatMoney(metrics.creditNotesTotal)}</p>
-                  </div>
-                  <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-3.5">
-                    <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Total Expenses</p>
-                    <p className="text-base font-semibold text-gray-900 mt-1 tabular-nums">{formatMoney(metrics.totalExpenses)}</p>
-                  </div>
-                </div>
-                <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-3 mt-3 flex flex-col sm:flex-row gap-3 flex-wrap">
+              <div className="mt-3 pt-3 pb-3 px-1 rounded-b-xl bg-gray-50/80 border border-t-0 border-gray-100 shadow-sm">
+                {/* Filters row at top */}
+                <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-3 flex flex-col sm:flex-row gap-3 flex-wrap mb-3">
                   <div className="flex gap-2 flex-1 min-w-0">
                     <div className="flex-1 min-w-0">
-                      <label className="block text-xs font-medium text-gray-500 mb-1">From</label>
-                      <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-full rounded-lg border border-gray-100 px-2.5 py-1.5 text-sm text-gray-900 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500/50" />
+                      <label className="block text-[11px] font-medium text-gray-500 mb-0.5">From</label>
+                      <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-full rounded-lg border border-gray-100 px-2.5 py-1.5 text-[12px] text-gray-900 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500/50" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <label className="block text-xs font-medium text-gray-500 mb-1">To</label>
-                      <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-full rounded-lg border border-gray-100 px-2.5 py-1.5 text-sm text-gray-900 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500/50" />
+                      <label className="block text-[11px] font-medium text-gray-500 mb-0.5">To</label>
+                      <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-full rounded-lg border border-gray-100 px-2.5 py-1.5 text-[12px] text-gray-900 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500/50" />
                     </div>
                   </div>
                   <div className="flex-1 min-w-[140px]">
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Filter by Client</label>
-                    <select value={filterClientId} onChange={(e) => setFilterClientId(e.target.value)} className="w-full rounded-lg border border-gray-100 px-2.5 py-1.5 text-sm text-gray-900 bg-white focus:ring-2 focus:ring-teal-500/20">
+                    <label className="block text-[11px] font-medium text-gray-500 mb-0.5">Filter by Client</label>
+                    <select value={filterClientId} onChange={(e) => setFilterClientId(e.target.value)} className="w-full rounded-lg border border-gray-100 px-2.5 py-1.5 text-[12px] text-gray-900 bg-white focus:ring-2 focus:ring-teal-500/20">
                       <option value="">All clients</option>
                       {clientOptions.map((c) => (
                         <option key={c.id} value={c.id}>{c.name}</option>
                       ))}
                     </select>
                   </div>
-                  <button type="button" onClick={() => { setDateFrom(""); setDateTo(""); setFilterClientId(""); }} className="self-end sm:self-auto px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600 text-sm font-medium hover:bg-gray-200 transition-colors">
+                  <button type="button" onClick={() => { setDateFrom(""); setDateTo(""); setFilterClientId(""); }} className="self-end sm:self-auto px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600 text-[12px] font-medium hover:bg-gray-200 transition-colors">
                     Clear
                   </button>
+                </div>
+                {/* Summary blocks below */}
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                  <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-3">
+                    <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Total Paid (Receipts)</p>
+                    <p className="text-sm font-semibold text-gray-900 mt-0.5 tabular-nums">{formatMoney(metrics.totalPaid)}</p>
+                  </div>
+                  <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-3">
+                    <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Unpaid Invoices</p>
+                    <p className="text-sm font-semibold text-gray-900 mt-0.5 tabular-nums">{metrics.unpaidCount} · {formatMoney(metrics.unpaidAmount)}</p>
+                  </div>
+                  <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-3">
+                    <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Active Quotes</p>
+                    <p className="text-sm font-semibold text-gray-900 mt-0.5 tabular-nums">{metrics.activeQuotes}</p>
+                  </div>
+                  <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-3">
+                    <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Cancellations</p>
+                    <p className="text-sm font-semibold text-gray-900 mt-0.5 tabular-nums">{metrics.cancellationsCount} · {formatMoney(metrics.creditNotesTotal)}</p>
+                  </div>
+                  <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-3">
+                    <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Total Expenses</p>
+                    <p className="text-sm font-semibold text-gray-900 mt-0.5 tabular-nums">{formatMoney(metrics.totalExpenses)}</p>
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -573,13 +570,13 @@ export default function DocumentsPage() {
 
       {/* Tabs */}
       <div className="px-4 pt-3">
-        <div className="flex gap-1 p-1 rounded-2xl bg-gray-100/80 overflow-x-auto border border-gray-100 shadow-sm">
+        <div className="flex gap-2 p-1.5 rounded-2xl bg-gray-100/80 overflow-x-auto border border-gray-100 shadow-sm">
           {tabs.map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => setActiveTab(t.id)}
-              className={`flex-1 min-w-0 py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-1.5 whitespace-nowrap transition-colors ${activeTab === t.id ? "bg-white shadow-sm text-gray-900 border border-gray-100" : "text-gray-600 hover:text-gray-800"}`}
+              className={`flex-1 min-w-0 py-3 px-4 rounded-xl text-[13px] flex items-center justify-center gap-1.5 whitespace-nowrap transition-colors ${activeTab === t.id ? "bg-white shadow-sm text-gray-900 font-semibold border border-gray-100" : "text-gray-500 font-medium hover:text-gray-700 hover:bg-white/50"}`}
             >
               {t.icon}
               {t.label}
@@ -592,15 +589,25 @@ export default function DocumentsPage() {
       <main className="flex-1 px-4 py-4">
         {activeTab !== "expenses" ? (
           <div className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
-            <table className="w-full text-[12px]">
+            {/* Section title above list */}
+            <div className="px-5 py-2.5 border-b border-gray-100 bg-gray-50/50">
+              <h2 className="text-[13px] font-semibold text-gray-700">
+                {activeTab === "quotes" && "Pending Quotes"}
+                {activeTab === "invoices" && "Recent Invoices"}
+                {activeTab === "receipts" && "Receipts"}
+                {activeTab === "delivery_notes" && "Delivery Notes"}
+                {activeTab === "cancellations" && "Canceled Documents"}
+              </h2>
+            </div>
+            <table className="w-full text-[11px]">
               <thead className="bg-gray-50/80 border-b border-gray-100">
                 <tr>
-                  <th className="text-left px-6 py-3 font-semibold text-gray-600">Type / Number</th>
-                  <th className="text-left px-6 py-3 font-semibold text-gray-600">Client</th>
-                  <th className="text-left px-6 py-3 font-semibold text-gray-600">Date</th>
-                  <th className="text-right px-6 py-3 font-semibold text-gray-600">Amount</th>
-                  <th className="text-left px-6 py-3 font-semibold text-gray-600">Status</th>
-                  <th className="text-right px-6 py-3 font-semibold text-gray-600" />
+                  <th className="text-left px-4 py-2 font-semibold text-gray-600 whitespace-nowrap">Type / Number</th>
+                  <th className="text-left px-4 py-2 font-semibold text-gray-600 whitespace-nowrap">Client</th>
+                  <th className="text-left px-4 py-2 font-semibold text-gray-600 whitespace-nowrap">Date</th>
+                  <th className="text-right px-4 py-2 font-semibold text-gray-600 whitespace-nowrap">Amount</th>
+                  <th className="text-left px-4 py-2 font-semibold text-gray-600 whitespace-nowrap">Status</th>
+                  <th className="text-right px-4 py-2 font-semibold text-gray-600 whitespace-nowrap" />
                 </tr>
               </thead>
               <tbody>
@@ -613,19 +620,21 @@ export default function DocumentsPage() {
                 ) : (
                   filteredDocs.map((d) => {
                     const uiStatus = getInvoiceUiStatus(d, todayIso);
-                    const notCanceled = (d.status as string) !== "canceled";
+                    const isCanceled = (d.status as string) === "canceled";
+                    const notCanceled = !isCanceled;
                     const canConvertToInvoice = (d.type === "quote" || d.type === "delivery_note") && notCanceled;
                     const canIssueReceipt = d.type === "invoice" && notCanceled;
                     const canCreateCreditNote = d.type === "invoice" && notCanceled;
                     const canCancelQuote = d.type === "quote" && notCanceled;
+                    const canCancelDeliveryNote = d.type === "delivery_note" && notCanceled;
                     return (
-                      <tr key={d.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                        <td className="px-6 py-2.5 font-medium text-gray-900">{docTypeLabel(d.type)} #{d.number}</td>
-                        <td className="px-6 py-2.5 text-gray-600">{d.clientName || "—"}</td>
-                        <td className="px-6 py-2.5 text-gray-600">{docDateIso(d)}</td>
-                        <td className="px-6 py-2.5 text-right font-medium text-gray-900 tabular-nums">{formatMoney(d.total || 0)}</td>
-                        <td className="px-6 py-2.5"><StatusBadge status={uiStatus} /></td>
-                        <td className="px-6 py-2.5 text-right">
+                      <tr key={d.id} className={`border-b border-gray-50 hover:bg-gray-50/50 transition-colors ${isCanceled ? "bg-gray-50/50" : ""}`}>
+                        <td className={`px-4 py-2 font-medium whitespace-nowrap ${isCanceled ? "text-gray-500 line-through" : "text-gray-900"}`}>{docTypeLabel(d.type)} #{d.number}</td>
+                        <td className={`px-4 py-2 whitespace-nowrap ${isCanceled ? "text-gray-400 line-through" : "text-gray-600"}`}>{d.clientName || "—"}</td>
+                        <td className={`px-4 py-2 whitespace-nowrap ${isCanceled ? "text-gray-400 line-through" : "text-gray-600"}`}>{docDateIso(d)}</td>
+                        <td className={`px-4 py-2 text-right font-medium tabular-nums whitespace-nowrap ${isCanceled ? "text-gray-400 line-through" : "text-gray-900"}`}>{formatMoney(d.total || 0)}</td>
+                        <td className="px-4 py-2 whitespace-nowrap"><StatusBadge status={uiStatus} /></td>
+                        <td className="px-4 py-2 text-right whitespace-nowrap">
                           <div className="relative inline-flex">
                             <button
                               type="button"
