@@ -207,6 +207,20 @@ export function updateDraftOrQuoteClient(
   }));
 }
 
+/** Cancel a quote (set status to canceled). */
+export function cancelQuote(userId: string, quoteId: string): BillingQuote | null {
+  const quote = vault.getDocumentById(userId, quoteId) as BillingQuote | null;
+  if (!quote || quote.type !== "quote") return null;
+  const updated: BillingQuote = {
+    ...quote,
+    status: "canceled",
+    auditTrail: [...quote.auditTrail, { action: "canceled", at: Date.now() }],
+    updatedAt: Date.now(),
+  };
+  vault.replaceDocument(userId, updated);
+  return updated;
+}
+
 export function duplicateDocument(userId: string, docId: string): BillingDocument | null {
   const doc = vault.getDocumentById(userId, docId);
   if (!doc) return null;

@@ -44,7 +44,7 @@ function DashboardPageInner() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo-icon.png" alt="" className="h-8 w-8 object-contain" />
         </Link>
-        <div className="flex items-center gap-1 flex-shrink-0">
+        <div className="flex items-center gap-1.5 flex-shrink-0">
           <Link
             href={`/card/${encodeURIComponent(cardSlug)}`}
             className="flex items-center justify-center w-9 h-9 rounded-xl text-gray-500 hover:bg-gray-100 hover:text-[#008080] transition-colors"
