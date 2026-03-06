@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useContacts } from "@/contexts/ContactsContext";
 import { useInternalMessages } from "@/contexts/ChatEngineContext";
 import { ChevronLeft, Send, Mic, Paperclip, Check } from "lucide-react";
-import type { InternalMessageRecord } from "@/contexts/ChatEngineContext";
+import type { InternalMessageRecord } from "@/lib/chat-engine";
 import { VoiceWaveformPlayer } from "@/components/VoiceWaveformPlayer";
 
 function lastMessagePreview(msgs: InternalMessageRecord[]): string {
@@ -31,7 +31,7 @@ export default function MessagesPage() {
   const listEndRef = useRef<HTMLDivElement>(null);
 
   const selected = selectedId ? contacts.find((c) => c.id === selectedId) : null;
-  const thread = selectedId ? getConversation(selectedId) : [];
+  const thread: InternalMessageRecord[] = selectedId ? getConversation(selectedId) : [];
 
   useEffect(() => {
     listEndRef.current?.scrollIntoView({ behavior: "smooth" });

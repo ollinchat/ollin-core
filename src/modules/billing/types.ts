@@ -146,4 +146,9 @@ export interface BillingExpense {
   category: string;
   date: string; // ISO date
   createdAt: number;
+  attachment?: {
+    name: string;
+    mime: string;
+    dataUrl: string;
+  };
 }

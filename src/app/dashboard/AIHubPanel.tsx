@@ -32,8 +32,7 @@ import { GPSClockModal } from "@/components/tools/GPSClockModal";
 import { AIScannerModal } from "@/components/tools/AIScannerModal";
 import { ShoppingAgentModal } from "@/components/tools/ShoppingAgentModal";
 import { useChat, useInternalMessages } from "@/contexts/ChatEngineContext";
-import type { AIMessage } from "@/contexts/ChatEngineContext";
-import type { EventCardPayload } from "@/lib/chat-engine";
+import type { AIMessage, EventCardPayload } from "@/lib/chat-engine";
 
 /** Minimal type for Web Speech API (not in TS lib). */
 type SpeechRecognitionInstance = {
@@ -749,7 +748,7 @@ const AIHubPanelInner = forwardRef<AIHubPanelHandle, { locale: "en" | "he"; pane
         <div className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col justify-end">
           <div className="relative flex flex-col gap-2 min-h-[120px] py-4">
             {messages.length === 0 && !thinking && null}
-            {messages.map((msg) => (
+            {messages.map((msg: AIMessage) => (
               <div key={msg.id} className="flex flex-col gap-1">
                 {"role" in msg ? (
                   <div
@@ -965,7 +964,7 @@ const AIHubPanelInner = forwardRef<AIHubPanelHandle, { locale: "en" | "he"; pane
 
       {/* Share poll with contacts modal */}
       {sharePollMessageId && (() => {
-        const pollMsg = messages.find((m) => "id" in m && m.id === sharePollMessageId);
+        const pollMsg = messages.find((m: AIMessage) => "id" in m && m.id === sharePollMessageId);
         let pollText = "";
         if (pollMsg && "type" in pollMsg && pollMsg.type === "card" && pollMsg.cardType === "quote") {
           const body = "body" in pollMsg.payload ? (pollMsg.payload as { body?: string }).body : undefined;

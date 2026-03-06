@@ -9,6 +9,7 @@ import {
   type BillingInvoice,
   type BillingReceipt,
   type BillingCreditNote,
+  type BillingDeliveryNote,
   type BillingLineItem,
   BILLING_VAT_RATE,
   billingSubtotalFromItems,
@@ -108,6 +109,27 @@ export function convertQuoteToInvoice(userId: string, quoteId: string): BillingI
     status: "pending",
     quoteId: quote.id,
     auditTrail: [...quote.auditTrail, { action: "issued", at: Date.now() }],
+    updatedAt: Date.now(),
+  };
+  vault.createDocument(userId, invoice);
+  return invoice;
+}
+
+export function convertDeliveryNoteToInvoice(userId: string, deliveryNoteId: string): BillingInvoice | null {
+  const dn = vault.getDocumentById(userId, deliveryNoteId) as BillingDeliveryNote | null;
+  if (!dn || dn.type !== "delivery_note") return null;
+  if (dn.status === "canceled") return null;
+  const docs = vault.getAllDocuments(userId);
+  const number = nextNumber("INV", docs.filter((d) => d.type === "invoice"));
+  const totals = baseFromItems(dn.items, dn.vatRate ?? BILLING_VAT_RATE);
+  const invoice: BillingInvoice = {
+    ...dn,
+    ...totals,
+    id: crypto.randomUUID(),
+    number,
+    type: "invoice",
+    status: "pending",
+    auditTrail: [...dn.auditTrail, { action: "issued", at: Date.now(), note: "Converted from delivery note" }],
     updatedAt: Date.now(),
   };
   vault.createDocument(userId, invoice);

@@ -11,15 +11,13 @@ export async function POST(req: Request) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ 
+    const model = genAI.getGenerativeModel({
       model: "gemini-2.0-flash",
-      tools: [{ googleSearch: {} }] 
     });
 
     const systemInstruction = `
       You are Ollin AI, a strategic productivity expert. 
       Respond in Hebrew. Be sharp and direct.
-      Use Google Search for real-time information.
     `;
 
     const chat = model.startChat({

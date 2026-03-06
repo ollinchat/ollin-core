@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocale } from "@/contexts/LocaleContext";
@@ -10,7 +10,7 @@ import { useInternalMessages } from "@/contexts/ChatEngineContext";
 import { useContacts } from "@/contexts/ContactsContext";
 import type { FinanceClient, TaxInvoice } from "@/lib/finance-types";
 import type { BillingDocument, BillingExpense } from "@/modules/billing/types";
-import { ChevronLeft, FileText, Receipt, FileStack, Plus, Package, Fingerprint, UserPlus, DollarSign, TrendingUp, Download, Trash2, ChevronDown, X, Loader2, MoreVertical, Share2 } from "lucide-react";
+import { ChevronLeft, FileText, Receipt, FileStack, Plus, Package, Fingerprint, UserPlus, DollarSign, TrendingUp, Download, Trash2, ChevronDown, X, Loader2, MoreVertical, Share2, Settings, Upload, Camera } from "lucide-react";
 import { DocumentCard } from "@/components/finances/DocumentCard";
 import { EditProfileModal } from "@/components/finances/EditProfileModal";
 import { AddClientModal } from "@/components/finances/AddClientModal";
@@ -75,7 +75,7 @@ function companyDisplayName(profile: { name?: string; nameEn?: string; nameHe?: 
 
 const TEAL = "#008080";
 
-type TabId = "quotes" | "invoices" | "receipts" | "delivery_notes" | "expenses";
+type TabId = "quotes" | "invoices" | "receipts" | "delivery_notes" | "cancellations" | "expenses";
 type UiStatus = "draft" | "pending" | "paid" | "canceled" | "overdue";
 
 function docTypeLabel(t: BillingDocument["type"]): string {
@@ -204,8 +204,8 @@ export default function DocumentsPage() {
     downloadPdf,
     getShareLink,
     addExpense,
-    removeExpense,
     convertQuoteToInvoice,
+    convertDeliveryNoteToInvoice,
     createReceipt,
     markPaid,
     issueCreditNote,
@@ -217,7 +217,6 @@ export default function DocumentsPage() {
   const [activeTab, setActiveTab] = useState<TabId>("quotes");
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showAddClient, setShowAddClient] = useState(false);
-  const [showAddExpense, setShowAddExpense] = useState(false);
   const [snapshotOpen, setSnapshotOpen] = useState(false);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -225,6 +224,8 @@ export default function DocumentsPage() {
   const [loadingDocId, setLoadingDocId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [openMenuDocId, setOpenMenuDocId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [previewExpense, setPreviewExpense] = useState<BillingExpense | null>(null);
 
   const showSuccessToast = useCallback((message: string) => {
     setToastMessage(message);
@@ -245,8 +246,8 @@ export default function DocumentsPage() {
     const link = getShareLink(docId);
     if (!link) return;
     navigator.clipboard.writeText(link);
-    showSuccessToast(locale === "he" ? "קישור שותף הועתק" : "Share link copied");
-  }, [getShareLink, showSuccessToast, locale]);
+    showSuccessToast("Share link copied");
+  }, [getShareLink, showSuccessToast]);
 
   const handleConvertToInvoice = useCallback(
     (docId: string) => {
@@ -254,23 +255,37 @@ export default function DocumentsPage() {
       setTimeout(() => {
         if (convertQuoteToInvoice(docId)) {
           setActiveTab("invoices");
-          showSuccessToast(locale === "he" ? "הצעת מחיר הומרה לחשבונית" : "Quote converted to invoice");
+          showSuccessToast("Quote converted to invoice");
         }
         setLoadingDocId(null);
       }, 400);
     },
-    [convertQuoteToInvoice, showSuccessToast, locale]
+    [convertQuoteToInvoice, showSuccessToast]
+  );
+
+  const handleConvertDeliveryNoteToInvoice = useCallback(
+    (docId: string) => {
+      setLoadingDocId(docId);
+      setTimeout(() => {
+        if (convertDeliveryNoteToInvoice(docId)) {
+          setActiveTab("invoices");
+          showSuccessToast("Delivery note converted to invoice");
+        }
+        setLoadingDocId(null);
+      }, 400);
+    },
+    [convertDeliveryNoteToInvoice, showSuccessToast]
   );
 
   const handleMarkPaid = useCallback(
     (docId: string) => {
       setLoadingDocId(docId);
       setTimeout(() => {
-        if (markPaid(docId)) showSuccessToast(locale === "he" ? "החשבונית סומנה כשולמה" : "Invoice marked as paid");
+        if (markPaid(docId)) showSuccessToast("Invoice marked as paid");
         setLoadingDocId(null);
       }, 400);
     },
-    [markPaid, showSuccessToast, locale]
+    [markPaid, showSuccessToast]
   );
 
   const handleIssueReceipt = useCallback(
@@ -279,12 +294,71 @@ export default function DocumentsPage() {
       setTimeout(() => {
         if (createReceipt(docId)) {
           setActiveTab("receipts");
-          showSuccessToast(locale === "he" ? "קבלה נוצרה" : "Receipt issued");
+          showSuccessToast("Receipt issued");
         }
         setLoadingDocId(null);
       }, 400);
     },
-    [createReceipt, showSuccessToast, locale]
+    [createReceipt, showSuccessToast]
+  );
+
+  const handleIssueReceiptFromInvoice = useCallback(
+    (invoice: BillingDocument) => {
+      if (invoice.type !== "invoice") return;
+      if ((invoice.status as string) === "canceled") return;
+      if ((invoice.status as string) !== "paid") {
+        setLoadingDocId(invoice.id);
+        setTimeout(() => {
+          markPaid(invoice.id);
+          if (createReceipt(invoice.id)) {
+            setActiveTab("receipts");
+            showSuccessToast("Receipt issued");
+          }
+          setLoadingDocId(null);
+        }, 450);
+        return;
+      }
+      handleIssueReceipt(invoice.id);
+    },
+    [createReceipt, handleIssueReceipt, markPaid, showSuccessToast]
+  );
+
+  const handleCreateCreditNote = useCallback(
+    (invoiceId: string) => {
+      setLoadingDocId(invoiceId);
+      setTimeout(() => {
+        if (issueCreditNote(invoiceId)) {
+          setActiveTab("cancellations");
+          showSuccessToast("Credit note created");
+        }
+        setLoadingDocId(null);
+      }, 400);
+    },
+    [issueCreditNote, showSuccessToast]
+  );
+
+  const handleScanReceipt = useCallback(() => {
+    showSuccessToast("Scan Receipt (coming soon)");
+  }, [showSuccessToast]);
+
+  const handleUploadExpenseFile = useCallback(
+    (file: File) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = typeof reader.result === "string" ? reader.result : "";
+        if (!dataUrl) return;
+        addExpense({
+          vendor: file.name.replace(/\.[^.]+$/, ""),
+          amount: 0,
+          category: "Uncategorized",
+          date: new Date().toISOString().slice(0, 10),
+          attachment: { name: file.name, mime: file.type || "application/octet-stream", dataUrl },
+        });
+        showSuccessToast("Expense uploaded");
+      };
+      reader.readAsDataURL(file);
+    },
+    [addExpense, showSuccessToast]
   );
 
   const todayIso = new Date().toISOString().slice(0, 10);
@@ -293,7 +367,8 @@ export default function DocumentsPage() {
   const clientOptions = useMemo(() => {
     const byId = new Map<string, { id: string; name: string }>();
     billingClients.forEach((c) => byId.set(c.id, { id: c.id, name: c.name }));
-    chatList.forEach(({ contactId }) => {
+    chatList.forEach((x: { contactId: string }) => {
+      const { contactId } = x;
       if (byId.has(contactId)) return;
       const contact = contacts.find((c) => c.id === contactId || c.phone === contactId);
       byId.set(contactId, { id: contactId, name: contact?.name ?? contactId });
@@ -321,6 +396,7 @@ export default function DocumentsPage() {
       if (activeTab === "invoices") return d.type === "invoice";
       if (activeTab === "receipts") return d.type === "receipt";
       if (activeTab === "delivery_notes") return d.type === "delivery_note";
+      if (activeTab === "cancellations") return (d.status as string) === "canceled" || d.type === "credit_note";
       return false;
     });
   }, [documents, activeTab, dateFrom, dateTo, filterClientId]);
@@ -338,7 +414,12 @@ export default function DocumentsPage() {
     const activeQuotes = quotes.filter((q) => (q.status as string) !== "canceled").length;
     const totalExpenses = filteredExpenses.reduce((s, e) => s + (e.amount || 0), 0);
 
-    return { totalPaid, unpaidAmount, unpaidCount: unpaidInvoices.length, activeQuotes, totalExpenses };
+    const cancellations = documents
+      .filter((d) => (d.status as string) === "canceled" || d.type === "credit_note")
+      .filter((d) => inRange(docDateIso(d)) && byClient(d.clientId));
+    const creditNotesTotal = cancellations.filter((d) => d.type === "credit_note").reduce((s, d) => s + (d.total || 0), 0);
+
+    return { totalPaid, unpaidAmount, unpaidCount: unpaidInvoices.length, activeQuotes, totalExpenses, cancellationsCount: cancellations.length, creditNotesTotal };
   }, [documents, dateFrom, dateTo, filterClientId, filteredExpenses, todayIso]);
 
   const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
@@ -346,6 +427,7 @@ export default function DocumentsPage() {
     { id: "invoices", label: locale === "he" ? "חשבוניות" : "Invoices", icon: <FileText className="w-4 h-4" /> },
     { id: "receipts", label: locale === "he" ? "קבלות" : "Receipts", icon: <Receipt className="w-4 h-4" /> },
     { id: "delivery_notes", label: locale === "he" ? "תעודות משלוח" : "Delivery Notes", icon: <Package className="w-4 h-4" /> },
+    { id: "cancellations", label: "Cancellations", icon: <X className="w-4 h-4" /> },
     { id: "expenses", label: locale === "he" ? "הוצאות" : "Expenses", icon: <DollarSign className="w-4 h-4" /> },
   ];
 
@@ -395,21 +477,18 @@ export default function DocumentsPage() {
           <button
             type="button"
             onClick={() => setShowEditProfile(true)}
-            className="inline-flex items-center justify-center w-9 h-9 rounded-full text-white transition-all hover:shadow-sm hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500/50"
-            style={{ backgroundColor: TEAL }}
-            title={locale === "he" ? "ערוך פרופיל" : "Edit Profile"}
-            aria-label="Edit Profile"
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-100 bg-gray-50/70 text-[13px] font-semibold text-gray-700 hover:bg-gray-100 transition-colors"
           >
-            <Fingerprint className="w-5 h-5" />
+            <Settings className="w-4 h-4 text-gray-600" />
+            Business Settings
           </button>
           <button
             type="button"
             onClick={() => setShowAddClient(true)}
-            className="inline-flex items-center justify-center w-9 h-9 rounded-full border border-gray-100 bg-white text-gray-600 transition-all hover:shadow-sm hover:-translate-y-0.5 hover:bg-gray-50 hover:border-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-300/50"
-            title={locale === "he" ? "הוסף לקוח" : "Add Client"}
-            aria-label="Add Client"
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-100 bg-white text-[13px] font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
           >
-            <UserPlus className="w-5 h-5" />
+            <UserPlus className="w-4 h-4 text-gray-600" />
+            Add New Client
           </button>
         </div>
       </header>
@@ -421,7 +500,7 @@ export default function DocumentsPage() {
           onClick={() => setSnapshotOpen((o) => !o)}
           className="w-full flex items-center justify-between gap-2 py-2 px-3 rounded-xl border border-gray-100 bg-white shadow-sm text-left text-[13px] font-medium text-gray-700 hover:bg-gray-50/80 transition-colors"
         >
-          <span>{locale === "he" ? "תצוגת סיכום פיננסי" : snapshotOpen ? "View Financial Snapshot ▴" : "View Financial Snapshot ▾"}</span>
+          <span>View Financial Snapshot</span>
           <motion.span
             animate={{ rotate: snapshotOpen ? 180 : 0 }}
             transition={{ duration: 0.25, ease: "easeInOut" }}
@@ -440,22 +519,26 @@ export default function DocumentsPage() {
               className="overflow-hidden"
             >
               <div className="mt-3 pt-4 pb-3 px-1 rounded-b-xl bg-gray-50/80 border border-t-0 border-gray-100 shadow-sm">
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                  <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-4">
-                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Total Paid (Receipts)</p>
-                    <p className="text-lg font-semibold text-gray-900 mt-1">{formatMoney(metrics.totalPaid)}</p>
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                  <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-3.5">
+                    <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Total Paid (Receipts)</p>
+                    <p className="text-base font-semibold text-gray-900 mt-1 tabular-nums">{formatMoney(metrics.totalPaid)}</p>
                   </div>
-                  <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-4">
-                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Unpaid Invoices</p>
-                    <p className="text-lg font-semibold text-gray-900 mt-1">{metrics.unpaidCount} · {formatMoney(metrics.unpaidAmount)}</p>
+                  <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-3.5">
+                    <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Unpaid Invoices</p>
+                    <p className="text-base font-semibold text-gray-900 mt-1 tabular-nums">{metrics.unpaidCount} · {formatMoney(metrics.unpaidAmount)}</p>
                   </div>
-                  <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-4">
-                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Active Quotes</p>
-                    <p className="text-lg font-semibold text-gray-900 mt-1">{metrics.activeQuotes}</p>
+                  <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-3.5">
+                    <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Active Quotes</p>
+                    <p className="text-base font-semibold text-gray-900 mt-1 tabular-nums">{metrics.activeQuotes}</p>
                   </div>
-                  <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-4">
-                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Total Expenses</p>
-                    <p className="text-lg font-semibold text-gray-900 mt-1">{formatMoney(metrics.totalExpenses)}</p>
+                  <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-3.5">
+                    <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Cancellations</p>
+                    <p className="text-base font-semibold text-gray-900 mt-1 tabular-nums">{metrics.cancellationsCount} · {formatMoney(metrics.creditNotesTotal)}</p>
+                  </div>
+                  <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-3.5">
+                    <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Total Expenses</p>
+                    <p className="text-base font-semibold text-gray-900 mt-1 tabular-nums">{formatMoney(metrics.totalExpenses)}</p>
                   </div>
                 </div>
                 <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-3 mt-3 flex flex-col sm:flex-row gap-3 flex-wrap">
@@ -509,15 +592,15 @@ export default function DocumentsPage() {
       <main className="flex-1 px-4 py-4">
         {activeTab !== "expenses" ? (
           <div className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
-            <table className="w-full text-[13px]">
+            <table className="w-full text-[12px]">
               <thead className="bg-gray-50/80 border-b border-gray-100">
                 <tr>
-                  <th className="text-left px-6 py-3.5 font-semibold text-gray-600">Type / Number</th>
-                  <th className="text-left px-6 py-3.5 font-semibold text-gray-600">Client</th>
-                  <th className="text-left px-6 py-3.5 font-semibold text-gray-600">Date</th>
-                  <th className="text-right px-6 py-3.5 font-semibold text-gray-600">Amount</th>
-                  <th className="text-left px-6 py-3.5 font-semibold text-gray-600">Status</th>
-                  <th className="text-right px-6 py-3.5 font-semibold text-gray-600" />
+                  <th className="text-left px-6 py-3 font-semibold text-gray-600">Type / Number</th>
+                  <th className="text-left px-6 py-3 font-semibold text-gray-600">Client</th>
+                  <th className="text-left px-6 py-3 font-semibold text-gray-600">Date</th>
+                  <th className="text-right px-6 py-3 font-semibold text-gray-600">Amount</th>
+                  <th className="text-left px-6 py-3 font-semibold text-gray-600">Status</th>
+                  <th className="text-right px-6 py-3 font-semibold text-gray-600" />
                 </tr>
               </thead>
               <tbody>
@@ -530,24 +613,24 @@ export default function DocumentsPage() {
                 ) : (
                   filteredDocs.map((d) => {
                     const uiStatus = getInvoiceUiStatus(d, todayIso);
-                    const isQuote = d.type === "quote";
-                    const isInvoice = d.type === "invoice";
                     const notCanceled = (d.status as string) !== "canceled";
-                    const canConvertQuote = isQuote && notCanceled;
-                    const canCancel = (isQuote || isInvoice) && notCanceled;
+                    const canConvertToInvoice = (d.type === "quote" || d.type === "delivery_note") && notCanceled;
+                    const canIssueReceipt = d.type === "invoice" && notCanceled;
+                    const canCreateCreditNote = d.type === "invoice" && notCanceled;
+                    const canCancelQuote = d.type === "quote" && notCanceled;
                     return (
                       <tr key={d.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                        <td className="px-6 py-3 font-medium text-gray-900">{docTypeLabel(d.type)} #{d.number}</td>
-                        <td className="px-6 py-3 text-gray-600">{d.clientName || "—"}</td>
-                        <td className="px-6 py-3 text-gray-600">{docDateIso(d)}</td>
-                        <td className="px-6 py-3 text-right font-medium text-gray-900 tabular-nums">{formatMoney(d.total || 0)}</td>
-                        <td className="px-6 py-3"><StatusBadge status={uiStatus} /></td>
-                        <td className="px-6 py-3 text-right">
+                        <td className="px-6 py-2.5 font-medium text-gray-900">{docTypeLabel(d.type)} #{d.number}</td>
+                        <td className="px-6 py-2.5 text-gray-600">{d.clientName || "—"}</td>
+                        <td className="px-6 py-2.5 text-gray-600">{docDateIso(d)}</td>
+                        <td className="px-6 py-2.5 text-right font-medium text-gray-900 tabular-nums">{formatMoney(d.total || 0)}</td>
+                        <td className="px-6 py-2.5"><StatusBadge status={uiStatus} /></td>
+                        <td className="px-6 py-2.5 text-right">
                           <div className="relative inline-flex">
                             <button
                               type="button"
                               onClick={() => setOpenMenuDocId((prev) => (prev === d.id ? null : d.id))}
-                              className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+                              className="inline-flex items-center justify-center w-7 h-7 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors"
                               aria-haspopup="menu"
                               aria-expanded={openMenuDocId === d.id}
                               aria-label="More actions"
@@ -569,47 +652,32 @@ export default function DocumentsPage() {
                                   <button
                                     type="button"
                                     onClick={() => { setOpenMenuDocId(null); downloadPdf(d.id); }}
-                                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-50 text-[13px] font-medium"
+                                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-50 text-[12px] font-medium"
                                     role="menuitem"
                                   >
                                     <Download className="w-4 h-4 text-gray-500" />
-                                    {locale === "he" ? "הורד PDF" : "Download PDF"}
+                                    Download PDF
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => { setOpenMenuDocId(null); handleShare(d.id); }}
-                                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-50 text-[13px] font-medium"
+                                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-50 text-[12px] font-medium"
                                     role="menuitem"
                                   >
                                     <Share2 className="w-4 h-4 text-gray-500" />
-                                    {locale === "he" ? "שתף" : "Share"}
+                                    Share
                                   </button>
 
-                                  {((isQuote && canConvertQuote) || (isInvoice && notCanceled)) && (
+                                  {canConvertToInvoice && (
                                     <button
                                       type="button"
                                       disabled={loadingDocId === d.id}
                                       onClick={() => {
                                         setOpenMenuDocId(null);
-                                        if (isQuote) handleConvertToInvoice(d.id);
-                                        if (isInvoice) {
-                                          // "To Receipt" as a next-step for invoices: mark paid if needed, then issue receipt
-                                          if ((d.status as string) !== "paid") {
-                                            setLoadingDocId(d.id);
-                                            setTimeout(() => {
-                                              markPaid(d.id);
-                                              if (createReceipt(d.id)) {
-                                                setActiveTab("receipts");
-                                                showSuccessToast(locale === "he" ? "קבלה נוצרה" : "Receipt issued");
-                                              }
-                                              setLoadingDocId(null);
-                                            }, 450);
-                                          } else {
-                                            handleIssueReceipt(d.id);
-                                          }
-                                        }
+                                        if (d.type === "quote") handleConvertToInvoice(d.id);
+                                        if (d.type === "delivery_note") handleConvertDeliveryNoteToInvoice(d.id);
                                       }}
-                                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-50 text-[13px] font-medium disabled:opacity-60"
+                                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-50 text-[12px] font-medium disabled:opacity-60"
                                       role="menuitem"
                                     >
                                       {loadingDocId === d.id ? (
@@ -617,23 +685,64 @@ export default function DocumentsPage() {
                                       ) : (
                                         <FileText className="w-4 h-4 text-gray-500" />
                                       )}
-                                      {isQuote ? (locale === "he" ? "לחשבונית" : "Convert to Invoice") : (locale === "he" ? "לקבלה" : "Convert to Receipt")}
+                                      Convert to Invoice
                                     </button>
                                   )}
 
-                                  {canCancel && (
+                                  {canIssueReceipt && (
+                                    <button
+                                      type="button"
+                                      disabled={loadingDocId === d.id}
+                                      onClick={() => {
+                                        setOpenMenuDocId(null);
+                                        handleIssueReceiptFromInvoice(d);
+                                      }}
+                                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-50 text-[12px] font-medium disabled:opacity-60"
+                                      role="menuitem"
+                                    >
+                                      {loadingDocId === d.id ? (
+                                        <Loader2 className="w-4 h-4 text-gray-500 animate-spin" />
+                                      ) : (
+                                        <Receipt className="w-4 h-4 text-gray-500" />
+                                      )}
+                                      Issue Receipt
+                                    </button>
+                                  )}
+
+                                  {canCreateCreditNote && (
+                                    <button
+                                      type="button"
+                                      disabled={loadingDocId === d.id}
+                                      onClick={() => {
+                                        setOpenMenuDocId(null);
+                                        handleCreateCreditNote(d.id);
+                                      }}
+                                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-50 text-[12px] font-medium disabled:opacity-60"
+                                      role="menuitem"
+                                    >
+                                      {loadingDocId === d.id ? (
+                                        <Loader2 className="w-4 h-4 text-gray-500 animate-spin" />
+                                      ) : (
+                                        <X className="w-4 h-4 text-gray-500" />
+                                      )}
+                                      Create Credit Note
+                                    </button>
+                                  )}
+
+                                  {canCancelQuote && (
                                     <button
                                       type="button"
                                       onClick={() => {
                                         setOpenMenuDocId(null);
-                                        isQuote ? cancelQuote(d.id) : issueCreditNote(d.id);
-                                        showSuccessToast(locale === "he" ? "המסמך בוטל" : "Document canceled");
+                                        cancelQuote(d.id);
+                                        setActiveTab("cancellations");
+                                        showSuccessToast("Document canceled");
                                       }}
-                                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-red-600 hover:bg-red-50 text-[13px] font-medium"
+                                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-red-600 hover:bg-red-50 text-[12px] font-medium"
                                       role="menuitem"
                                     >
                                       <X className="w-4 h-4" />
-                                      {locale === "he" ? "בטל מסמך" : "Cancel Document"}
+                                      Cancel Document
                                     </button>
                                   )}
                                 </motion.div>
@@ -649,38 +758,71 @@ export default function DocumentsPage() {
             </table>
           </div>
         ) : (
-          <div className="space-y-4">
-            <div className="flex justify-end">
-              <button type="button" onClick={() => setShowAddExpense(true)} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white shadow-sm hover:shadow transition-shadow" style={{ backgroundColor: TEAL }}>
-                <Plus className="w-4 h-4" /> Add Expense
+          <div className="space-y-3">
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={handleScanReceipt}
+                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-100 bg-white text-[12px] font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                <Camera className="w-4 h-4 text-gray-600" />
+                Scan Receipt
               </button>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-100 bg-gray-50/70 text-[12px] font-semibold text-gray-700 hover:bg-gray-100 transition-colors"
+              >
+                <Upload className="w-4 h-4 text-gray-600" />
+                Upload Document
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,application/pdf"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.currentTarget.value = "";
+                  if (!f) return;
+                  handleUploadExpenseFile(f);
+                }}
+              />
             </div>
+
             <div className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
-              <table className="w-full text-sm">
+              <table className="w-full text-[12px]">
                 <thead className="bg-gray-50/80 border-b border-gray-100">
                   <tr>
-                    <th className="text-left px-5 py-4 font-semibold text-gray-600">Vendor</th>
-                    <th className="text-left px-5 py-4 font-semibold text-gray-600">Category</th>
-                    <th className="text-left px-5 py-4 font-semibold text-gray-600">Date</th>
-                    <th className="text-right px-5 py-4 font-semibold text-gray-600">Amount</th>
-                    <th className="text-right px-5 py-4 font-semibold text-gray-600">Actions</th>
+                    <th className="text-left px-6 py-3 font-semibold text-gray-600">Date</th>
+                    <th className="text-left px-6 py-3 font-semibold text-gray-600">Supplier Name</th>
+                    <th className="text-left px-6 py-3 font-semibold text-gray-600">Category</th>
+                    <th className="text-right px-6 py-3 font-semibold text-gray-600">Amount</th>
+                    <th className="text-right px-6 py-3 font-semibold text-gray-600">View</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredExpenses.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-5 py-12 text-center text-gray-500 font-medium">No expenses in this date range.</td>
+                      <td colSpan={5} className="px-6 py-10 text-center text-gray-500 font-medium">
+                        No expenses in this view.
+                      </td>
                     </tr>
                   ) : (
                     filteredExpenses.map((e) => (
                       <tr key={e.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                        <td className="px-5 py-4 font-medium text-gray-900">{e.vendor}</td>
-                        <td className="px-5 py-4 text-gray-700">{e.category}</td>
-                        <td className="px-5 py-4 text-gray-700">{expenseDateIso(e)}</td>
-                        <td className="px-5 py-4 text-right font-medium text-gray-900">{formatMoney(e.amount)}</td>
-                        <td className="px-5 py-4 text-right">
-                          <button type="button" onClick={() => removeExpense(e.id)} className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors" aria-label="Remove expense">
-                            <Trash2 className="w-4 h-4" />
+                        <td className="px-6 py-2.5 text-gray-600">{expenseDateIso(e)}</td>
+                        <td className="px-6 py-2.5 font-medium text-gray-900">{e.vendor}</td>
+                        <td className="px-6 py-2.5 text-gray-600">{e.category}</td>
+                        <td className="px-6 py-2.5 text-right font-medium text-gray-900 tabular-nums">{formatMoney(e.amount)}</td>
+                        <td className="px-6 py-2.5 text-right">
+                          <button
+                            type="button"
+                            disabled={!e.attachment?.dataUrl}
+                            onClick={() => setPreviewExpense(e)}
+                            className="inline-flex items-center justify-center px-2.5 py-1 rounded-lg border border-gray-100 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:hover:bg-transparent transition-colors"
+                          >
+                            View
                           </button>
                         </td>
                       </tr>
@@ -695,7 +837,51 @@ export default function DocumentsPage() {
 
       <EditProfileModal open={showEditProfile} onClose={() => setShowEditProfile(false)} />
       <AddClientModal open={showAddClient} onClose={() => setShowAddClient(false)} />
-      <ExpenseModal open={showAddExpense} onClose={() => setShowAddExpense(false)} onSave={(e) => addExpense(e)} />
+
+      {/* Expense preview */}
+      <AnimatePresence>
+        {previewExpense?.attachment?.dataUrl && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[220] bg-black/40 flex items-center justify-center p-4"
+            onClick={() => setPreviewExpense(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 8, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.98 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="bg-white rounded-2xl shadow-xl border border-gray-100 max-w-2xl w-full overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-gray-900 truncate">{previewExpense.attachment.name}</p>
+                  <p className="text-xs text-gray-500 truncate">{previewExpense.vendor} · {expenseDateIso(previewExpense)}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPreviewExpense(null)}
+                  className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
+                  aria-label="Close"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="p-4 bg-gray-50/50">
+                {previewExpense.attachment.mime === "application/pdf" ? (
+                  <iframe title="Expense preview" src={previewExpense.attachment.dataUrl} className="w-full h-[70vh] rounded-xl bg-white border border-gray-100" />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={previewExpense.attachment.dataUrl} alt="Expense attachment" className="w-full max-h-[70vh] object-contain rounded-xl bg-white border border-gray-100" />
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -750,7 +936,8 @@ function LegacyFinanceDocumentsPage() {
   const filterClientOptions = useMemo(() => {
     const byId = new Map<string, { id: string; name: string }>();
     clients.forEach((c) => byId.set(c.id, { id: c.id, name: c.name }));
-    chatList.forEach(({ contactId }) => {
+    chatList.forEach((x: { contactId: string }) => {
+      const { contactId } = x;
       if (byId.has(contactId)) return;
       const contact = contacts.find((c) => c.id === contactId || c.phone === contactId);
       byId.set(contactId, { id: contactId, name: contact?.name ?? contactId });
