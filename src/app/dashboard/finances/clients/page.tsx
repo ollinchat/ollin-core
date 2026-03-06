@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useBilling } from "@/contexts/BillingContext";
 import { useContacts } from "@/contexts/ContactsContext";
 import { useInternalMessages } from "@/contexts/ChatEngineContext";
@@ -68,26 +69,50 @@ export default function ClientsPage() {
       <div className="flex-1 p-4">
         <div className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50/50">
-            <h2 className="text-[13px] font-semibold text-gray-700">All clients</h2>
-            <p className="text-[11px] text-gray-500 mt-0.5">Billing clients and contacts from chat</p>
+            <h2 className="text-xs font-bold uppercase tracking-wider text-gray-600">All clients</h2>
+            <p className="text-[11px] text-gray-500 mt-0.5">Click a row to open the client profile</p>
           </div>
-          <ul className="divide-y divide-gray-50">
-            {mergedClients.length === 0 ? (
-              <li className="px-4 py-10 text-center text-gray-500 text-[13px]">No clients yet. Add one to get started.</li>
-            ) : (
-              mergedClients.map((c) => (
-                <li key={c.id} className="px-4 py-3 flex items-center justify-between gap-3 hover:bg-gray-50/50">
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium text-gray-900 text-[13px] truncate">{c.name}</p>
-                    <p className="text-[11px] text-gray-500 truncate">{c.email || c.phone || "—"}</p>
-                    {c.source === "contact" && (
-                      <span className="inline-block mt-1 text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">From contacts</span>
-                    )}
-                  </div>
-                </li>
-              ))
-            )}
-          </ul>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-gray-50/80 border-b border-gray-100">
+                <tr>
+                  <th className="text-left px-4 py-2.5 font-semibold text-gray-600 whitespace-nowrap">Name</th>
+                  <th className="text-left px-4 py-2.5 font-semibold text-gray-600 whitespace-nowrap">Tax ID</th>
+                  <th className="text-left px-4 py-2.5 font-semibold text-gray-600 whitespace-nowrap">Contact</th>
+                  <th className="text-left px-4 py-2.5 font-semibold text-gray-600 whitespace-nowrap">Source</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mergedClients.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-10 text-center text-gray-500">No clients yet. Add one to get started.</td>
+                  </tr>
+                ) : (
+                  mergedClients.map((c) => (
+                    <tr
+                      key={c.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => goToProfile(c.id)}
+                      onKeyDown={(e) => e.key === "Enter" && goToProfile(c.id)}
+                      className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors cursor-pointer"
+                    >
+                      <td className="px-4 py-2.5 font-medium text-gray-900">{c.name}</td>
+                      <td className="px-4 py-2.5 text-gray-600 whitespace-nowrap">{c.taxId || "—"}</td>
+                      <td className="px-4 py-2.5 text-gray-600 whitespace-nowrap truncate max-w-[140px]">{c.email || c.phone || "—"}</td>
+                      <td className="px-4 py-2.5">
+                        {c.source === "billing" ? (
+                          <span className="text-gray-600">Billing</span>
+                        ) : (
+                          <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">Contact</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
         <div className="mt-4 flex gap-2">
           <Link href="/dashboard/finances/documents" className="flex-1 text-center py-2.5 rounded-xl bg-gray-100 text-gray-700 font-medium text-[13px] hover:bg-gray-200">

@@ -411,12 +411,7 @@ export default function DocumentsPage() {
     const activeQuotes = quotes.filter((q) => (q.status as string) !== "canceled").length;
     const totalExpenses = filteredExpenses.reduce((s, e) => s + (e.amount || 0), 0);
 
-    const cancellations = documents
-      .filter((d) => (d.status as string) === "canceled" || d.type === "credit_note")
-      .filter((d) => inRange(docDateIso(d)) && byClient(d.clientId));
-    const creditNotesTotal = cancellations.filter((d) => d.type === "credit_note").reduce((s, d) => s + (d.total || 0), 0);
-
-    return { totalPaid, unpaidAmount, unpaidCount: unpaidInvoices.length, activeQuotes, totalExpenses, cancellationsCount: cancellations.length, creditNotesTotal };
+    return { totalPaid, unpaidAmount, unpaidCount: unpaidInvoices.length, activeQuotes, totalExpenses };
   }, [documents, dateFrom, dateTo, filterClientId, filteredExpenses, todayIso]);
 
   const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
@@ -470,20 +465,20 @@ export default function DocumentsPage() {
           <TrendingUp className="w-5 h-5 shrink-0" style={{ color: TEAL }} />
           Documents
         </h1>
-        <div className="flex items-center gap-2">
-          <Link
-            href="/dashboard/finances/business-settings"
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-100 bg-gray-50/70 text-[13px] font-semibold text-gray-700 hover:bg-gray-100 transition-colors"
-          >
-            <Settings className="w-4 h-4 text-gray-600" />
-            Business Settings
-          </Link>
+        <div className="flex items-center gap-2 rounded-xl border border-gray-100 bg-gray-50/60 px-2 py-1.5">
           <Link
             href="/dashboard/finances/clients"
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-100 bg-white text-[13px] font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-gray-100 text-[13px] font-semibold text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
           >
             <UserPlus className="w-4 h-4 text-gray-600" />
             Clients
+          </Link>
+          <Link
+            href="/dashboard/finances/business-settings"
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-gray-100 text-[13px] font-semibold text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
+          >
+            <Settings className="w-4 h-4 text-gray-600" />
+            Business Settings
           </Link>
         </div>
       </header>
@@ -514,51 +509,47 @@ export default function DocumentsPage() {
               className="overflow-hidden"
             >
               <div className="mt-3 pt-3 pb-3 px-1 rounded-b-xl bg-gray-50/80 border border-t-0 border-gray-100 shadow-sm">
-                {/* Filters row at top */}
-                <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-3 flex flex-col sm:flex-row gap-3 flex-wrap mb-3">
-                  <div className="flex gap-2 flex-1 min-w-0">
-                    <div className="flex-1 min-w-0">
-                      <label className="block text-[11px] font-medium text-gray-500 mb-0.5">From</label>
-                      <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-full rounded-lg border border-gray-100 px-2.5 py-1.5 text-[12px] text-gray-900 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500/50" />
+                {/* Single-row filters directly above summary cards */}
+                <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-3 mb-3 flex flex-row flex-wrap items-end gap-3">
+                  <div className="flex items-end gap-2 min-w-0">
+                    <div>
+                      <label className="block text-[11px] font-medium text-gray-500 mb-0.5">From Date</label>
+                      <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="rounded-lg border border-gray-100 px-2.5 py-1.5 text-xs text-gray-900 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500/50" />
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <label className="block text-[11px] font-medium text-gray-500 mb-0.5">To</label>
-                      <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-full rounded-lg border border-gray-100 px-2.5 py-1.5 text-[12px] text-gray-900 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500/50" />
+                    <div>
+                      <label className="block text-[11px] font-medium text-gray-500 mb-0.5">To Date</label>
+                      <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="rounded-lg border border-gray-100 px-2.5 py-1.5 text-xs text-gray-900 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500/50" />
                     </div>
                   </div>
-                  <div className="flex-1 min-w-[140px]">
-                    <label className="block text-[11px] font-medium text-gray-500 mb-0.5">Filter by Client</label>
-                    <select value={filterClientId} onChange={(e) => setFilterClientId(e.target.value)} className="w-full rounded-lg border border-gray-100 px-2.5 py-1.5 text-[12px] text-gray-900 bg-white focus:ring-2 focus:ring-teal-500/20">
+                  <div className="min-w-[140px]">
+                    <label className="block text-[11px] font-medium text-gray-500 mb-0.5">Select Client</label>
+                    <select value={filterClientId} onChange={(e) => setFilterClientId(e.target.value)} className="w-full rounded-lg border border-gray-100 px-2.5 py-1.5 text-xs text-gray-900 bg-white focus:ring-2 focus:ring-teal-500/20">
                       <option value="">All clients</option>
                       {clientOptions.map((c) => (
                         <option key={c.id} value={c.id}>{c.name}</option>
                       ))}
                     </select>
                   </div>
-                  <button type="button" onClick={() => { setDateFrom(""); setDateTo(""); setFilterClientId(""); }} className="self-end sm:self-auto px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600 text-[12px] font-medium hover:bg-gray-200 transition-colors">
+                  <button type="button" onClick={() => { setDateFrom(""); setDateTo(""); setFilterClientId(""); }} className="px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600 text-xs font-medium hover:bg-gray-200 transition-colors shrink-0">
                     Clear
                   </button>
                 </div>
-                {/* Summary blocks below */}
-                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                {/* Summary blocks: Paid, Unpaid, Quotes, Expenses only */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                   <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-3">
-                    <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Total Paid (Receipts)</p>
+                    <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Paid</p>
                     <p className="text-sm font-semibold text-gray-900 mt-0.5 tabular-nums">{formatMoney(metrics.totalPaid)}</p>
                   </div>
                   <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-3">
-                    <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Unpaid Invoices</p>
+                    <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Unpaid</p>
                     <p className="text-sm font-semibold text-gray-900 mt-0.5 tabular-nums">{metrics.unpaidCount} · {formatMoney(metrics.unpaidAmount)}</p>
                   </div>
                   <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-3">
-                    <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Active Quotes</p>
+                    <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Quotes</p>
                     <p className="text-sm font-semibold text-gray-900 mt-0.5 tabular-nums">{metrics.activeQuotes}</p>
                   </div>
                   <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-3">
-                    <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Cancellations</p>
-                    <p className="text-sm font-semibold text-gray-900 mt-0.5 tabular-nums">{metrics.cancellationsCount} · {formatMoney(metrics.creditNotesTotal)}</p>
-                  </div>
-                  <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-3">
-                    <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Total Expenses</p>
+                    <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Expenses</p>
                     <p className="text-sm font-semibold text-gray-900 mt-0.5 tabular-nums">{formatMoney(metrics.totalExpenses)}</p>
                   </div>
                 </div>
@@ -589,9 +580,9 @@ export default function DocumentsPage() {
       <main className="flex-1 px-4 py-4">
         {activeTab !== "expenses" ? (
           <div className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
-            {/* Section title above list */}
-            <div className="px-5 py-2.5 border-b border-gray-100 bg-gray-50/50">
-              <h2 className="text-[13px] font-semibold text-gray-700">
+            {/* Section header: bold small-caps */}
+            <div className="px-4 py-2 border-b border-gray-100 bg-gray-50/50">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-gray-600">
                 {activeTab === "quotes" && "Pending Quotes"}
                 {activeTab === "invoices" && "Recent Invoices"}
                 {activeTab === "receipts" && "Receipts"}
@@ -599,15 +590,15 @@ export default function DocumentsPage() {
                 {activeTab === "cancellations" && "Canceled Documents"}
               </h2>
             </div>
-            <table className="w-full text-[11px]">
+            <table className="w-full text-xs">
               <thead className="bg-gray-50/80 border-b border-gray-100">
                 <tr>
-                  <th className="text-left px-4 py-2 font-semibold text-gray-600 whitespace-nowrap">Type / Number</th>
-                  <th className="text-left px-4 py-2 font-semibold text-gray-600 whitespace-nowrap">Client</th>
-                  <th className="text-left px-4 py-2 font-semibold text-gray-600 whitespace-nowrap">Date</th>
-                  <th className="text-right px-4 py-2 font-semibold text-gray-600 whitespace-nowrap">Amount</th>
-                  <th className="text-left px-4 py-2 font-semibold text-gray-600 whitespace-nowrap">Status</th>
-                  <th className="text-right px-4 py-2 font-semibold text-gray-600 whitespace-nowrap" />
+                  <th className="text-left px-4 py-2 text-xs font-semibold text-gray-600 whitespace-nowrap">Type / Number</th>
+                  <th className="text-left px-4 py-2 text-xs font-semibold text-gray-600 whitespace-nowrap">Client</th>
+                  <th className="text-left px-4 py-2 text-xs font-semibold text-gray-600 whitespace-nowrap">Date</th>
+                  <th className="text-right px-4 py-2 text-xs font-semibold text-gray-600 whitespace-nowrap">Amount</th>
+                  <th className="text-left px-4 py-2 text-xs font-semibold text-gray-600 whitespace-nowrap">Status</th>
+                  <th className="text-right px-4 py-2 text-xs font-semibold text-gray-600 whitespace-nowrap" />
                 </tr>
               </thead>
               <tbody>
@@ -658,25 +649,7 @@ export default function DocumentsPage() {
                                   className="absolute right-0 top-[calc(100%+0.5rem)] z-[160] w-56 rounded-xl border border-gray-100 bg-white shadow-lg p-1"
                                   role="menu"
                                 >
-                                  <button
-                                    type="button"
-                                    onClick={() => { setOpenMenuDocId(null); downloadPdf(d.id); }}
-                                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-50 text-[12px] font-medium"
-                                    role="menuitem"
-                                  >
-                                    <Download className="w-4 h-4 text-gray-500" />
-                                    Download PDF
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => { setOpenMenuDocId(null); handleShare(d.id); }}
-                                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-50 text-[12px] font-medium"
-                                    role="menuitem"
-                                  >
-                                    <Share2 className="w-4 h-4 text-gray-500" />
-                                    Share
-                                  </button>
-
+                                  {/* Quotes & Delivery Notes: Convert first (primary), then Share, Download PDF, Cancel */}
                                   {canConvertToInvoice && (
                                     <button
                                       type="button"
@@ -686,15 +659,51 @@ export default function DocumentsPage() {
                                         if (d.type === "quote") handleConvertToInvoice(d.id);
                                         if (d.type === "delivery_note") handleConvertDeliveryNoteToInvoice(d.id);
                                       }}
-                                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-50 text-[12px] font-medium disabled:opacity-60"
+                                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] font-medium disabled:opacity-60 text-white hover:opacity-90 transition-opacity"
+                                      style={{ backgroundColor: TEAL }}
                                       role="menuitem"
                                     >
                                       {loadingDocId === d.id ? (
-                                        <Loader2 className="w-4 h-4 text-gray-500 animate-spin" />
+                                        <Loader2 className="w-4 h-4 animate-spin" />
                                       ) : (
-                                        <FileText className="w-4 h-4 text-gray-500" />
+                                        <FileText className="w-4 h-4" />
                                       )}
                                       Convert to Invoice
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => { setOpenMenuDocId(null); handleShare(d.id); }}
+                                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-50 text-[12px] font-medium"
+                                    role="menuitem"
+                                  >
+                                    <Share2 className="w-4 h-4 text-gray-500" />
+                                    Share
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => { setOpenMenuDocId(null); downloadPdf(d.id); }}
+                                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-50 text-[12px] font-medium"
+                                    role="menuitem"
+                                  >
+                                    <Download className="w-4 h-4 text-gray-500" />
+                                    Download PDF
+                                  </button>
+                                  {(canCancelQuote || canCancelDeliveryNote) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setOpenMenuDocId(null);
+                                        if (d.type === "quote") cancelQuote(d.id);
+                                        if (d.type === "delivery_note") cancelDeliveryNote(d.id);
+                                        setActiveTab("cancellations");
+                                        showSuccessToast("Document canceled");
+                                      }}
+                                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-red-600 hover:bg-red-50 text-[12px] font-medium"
+                                      role="menuitem"
+                                    >
+                                      <X className="w-4 h-4" />
+                                      Cancel
                                     </button>
                                   )}
 
@@ -735,24 +744,6 @@ export default function DocumentsPage() {
                                         <X className="w-4 h-4 text-gray-500" />
                                       )}
                                       Create Credit Note
-                                    </button>
-                                  )}
-
-                                  {(canCancelQuote || canCancelDeliveryNote) && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setOpenMenuDocId(null);
-                                        if (d.type === "quote") cancelQuote(d.id);
-                                        if (d.type === "delivery_note") cancelDeliveryNote(d.id);
-                                        setActiveTab("cancellations");
-                                        showSuccessToast("Document canceled");
-                                      }}
-                                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-red-600 hover:bg-red-50 text-[12px] font-medium"
-                                      role="menuitem"
-                                    >
-                                      <X className="w-4 h-4" />
-                                      Cancel
                                     </button>
                                   )}
                                 </motion.div>

@@ -446,18 +446,11 @@ export function StrategicBoard({ locale, onBack }: StrategicBoardProps) {
         {mainTab === "finances" && (
           <div className="space-y-3">
             <Link
-              href="/dashboard/finances"
-              className="flex items-center gap-3 w-full px-4 py-3 rounded bg-white border border-gray-200 shadow-soft text-left hover:bg-gray-50"
-            >
-              <Wallet className="w-5 h-5 text-[#008080] shrink-0" />
-              <span className="font-medium text-gray-900">{locale === "he" ? "תצוגת כספים" : "Money View"}</span>
-            </Link>
-            <Link
               href="/dashboard/finances/documents"
               className="flex items-center gap-3 w-full px-4 py-3 rounded bg-white border border-gray-200 shadow-soft text-left hover:bg-gray-50"
             >
-              <FileText className="w-5 h-5 text-[#008080] shrink-0" />
-              <span className="font-medium text-gray-900">{locale === "he" ? "מסמכים" : "Documents"}</span>
+              <Wallet className="w-5 h-5 text-[#008080] shrink-0" />
+              <span className="font-medium text-gray-900">{locale === "he" ? "חשבוניות" : "Invoices"}</span>
             </Link>
             <Link
               href="/dashboard/finances/clients"

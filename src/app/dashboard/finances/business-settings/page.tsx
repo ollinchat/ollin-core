@@ -1,38 +1,75 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useBilling } from "@/contexts/BillingContext";
-import type { BusinessProfile } from "@/modules/billing/types";
-import { defaultBusinessProfile } from "@/modules/billing/types";
-import { ChevronLeft, Settings, Edit3, Save } from "lucide-react";
+import type { BusinessProfile } from "@/contexts/ChatEngineContext";
+import { ChevronLeft, Settings, Edit3, Save, Upload } from "lucide-react";
+import { SignaturePad } from "@/components/ui/SignaturePad";
 
 const TEAL = "#008080";
 
+const emptyProfile: BusinessProfile = {
+  legalName: "",
+  taxId: "",
+  address: "",
+  businessLogo: "",
+  bankDetails: {},
+};
+
 export default function BusinessSettingsPage() {
   const { businessProfile, setBusinessProfile } = useBilling();
-  const profile = businessProfile || defaultBusinessProfile;
+  const profile = businessProfile || emptyProfile;
 
   const [editing, setEditing] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [form, setForm] = useState<BusinessProfile>({ ...defaultBusinessProfile });
+  const [useSavedSignature, setUseSavedSignature] = useState(!!profile.signature);
+  const [form, setForm] = useState<BusinessProfile>({
+    ...emptyProfile,
+    legalNameEn: profile.legalNameEn ?? profile.legalName ?? "",
+    legalNameHe: profile.legalNameHe ?? "",
+    addressEn: profile.addressEn ?? profile.address ?? "",
+    addressHe: profile.addressHe ?? "",
+    legalName: profile.legalName || "",
+    taxId: profile.taxId || "",
+    address: profile.address || "",
+    businessLogo: profile.businessLogo || "",
+    signature: profile.signature ?? "",
+    bankDetails: profile.bankDetails || {},
+  });
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setForm({
-      legalName: profile.legalName || "",
-      taxId: profile.taxId || "",
+    setForm((prev) => ({
+      ...prev,
+      legalName: profile.legalName || prev.legalNameEn || prev.legalNameHe || "",
+      legalNameEn: profile.legalNameEn ?? profile.legalName ?? "",
+      legalNameHe: profile.legalNameHe ?? "",
+      addressEn: profile.addressEn ?? profile.address ?? "",
+      addressHe: profile.addressHe ?? "",
       address: profile.address || "",
+      taxId: profile.taxId || "",
       businessLogo: profile.businessLogo || "",
+      signature: profile.signature ?? "",
       bankDetails: profile.bankDetails || {},
-    });
-  }, [profile.legalName, profile.taxId, profile.address, profile.businessLogo, profile.bankDetails]);
+    }));
+    setUseSavedSignature(!!profile.signature);
+  }, [profile.legalName, profile.legalNameEn, profile.legalNameHe, profile.address, profile.addressEn, profile.addressHe, profile.taxId, profile.businessLogo, profile.signature, profile.bankDetails]);
 
   const handleSave = () => {
+    const legalName = form.legalNameEn?.trim() || form.legalNameHe?.trim() || form.legalName?.trim() || "";
+    const address = form.addressEn?.trim() || form.addressHe?.trim() || form.address?.trim() || "";
     setBusinessProfile({
-      legalName: form.legalName.trim() || "",
-      taxId: form.taxId.trim() || "",
-      address: form.address.trim() || "",
+      ...profile,
+      legalName,
+      legalNameEn: form.legalNameEn?.trim() || undefined,
+      legalNameHe: form.legalNameHe?.trim() || undefined,
+      address,
+      addressEn: form.addressEn?.trim() || undefined,
+      addressHe: form.addressHe?.trim() || undefined,
+      taxId: form.taxId?.trim() || "",
       businessLogo: form.businessLogo || "",
+      signature: form.signature || undefined,
       bankDetails: form.bankDetails || {},
     });
     setEditing(false);
@@ -40,7 +77,28 @@ export default function BusinessSettingsPage() {
     setTimeout(() => setSaved(false), 2000);
   };
 
-  const displayProfile = editing ? form : profile;
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setForm((p) => ({ ...p, businessLogo: (reader.result as string) || "" }));
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  const handleSignatureSave = (dataUrl: string) => {
+    setForm((p) => ({ ...p, signature: dataUrl }));
+  };
+
+  const displayProfile = editing ? form : {
+    ...profile,
+    legalNameEn: profile.legalNameEn ?? profile.legalName,
+    legalNameHe: profile.legalNameHe,
+    addressEn: profile.addressEn ?? profile.address,
+    addressHe: profile.addressHe,
+    businessLogo: profile.businessLogo,
+    signature: profile.signature,
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-[#f8fafc] font-sans antialiased">
@@ -79,20 +137,60 @@ export default function BusinessSettingsPage() {
       </header>
 
       <div className="flex-1 p-4 max-w-3xl mx-auto w-full space-y-6">
-        {/* Editable fields */}
         <section className="rounded-2xl bg-white border border-gray-100 shadow-sm p-4 space-y-4">
-          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Business details</h2>
+          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Company name</h2>
           <div>
-            <label className="block text-[11px] font-medium text-gray-500 mb-1">Legal name</label>
+            <label className="block text-[11px] font-medium text-gray-500 mb-1">Company name (English)</label>
             <input
               type="text"
-              value={form.legalName}
-              onChange={(e) => setForm((p) => ({ ...p, legalName: e.target.value }))}
+              value={form.legalNameEn ?? ""}
+              onChange={(e) => setForm((p) => ({ ...p, legalNameEn: e.target.value, legalName: e.target.value.trim() || p.legalName }))}
               disabled={!editing}
-              className="w-full rounded-lg border border-gray-100 px-3 py-2 text-sm text-gray-900 disabled:bg-gray-50 disabled:text-gray-700"
-              placeholder="Company name"
+              className="w-full rounded-lg border border-gray-100 px-3 py-2 text-sm text-gray-900 disabled:bg-gray-50"
+              placeholder="Company name (English)"
             />
           </div>
+          <div>
+            <label className="block text-[11px] font-medium text-gray-500 mb-1">שם החברה (עברית)</label>
+            <input
+              type="text"
+              value={form.legalNameHe ?? ""}
+              onChange={(e) => setForm((p) => ({ ...p, legalNameHe: e.target.value }))}
+              disabled={!editing}
+              className="w-full rounded-lg border border-gray-100 px-3 py-2 text-sm text-gray-900 disabled:bg-gray-50"
+              placeholder="שם החברה"
+            />
+          </div>
+        </section>
+
+        <section className="rounded-2xl bg-white border border-gray-100 shadow-sm p-4 space-y-4">
+          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Address</h2>
+          <div>
+            <label className="block text-[11px] font-medium text-gray-500 mb-1">Address (English)</label>
+            <input
+              type="text"
+              value={form.addressEn ?? ""}
+              onChange={(e) => setForm((p) => ({ ...p, addressEn: e.target.value, address: e.target.value.trim() || p.address }))}
+              disabled={!editing}
+              className="w-full rounded-lg border border-gray-100 px-3 py-2 text-sm text-gray-900 disabled:bg-gray-50"
+              placeholder="Business address (English)"
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-medium text-gray-500 mb-1">כתובת (עברית)</label>
+            <input
+              type="text"
+              value={form.addressHe ?? ""}
+              onChange={(e) => setForm((p) => ({ ...p, addressHe: e.target.value }))}
+              disabled={!editing}
+              className="w-full rounded-lg border border-gray-100 px-3 py-2 text-sm text-gray-900 disabled:bg-gray-50"
+              placeholder="כתובת"
+            />
+          </div>
+        </section>
+
+        <section className="rounded-2xl bg-white border border-gray-100 shadow-sm p-4 space-y-4">
+          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Tax &amp; Logo</h2>
           <div>
             <label className="block text-[11px] font-medium text-gray-500 mb-1">Tax ID (ח.פ / ע.מ)</label>
             <input
@@ -105,30 +203,50 @@ export default function BusinessSettingsPage() {
             />
           </div>
           <div>
-            <label className="block text-[11px] font-medium text-gray-500 mb-1">Address</label>
+            <label className="block text-[11px] font-medium text-gray-500 mb-1">Logo</label>
             <input
-              type="text"
-              value={form.address}
-              onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))}
-              disabled={!editing}
-              className="w-full rounded-lg border border-gray-100 px-3 py-2 text-sm text-gray-900 disabled:bg-gray-50"
-              placeholder="Business address"
+              ref={logoInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleLogoChange}
+              className="hidden"
             />
-          </div>
-          <div>
-            <label className="block text-[11px] font-medium text-gray-500 mb-1">Logo (URL or data URL)</label>
-            <input
-              type="text"
-              value={form.businessLogo}
-              onChange={(e) => setForm((p) => ({ ...p, businessLogo: e.target.value }))}
-              disabled={!editing}
-              className="w-full rounded-lg border border-gray-100 px-3 py-2 text-sm text-gray-900 disabled:bg-gray-50"
-              placeholder="https://... or data:image/..."
-            />
+            {editing ? (
+              <button
+                type="button"
+                onClick={() => logoInputRef.current?.click()}
+                className="flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 border-dashed border-gray-200 text-gray-600 hover:border-teal-300 hover:text-teal-600 text-sm font-medium"
+              >
+                <Upload className="w-4 h-4" />
+                {form.businessLogo ? "Change logo" : "Upload logo"}
+              </button>
+            ) : null}
+            {form.businessLogo && (
+              <div className="mt-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={form.businessLogo} alt="Logo" className="max-h-16 object-contain rounded-lg border border-gray-200" />
+              </div>
+            )}
           </div>
         </section>
 
-        {/* Sample document preview */}
+        {editing && (
+          <section className="rounded-2xl bg-white border border-gray-100 shadow-sm p-4">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Digital signature</h3>
+            <p className="text-[11px] text-gray-500 mb-2">Draw your signature below or use the saved one. It will appear on PDF invoices.</p>
+            <SignaturePad
+              onSave={handleSignatureSave}
+              savedSignatureDataUrl={form.signature || null}
+              useSavedSignature={useSavedSignature}
+              onUseSavedChange={setUseSavedSignature}
+              locale="en"
+              labelSign="Sign here"
+              labelUseSaved="Use saved signature"
+            />
+          </section>
+        )}
+
+        {/* Live preview */}
         <section className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
           <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-4 pt-4 pb-2">Sample invoice preview</h2>
           <div className="p-4 bg-gray-50/80 border-t border-gray-100">
@@ -143,9 +261,13 @@ export default function BusinessSettingsPage() {
                   <span className="text-gray-400 text-xs">Logo placeholder</span>
                 </div>
               )}
-              <p className="font-semibold text-gray-900">{displayProfile.legalName || "Your company name"}</p>
+              <p className="font-semibold text-gray-900">{displayProfile.legalNameEn || displayProfile.legalName || "Company name (EN)"}</p>
+              {displayProfile.legalNameHe && <p className="text-gray-700 text-xs font-medium">{displayProfile.legalNameHe}</p>}
               {displayProfile.taxId && <p className="text-gray-600 text-xs">Tax ID: {displayProfile.taxId}</p>}
-              {displayProfile.address && <p className="text-gray-600 text-xs mt-0.5">{displayProfile.address}</p>}
+              {(displayProfile.addressEn || displayProfile.address) && (
+                <p className="text-gray-600 text-xs mt-0.5">{displayProfile.addressEn || displayProfile.address}</p>
+              )}
+              {displayProfile.addressHe && <p className="text-gray-600 text-xs">{displayProfile.addressHe}</p>}
               <div className="mt-6 pt-4 border-t border-gray-100">
                 <p className="text-gray-500 text-xs">Client: Sample Client Ltd</p>
                 <p className="text-gray-500 text-xs">Date: {new Date().toISOString().slice(0, 10)}</p>
@@ -164,6 +286,13 @@ export default function BusinessSettingsPage() {
                   </tbody>
                 </table>
                 <p className="text-right font-semibold text-gray-900 mt-2">Total: 1,200.00</p>
+                {displayProfile.signature && (
+                  <div className="mt-4 pt-3 border-t border-gray-100">
+                    <p className="text-[10px] text-gray-500 mb-1">Authorized signature</p>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={displayProfile.signature} alt="Signature" className="max-h-14 max-w-[160px] object-contain" />
+                  </div>
+                )}
               </div>
             </div>
           </div>

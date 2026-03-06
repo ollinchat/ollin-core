@@ -12,6 +12,13 @@ export interface BusinessProfile {
   address: string;
   businessLogo: string;
   bankDetails: { iban?: string; swift?: string; bitLink?: string };
+  /** Bilingual display */
+  legalNameEn?: string;
+  legalNameHe?: string;
+  addressEn?: string;
+  addressHe?: string;
+  /** Signature image (data URL) for PDFs */
+  signature?: string;
 }
 
 export type DevCurrentUser = {
