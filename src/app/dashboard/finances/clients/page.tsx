@@ -1,132 +1,105 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
-import { useFinance } from "@/contexts/FinanceContext";
-import { ChevronLeft, Users, Plus, Building2, User } from "lucide-react";
-import type { ClientType } from "@/lib/finance-types";
+import { useBilling } from "@/contexts/BillingContext";
+import { useContacts } from "@/contexts/ContactsContext";
+import { useInternalMessages } from "@/contexts/ChatEngineContext";
+import { ChevronLeft, Users, Plus } from "lucide-react";
+import { AddClientModal } from "@/components/finances/AddClientModal";
+
+const TEAL = "#008080";
 
 export default function ClientsPage() {
-  const { clients, addClient } = useFinance();
-  const [showForm, setShowForm] = useState(false);
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [clientType, setClientType] = useState<ClientType>("private");
-  const [vatId, setVatId] = useState("");
-  const [hpNumber, setHpNumber] = useState("");
-  const [address, setAddress] = useState("");
+  const { clients: billingClients, addClient } = useBilling();
+  const { contacts } = useContacts();
+  const { getConversationsWithMeta, currentUserId } = useInternalMessages();
+  const [showAddModal, setShowAddModal] = useState(false);
 
-  const handleAdd = () => {
-    const trimmedName = name.trim();
-    const trimmedEmail = email.trim();
-    if (!trimmedName || !trimmedEmail) return;
-    addClient({
-      name: trimmedName,
-      email: trimmedEmail,
-      clientType,
-      vatId: vatId.trim() || undefined,
-      hpNumber: clientType === "company" ? (hpNumber.trim() || undefined) : undefined,
-      address: address.trim() || undefined,
+  const chatList = useMemo(() => getConversationsWithMeta(currentUserId), [getConversationsWithMeta, currentUserId]);
+
+  const mergedClients = useMemo(() => {
+    const byId = new Map<string, { id: string; name: string; email?: string; phone?: string; address?: string; taxId?: string; source: "billing" | "contact" }>();
+    billingClients.forEach((c) => byId.set(c.id, { id: c.id, name: c.name, email: c.email, phone: c.phone, address: c.address, taxId: c.taxId, source: "billing" }));
+    chatList.forEach((x: { contactId: string }) => {
+      const contactId = x.contactId;
+      if (byId.has(contactId)) return;
+      const contact = contacts.find((c) => c.id === contactId || c.phone === contactId);
+      byId.set(contactId, {
+        id: contactId,
+        name: contact?.name ?? contactId,
+        email: contact?.email,
+        phone: contact?.phone,
+        source: "contact",
+      });
     });
-    setName("");
-    setEmail("");
-    setClientType("private");
-    setVatId("");
-    setHpNumber("");
-    setAddress("");
-    setShowForm(false);
-  };
-
-  const companies = clients.filter((c) => (c.clientType ?? "private") === "company");
-  const privateClients = clients.filter((c) => (c.clientType ?? "private") === "private");
+    contacts.forEach((c) => {
+      const key = c.id || c.phone || "";
+      if (!key || byId.has(key)) return;
+      byId.set(key, { id: key, name: c.name ?? key, email: c.email, phone: c.phone, source: "contact" });
+    });
+    return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [billingClients, chatList, contacts]);
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
-      <header className="flex-shrink-0 flex items-center gap-2 px-4 py-3 border-b border-gray-100 bg-white/95">
-        <Link href="/dashboard" className="p-2 rounded-2xl text-gray-600 hover:bg-gray-100 flex items-center gap-1">
+    <div className="min-h-screen flex flex-col bg-[#f8fafc] font-sans antialiased">
+      <header className="flex-shrink-0 flex items-center gap-2 px-4 py-3 border-b border-gray-100 bg-white shadow-sm">
+        <Link
+          href="/dashboard/finances/documents"
+          className="p-2 rounded-xl text-gray-600 hover:bg-gray-100 flex items-center gap-1"
+        >
           <ChevronLeft className="w-5 h-5" />
-          Back
+          <span className="text-sm font-medium">Back</span>
         </Link>
         <h1 className="flex-1 font-semibold text-gray-900 flex items-center gap-2">
-          <Users className="w-5 h-5 text-accent" />
+          <Users className="w-5 h-5" style={{ color: TEAL }} />
           Clients
         </h1>
         <button
           type="button"
-          onClick={() => setShowForm((v) => !v)}
-          className="p-2.5 rounded-sm border border-[#006666] bg-[#008080] text-white hover:shadow-glow-subtle"
-          aria-label="Add client"
+          onClick={() => setShowAddModal(true)}
+          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-100 bg-white text-[13px] font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
         >
-          <Plus className="w-5 h-5" />
-          <span className="ml-1.5 text-sm font-medium hidden sm:inline">Add Client</span>
+          <Plus className="w-4 h-4" />
+          + Add New Client
         </button>
       </header>
-      <div className="flex-1 p-4 space-y-6">
-        {showForm && (
-          <div className="rounded-2xl bg-white shadow-soft p-4 space-y-3 border-0">
-            <div>
-              <p className="text-xs font-medium text-gray-500 mb-1">Type</p>
-              <div className="flex gap-2">
-                <button type="button" onClick={() => setClientType("company")} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium ${clientType === "company" ? "bg-[#008080] text-white" : "bg-gray-100 text-gray-600"}`}>
-                  <Building2 className="w-4 h-4" />
-                  Company
-                </button>
-                <button type="button" onClick={() => setClientType("private")} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium ${clientType === "private" ? "bg-[#008080] text-white" : "bg-gray-100 text-gray-600"}`}>
-                  <User className="w-4 h-4" />
-                  Private
-                </button>
-              </div>
-            </div>
-            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-gray-900" />
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-gray-900" />
-            <input type="text" value={vatId} onChange={(e) => setVatId(e.target.value)} placeholder="VAT ID (optional)" className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-gray-900" />
-            {clientType === "company" && (
-              <input type="text" value={hpNumber} onChange={(e) => setHpNumber(e.target.value)} placeholder="P.C. / H.P. (ח.פ) number" className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-gray-900" />
+
+      <div className="flex-1 p-4">
+        <div className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50/50">
+            <h2 className="text-[13px] font-semibold text-gray-700">All clients</h2>
+            <p className="text-[11px] text-gray-500 mt-0.5">Billing clients and contacts from chat</p>
+          </div>
+          <ul className="divide-y divide-gray-50">
+            {mergedClients.length === 0 ? (
+              <li className="px-4 py-10 text-center text-gray-500 text-[13px]">No clients yet. Add one to get started.</li>
+            ) : (
+              mergedClients.map((c) => (
+                <li key={c.id} className="px-4 py-3 flex items-center justify-between gap-3 hover:bg-gray-50/50">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-gray-900 text-[13px] truncate">{c.name}</p>
+                    <p className="text-[11px] text-gray-500 truncate">{c.email || c.phone || "—"}</p>
+                    {c.source === "contact" && (
+                      <span className="inline-block mt-1 text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">From contacts</span>
+                    )}
+                  </div>
+                </li>
+              ))
             )}
-            <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Address (optional)" className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-gray-900" />
-            <div className="flex gap-2">
-              <button type="button" onClick={() => setShowForm(false)} className="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-700 font-medium">Cancel</button>
-              <button type="button" onClick={handleAdd} className="flex-1 py-2.5 rounded-xl bg-accent text-white font-medium">Add</button>
-            </div>
-          </div>
-        )}
-        <section>
-          <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-2">
-            <Building2 className="w-4 h-4 text-[#008080]" />
-            Companies
-          </h2>
-          <div className="space-y-2">
-            {companies.length === 0 && <p className="text-xs text-gray-400 py-3 rounded-xl bg-gray-50 text-center">No companies</p>}
-            {companies.map((c) => (
-              <div key={c.id} className="rounded-2xl bg-white shadow-soft px-4 py-3 border border-gray-100">
-                <p className="font-medium text-gray-900">{c.name}</p>
-                <p className="text-sm text-gray-500">{c.email}</p>
-                {(c.vatId || c.hpNumber || c.address) && <p className="text-xs text-gray-400 mt-1">{[c.vatId, c.hpNumber, c.address].filter(Boolean).join(" · ")}</p>}
-              </div>
-            ))}
-          </div>
-        </section>
-        <section>
-          <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-2">
-            <User className="w-4 h-4 text-[#008080]" />
-            Private Clients
-          </h2>
-          <div className="space-y-2">
-            {privateClients.length === 0 && <p className="text-xs text-gray-400 py-3 rounded-xl bg-gray-50 text-center">No private clients</p>}
-            {privateClients.map((c) => (
-              <div key={c.id} className="rounded-2xl bg-white shadow-soft px-4 py-3 border border-gray-100">
-                <p className="font-medium text-gray-900">{c.name}</p>
-                <p className="text-sm text-gray-500">{c.email}</p>
-                {(c.vatId || c.hpNumber || c.address) && <p className="text-xs text-gray-400 mt-1">{[c.vatId, c.hpNumber, c.address].filter(Boolean).join(" · ")}</p>}
-              </div>
-            ))}
-          </div>
-        </section>
-        <div className="flex gap-2">
-          <Link href="/dashboard/finances/company-profile" className="flex-1 text-center py-2.5 rounded-xl bg-gray-100 text-gray-700 font-medium text-sm hover:bg-gray-200">Company profile</Link>
-          <Link href="/dashboard/finances/documents" className="flex-1 text-center py-2.5 rounded-xl bg-gray-100 text-gray-700 font-medium text-sm hover:bg-gray-200">Documents</Link>
+          </ul>
+        </div>
+        <div className="mt-4 flex gap-2">
+          <Link href="/dashboard/finances/documents" className="flex-1 text-center py-2.5 rounded-xl bg-gray-100 text-gray-700 font-medium text-[13px] hover:bg-gray-200">
+            Documents
+          </Link>
+          <Link href="/dashboard/finances/business-settings" className="flex-1 text-center py-2.5 rounded-xl bg-gray-100 text-gray-700 font-medium text-[13px] hover:bg-gray-200">
+            Business Settings
+          </Link>
         </div>
       </div>
+
+      <AddClientModal open={showAddModal} onClose={() => setShowAddModal(false)} />
     </div>
   );
 }

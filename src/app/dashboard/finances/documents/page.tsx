@@ -613,7 +613,7 @@ export default function DocumentsPage() {
               <tbody>
                 {filteredDocs.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-5 py-12 text-center text-gray-500 font-medium">
+                    <td colSpan={6} className="px-4 py-10 text-center text-gray-500 text-[12px] font-medium">
                       No documents in this view.
                     </td>
                   </tr>
@@ -738,12 +738,13 @@ export default function DocumentsPage() {
                                     </button>
                                   )}
 
-                                  {canCancelQuote && (
+                                  {(canCancelQuote || canCancelDeliveryNote) && (
                                     <button
                                       type="button"
                                       onClick={() => {
                                         setOpenMenuDocId(null);
-                                        cancelQuote(d.id);
+                                        if (d.type === "quote") cancelQuote(d.id);
+                                        if (d.type === "delivery_note") cancelDeliveryNote(d.id);
                                         setActiveTab("cancellations");
                                         showSuccessToast("Document canceled");
                                       }}
@@ -751,7 +752,7 @@ export default function DocumentsPage() {
                                       role="menuitem"
                                     >
                                       <X className="w-4 h-4" />
-                                      Cancel Document
+                                      Cancel
                                     </button>
                                   )}
                                 </motion.div>
@@ -843,9 +844,6 @@ export default function DocumentsPage() {
           </div>
         )}
       </main>
-
-      <EditProfileModal open={showEditProfile} onClose={() => setShowEditProfile(false)} />
-      <AddClientModal open={showAddClient} onClose={() => setShowAddClient(false)} />
 
       {/* Expense preview */}
       <AnimatePresence>
