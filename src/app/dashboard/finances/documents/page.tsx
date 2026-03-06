@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocale } from "@/contexts/LocaleContext";
@@ -10,7 +10,7 @@ import { useInternalMessages } from "@/contexts/ChatEngineContext";
 import { useContacts } from "@/contexts/ContactsContext";
 import type { FinanceClient, TaxInvoice } from "@/lib/finance-types";
 import type { BillingDocument, BillingExpense } from "@/modules/billing/types";
-import { ChevronLeft, FileText, Receipt, FileStack, Plus, Package, Pencil, UserPlus, DollarSign, TrendingUp, Download, Trash2, ChevronDown, X, Loader2 } from "lucide-react";
+import { ChevronLeft, FileText, Receipt, FileStack, Plus, Package, Fingerprint, UserPlus, DollarSign, TrendingUp, Download, Trash2, ChevronDown, X, Loader2, MoreVertical, Share2 } from "lucide-react";
 import { DocumentCard } from "@/components/finances/DocumentCard";
 import { EditProfileModal } from "@/components/finances/EditProfileModal";
 import { AddClientModal } from "@/components/finances/AddClientModal";
@@ -104,7 +104,7 @@ function StatusBadge({ status }: { status: UiStatus }) {
             ? "bg-gray-100/80 text-gray-600 font-medium"
             : "bg-gray-100/70 text-gray-700 font-medium";
   const label = status === "overdue" ? "Overdue" : status.charAt(0).toUpperCase() + status.slice(1);
-  return <span className={`inline-flex px-2.5 py-1 rounded-full text-xs ${cls}`}>{label}</span>;
+  return <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] ${cls}`}>{label}</span>;
 }
 
 function docDateIso(doc: BillingDocument): string {
@@ -202,6 +202,7 @@ export default function DocumentsPage() {
     clients: billingClients,
     expenses,
     downloadPdf,
+    getShareLink,
     addExpense,
     removeExpense,
     convertQuoteToInvoice,
@@ -223,12 +224,29 @@ export default function DocumentsPage() {
   const [filterClientId, setFilterClientId] = useState("");
   const [loadingDocId, setLoadingDocId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [openMenuDocId, setOpenMenuDocId] = useState<string | null>(null);
 
   const showSuccessToast = useCallback((message: string) => {
     setToastMessage(message);
     const t = setTimeout(() => setToastMessage(null), 3000);
     return () => clearTimeout(t);
   }, []);
+
+  useEffect(() => {
+    if (!openMenuDocId) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpenMenuDocId(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [openMenuDocId]);
+
+  const handleShare = useCallback((docId: string) => {
+    const link = getShareLink(docId);
+    if (!link) return;
+    navigator.clipboard.writeText(link);
+    showSuccessToast(locale === "he" ? "קישור שותף הועתק" : "Share link copied");
+  }, [getShareLink, showSuccessToast, locale]);
 
   const handleConvertToInvoice = useCallback(
     (docId: string) => {
@@ -351,6 +369,16 @@ export default function DocumentsPage() {
         )}
       </AnimatePresence>
 
+      {/* Click-away overlay for row menus */}
+      {openMenuDocId && (
+        <button
+          type="button"
+          className="fixed inset-0 z-[140] cursor-default"
+          aria-label="Close menu"
+          onClick={() => setOpenMenuDocId(null)}
+        />
+      )}
+
       <header className="flex-shrink-0 flex items-center gap-3 px-4 py-3.5 border-b border-gray-100 bg-white shadow-sm min-h-[56px]">
         <Link
           href="/dashboard"
@@ -367,17 +395,17 @@ export default function DocumentsPage() {
           <button
             type="button"
             onClick={() => setShowEditProfile(true)}
-            className="inline-flex items-center justify-center w-11 h-11 rounded-full text-white transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500/50"
+            className="inline-flex items-center justify-center w-9 h-9 rounded-full text-white transition-all hover:shadow-sm hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500/50"
             style={{ backgroundColor: TEAL }}
             title={locale === "he" ? "ערוך פרופיל" : "Edit Profile"}
             aria-label="Edit Profile"
           >
-            <Pencil className="w-5 h-5" />
+            <Fingerprint className="w-5 h-5" />
           </button>
           <button
             type="button"
             onClick={() => setShowAddClient(true)}
-            className="inline-flex items-center justify-center w-11 h-11 rounded-full border border-gray-100 bg-white text-gray-600 transition-all hover:shadow-md hover:-translate-y-0.5 hover:bg-gray-50 hover:border-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-300/50"
+            className="inline-flex items-center justify-center w-9 h-9 rounded-full border border-gray-100 bg-white text-gray-600 transition-all hover:shadow-sm hover:-translate-y-0.5 hover:bg-gray-50 hover:border-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-300/50"
             title={locale === "he" ? "הוסף לקוח" : "Add Client"}
             aria-label="Add Client"
           >
@@ -391,7 +419,7 @@ export default function DocumentsPage() {
         <button
           type="button"
           onClick={() => setSnapshotOpen((o) => !o)}
-          className="w-full flex items-center justify-between gap-2 py-3 px-4 rounded-xl border border-gray-100 bg-white shadow-sm text-left text-sm font-medium text-gray-700 hover:bg-gray-50/80 transition-colors"
+          className="w-full flex items-center justify-between gap-2 py-2 px-3 rounded-xl border border-gray-100 bg-white shadow-sm text-left text-[13px] font-medium text-gray-700 hover:bg-gray-50/80 transition-colors"
         >
           <span>{locale === "he" ? "תצוגת סיכום פיננסי" : snapshotOpen ? "View Financial Snapshot ▴" : "View Financial Snapshot ▾"}</span>
           <motion.span
@@ -481,15 +509,15 @@ export default function DocumentsPage() {
       <main className="flex-1 px-4 py-4">
         {activeTab !== "expenses" ? (
           <div className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
-            <table className="w-full text-sm">
+            <table className="w-full text-[13px]">
               <thead className="bg-gray-50/80 border-b border-gray-100">
                 <tr>
-                  <th className="text-left px-5 py-4 font-semibold text-gray-600">Type / Number</th>
-                  <th className="text-left px-5 py-4 font-semibold text-gray-600">Client</th>
-                  <th className="text-left px-5 py-4 font-semibold text-gray-600">Date</th>
-                  <th className="text-right px-5 py-4 font-semibold text-gray-600">Amount</th>
-                  <th className="text-left px-5 py-4 font-semibold text-gray-600">Status</th>
-                  <th className="text-right px-5 py-4 font-semibold text-gray-600">Actions</th>
+                  <th className="text-left px-6 py-3.5 font-semibold text-gray-600">Type / Number</th>
+                  <th className="text-left px-6 py-3.5 font-semibold text-gray-600">Client</th>
+                  <th className="text-left px-6 py-3.5 font-semibold text-gray-600">Date</th>
+                  <th className="text-right px-6 py-3.5 font-semibold text-gray-600">Amount</th>
+                  <th className="text-left px-6 py-3.5 font-semibold text-gray-600">Status</th>
+                  <th className="text-right px-6 py-3.5 font-semibold text-gray-600" />
                 </tr>
               </thead>
               <tbody>
@@ -507,74 +535,110 @@ export default function DocumentsPage() {
                     const notCanceled = (d.status as string) !== "canceled";
                     const canConvertQuote = isQuote && notCanceled;
                     const canCancel = (isQuote || isInvoice) && notCanceled;
-                    const isLoading = loadingDocId === d.id;
                     return (
                       <tr key={d.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                        <td className="px-5 py-4 font-medium text-gray-900">{docTypeLabel(d.type)} #{d.number}</td>
-                        <td className="px-5 py-4 text-gray-700">{d.clientName || "—"}</td>
-                        <td className="px-5 py-4 text-gray-700">{docDateIso(d)}</td>
-                        <td className="px-5 py-4 text-right font-medium text-gray-900">{formatMoney(d.total || 0)}</td>
-                        <td className="px-5 py-4"><StatusBadge status={uiStatus} /></td>
-                        <td className="px-5 py-4">
-                          <div className="flex items-center justify-end gap-2 flex-wrap">
-                            <div className="inline-flex items-center rounded-lg border border-gray-100 bg-gray-50/50 p-0.5 gap-0.5">
-                              <button
-                                type="button"
-                                onClick={() => downloadPdf(d.id)}
-                                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-gray-600 hover:bg-white hover:text-gray-900 text-xs font-medium transition-colors border border-transparent shadow-sm"
-                                title="Download PDF"
-                              >
-                                <Download className="w-3.5 h-3.5" />
-                                PDF
-                              </button>
-                              {canConvertQuote && (
-                                <button
-                                  type="button"
-                                  disabled={isLoading}
-                                  onClick={() => handleConvertToInvoice(d.id)}
-                                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-white text-xs font-medium hover:opacity-90 disabled:opacity-70 transition-opacity"
-                                  style={{ backgroundColor: TEAL }}
-                                  title="Convert to Invoice"
+                        <td className="px-6 py-3 font-medium text-gray-900">{docTypeLabel(d.type)} #{d.number}</td>
+                        <td className="px-6 py-3 text-gray-600">{d.clientName || "—"}</td>
+                        <td className="px-6 py-3 text-gray-600">{docDateIso(d)}</td>
+                        <td className="px-6 py-3 text-right font-medium text-gray-900 tabular-nums">{formatMoney(d.total || 0)}</td>
+                        <td className="px-6 py-3"><StatusBadge status={uiStatus} /></td>
+                        <td className="px-6 py-3 text-right">
+                          <div className="relative inline-flex">
+                            <button
+                              type="button"
+                              onClick={() => setOpenMenuDocId((prev) => (prev === d.id ? null : d.id))}
+                              className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+                              aria-haspopup="menu"
+                              aria-expanded={openMenuDocId === d.id}
+                              aria-label="More actions"
+                              title="More"
+                            >
+                              <MoreVertical className="w-4 h-4" />
+                            </button>
+
+                            <AnimatePresence>
+                              {openMenuDocId === d.id && (
+                                <motion.div
+                                  initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                                  exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                                  transition={{ duration: 0.15, ease: "easeOut" }}
+                                  className="absolute right-0 top-[calc(100%+0.5rem)] z-[160] w-56 rounded-xl border border-gray-100 bg-white shadow-lg p-1"
+                                  role="menu"
                                 >
-                                  {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
-                                  {locale === "he" ? "לחשבונית" : "To Invoice"}
-                                </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => { setOpenMenuDocId(null); downloadPdf(d.id); }}
+                                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-50 text-[13px] font-medium"
+                                    role="menuitem"
+                                  >
+                                    <Download className="w-4 h-4 text-gray-500" />
+                                    {locale === "he" ? "הורד PDF" : "Download PDF"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => { setOpenMenuDocId(null); handleShare(d.id); }}
+                                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-50 text-[13px] font-medium"
+                                    role="menuitem"
+                                  >
+                                    <Share2 className="w-4 h-4 text-gray-500" />
+                                    {locale === "he" ? "שתף" : "Share"}
+                                  </button>
+
+                                  {((isQuote && canConvertQuote) || (isInvoice && notCanceled)) && (
+                                    <button
+                                      type="button"
+                                      disabled={loadingDocId === d.id}
+                                      onClick={() => {
+                                        setOpenMenuDocId(null);
+                                        if (isQuote) handleConvertToInvoice(d.id);
+                                        if (isInvoice) {
+                                          // "To Receipt" as a next-step for invoices: mark paid if needed, then issue receipt
+                                          if ((d.status as string) !== "paid") {
+                                            setLoadingDocId(d.id);
+                                            setTimeout(() => {
+                                              markPaid(d.id);
+                                              if (createReceipt(d.id)) {
+                                                setActiveTab("receipts");
+                                                showSuccessToast(locale === "he" ? "קבלה נוצרה" : "Receipt issued");
+                                              }
+                                              setLoadingDocId(null);
+                                            }, 450);
+                                          } else {
+                                            handleIssueReceipt(d.id);
+                                          }
+                                        }
+                                      }}
+                                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-50 text-[13px] font-medium disabled:opacity-60"
+                                      role="menuitem"
+                                    >
+                                      {loadingDocId === d.id ? (
+                                        <Loader2 className="w-4 h-4 text-gray-500 animate-spin" />
+                                      ) : (
+                                        <FileText className="w-4 h-4 text-gray-500" />
+                                      )}
+                                      {isQuote ? (locale === "he" ? "לחשבונית" : "Convert to Invoice") : (locale === "he" ? "לקבלה" : "Convert to Receipt")}
+                                    </button>
+                                  )}
+
+                                  {canCancel && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setOpenMenuDocId(null);
+                                        isQuote ? cancelQuote(d.id) : issueCreditNote(d.id);
+                                        showSuccessToast(locale === "he" ? "המסמך בוטל" : "Document canceled");
+                                      }}
+                                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-red-600 hover:bg-red-50 text-[13px] font-medium"
+                                      role="menuitem"
+                                    >
+                                      <X className="w-4 h-4" />
+                                      {locale === "he" ? "בטל מסמך" : "Cancel Document"}
+                                    </button>
+                                  )}
+                                </motion.div>
                               )}
-                              {isInvoice && notCanceled && (d.status as string) !== "paid" && (
-                                <button
-                                  type="button"
-                                  disabled={isLoading}
-                                  onClick={() => handleMarkPaid(d.id)}
-                                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-green-600 text-white text-xs font-medium hover:opacity-90 disabled:opacity-70 transition-opacity"
-                                  title="Mark Paid"
-                                >
-                                  {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : (locale === "he" ? "שולם" : "Mark Paid")}
-                                </button>
-                              )}
-                              {isInvoice && notCanceled && (d.status as string) === "paid" && (
-                                <button
-                                  type="button"
-                                  disabled={isLoading}
-                                  onClick={() => handleIssueReceipt(d.id)}
-                                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-white text-xs font-medium hover:opacity-90 disabled:opacity-70 transition-opacity"
-                                  style={{ backgroundColor: TEAL }}
-                                  title="Issue Receipt"
-                                >
-                                  {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <><Receipt className="w-3.5 h-3.5" />{locale === "he" ? "הנפק קבלה" : "Issue Receipt"}</>}
-                                </button>
-                              )}
-                            </div>
-                            {canCancel && (
-                              <button
-                                type="button"
-                                onClick={() => { isQuote ? cancelQuote(d.id) : issueCreditNote(d.id); }}
-                                className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-red-100 text-red-400 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
-                                title={locale === "he" ? "ביטול" : "Cancel"}
-                                aria-label="Cancel"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            )}
+                            </AnimatePresence>
                           </div>
                         </td>
                       </tr>
