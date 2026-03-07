@@ -3,14 +3,34 @@
 import { useState, useRef, useCallback, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { pdfjs } from "react-pdf";
 import { ChevronLeft, Upload, Share2, User, CheckCircle, Clock, MessageCircle } from "lucide-react";
 import { useProfile } from "@/contexts/ProfileContext";
 import { useContacts } from "@/contexts/ContactsContext";
 import type { Contact } from "@/contexts/ContactsContext";
 
-if (typeof window !== "undefined") {
-  pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/legacy/build/pdf.worker.min.mjs`;
+/** Scale for PDF page rasterization; fixed dimensions so canvas is visible. */
+const PDF_PAGE_SCALE = 2;
+const PDF_PAGE_MAX_HEIGHT_PX = 1200;
+
+const PDF_WORKER_CDN = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+export type PdfPageResult = { dataUrl: string; width: number; height: number };
+
+const SIGN_DOC_STORAGE_PREFIX = "sign-doc-";
+
+/** Convert any document source to Uint8Array for stable PDF.js loading. */
+async function toUint8Array(documentUrl: string): Promise<Uint8Array> {
+  if (documentUrl.startsWith("data:")) {
+    const base64 = documentUrl.split(",")[1];
+    if (!base64) throw new Error("Invalid data URL");
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  }
+  const res = await fetch(documentUrl);
+  const buffer = await res.arrayBuffer();
+  return new Uint8Array(buffer);
 }
 
 export default function DocumentSignPage() {
@@ -35,6 +55,8 @@ interface Anchor {
   contactName?: string;
   contactId?: string;
   isLocked?: boolean;
+  /** Order of this signer (0-based); used for collision-free multi-signer flow. */
+  signerOrder?: number;
 }
 
 function nextId() {
@@ -50,32 +72,15 @@ function getSignersFromAnchors(anchors: Anchor[]): { name: string; contactId?: s
   return Array.from(byId.entries()).map(([contactId, v]) => ({ ...v, contactId }));
 }
 
-async function pdfToPageImageUrls(url: string): Promise<string[]> {
-  const doc = await pdfjs.getDocument(url).promise;
-  const numPages = doc.numPages;
-  const urls: string[] = [];
-  for (let i = 1; i <= numPages; i++) {
-    const page = await doc.getPage(i);
-    const viewport = page.getViewport({ scale: 2 });
-    const canvas = document.createElement("canvas");
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) continue;
-    await page.render({ canvasContext: ctx, viewport }).promise;
-    urls.push(canvas.toDataURL("image/png"));
-  }
-  return urls;
-}
-
 function DocumentSignPageInner() {
   const searchParams = useSearchParams();
   const { profile } = useProfile();
   const { contacts } = useContacts();
   const [documentType, setDocumentType] = useState<"image" | "pdf">("image");
   const [documentUrl, setDocumentUrl] = useState<string | null>(null);
-  const [pdfPageUrls, setPdfPageUrls] = useState<string[]>([]);
+  const [pdfPages, setPdfPages] = useState<PdfPageResult[]>([]);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
   const [anchors, setAnchors] = useState<Anchor[]>([]);
   const [menuAnchorId, setMenuAnchorId] = useState<string | null>(null);
   const [contactSearch, setContactSearch] = useState("");
@@ -83,7 +88,10 @@ function DocumentSignPageInner() {
   const [shareCopied, setShareCopied] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [useImageFallbackHint, setUseImageFallbackHint] = useState(false);
+  const [pageRenderedWidths, setPageRenderedWidths] = useState<Record<number, number>>({});
   const containerRef = useRef<HTMLDivElement>(null);
+  const pageWrapperRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
   const currentSignerId = searchParams.get("signer") ?? null;
   const signatureUrl = profile?.signatureImage ?? undefined;
@@ -95,36 +103,117 @@ function DocumentSignPageInner() {
     fetch(`/api/sign-doc?docId=${encodeURIComponent(id)}`)
       .then((r) => r.json())
       .then((data) => {
-        if (!data || data.error) {
-          setLoadError(data?.error ?? "Failed to load");
+        if (data && !data.error) {
+          setDocId(id);
+          setDocumentType(data.documentType ?? "image");
+          setAnchors(Array.isArray(data.anchors) ? data.anchors : []);
+          if (data.documentUrl) setDocumentUrl(data.documentUrl);
+          else if (data.documentType === "pdf") setLoadError("PDF document not available for viewing.");
           return;
         }
-        setDocId(id);
-        setDocumentType(data.documentType ?? "image");
-        setAnchors(Array.isArray(data.anchors) ? data.anchors : []);
-        if (data.documentUrl) {
-          setDocumentUrl(data.documentUrl);
-          if (data.documentType === "pdf") {
-            setPdfLoading(true);
-            pdfToPageImageUrls(data.documentUrl)
-              .then(setPdfPageUrls)
-              .catch(() => setPdfPageUrls([]))
-              .finally(() => setPdfLoading(false));
-          }
-        } else if (data.documentType === "pdf" && data.pdfNumPages) {
-          setLoadError("PDF document not available for viewing.");
+        if (typeof window !== "undefined") {
+          try {
+            const raw = window.localStorage.getItem(SIGN_DOC_STORAGE_PREFIX + id);
+            if (raw) {
+              const stored = JSON.parse(raw) as { documentType?: string; documentUrl?: string; anchors?: Anchor[] };
+              setDocId(id);
+              setDocumentType((stored.documentType as "image" | "pdf") ?? "image");
+              setAnchors(Array.isArray(stored.anchors) ? stored.anchors : []);
+              if (stored.documentUrl) setDocumentUrl(stored.documentUrl);
+              return;
+            }
+          } catch (_) {}
         }
+        setLoadError(data?.error ?? "Failed to load");
       })
-      .catch(() => setLoadError("Failed to fetch document"));
+      .catch(() => {
+        if (typeof window !== "undefined" && id) {
+          try {
+            const raw = window.localStorage.getItem(SIGN_DOC_STORAGE_PREFIX + id);
+            if (raw) {
+              const stored = JSON.parse(raw) as { documentType?: string; documentUrl?: string; anchors?: Anchor[] };
+              setDocId(id);
+              setDocumentType((stored.documentType as "image" | "pdf") ?? "image");
+              setAnchors(Array.isArray(stored.anchors) ? stored.anchors : []);
+              if (stored.documentUrl) setDocumentUrl(stored.documentUrl);
+              return;
+            }
+          } catch (_) {}
+        }
+        setLoadError("Failed to fetch document");
+      });
   }, [searchParams]);
 
   useEffect(() => {
     if (documentType !== "pdf" || !documentUrl) return;
+    let cancelled = false;
     setPdfLoading(true);
-    pdfToPageImageUrls(documentUrl)
-      .then(setPdfPageUrls)
-      .catch(() => setPdfPageUrls([]))
-      .finally(() => setPdfLoading(false));
+    setPdfError(null);
+
+    async function loadPdf() {
+      if (typeof window === "undefined") return;
+      try {
+        const pdfjsLib = await import("pdfjs-dist");
+        const set = (pdfjsLib as unknown as { _workerSet?: boolean })._workerSet;
+        if (!set) {
+          (pdfjsLib as unknown as { _workerSet?: boolean })._workerSet = true;
+          try {
+            const workerRes = await fetch(PDF_WORKER_CDN);
+            const workerBlob = await workerRes.blob();
+            pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(workerBlob);
+          } catch {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = PDF_WORKER_CDN;
+          }
+        }
+
+        const bytes = await toUint8Array(documentUrl);
+        if (cancelled) return;
+
+        const doc = await pdfjsLib.getDocument({ data: bytes }).promise;
+        if (cancelled) return;
+
+        const numPages = doc.numPages;
+        const results: PdfPageResult[] = [];
+
+        for (let i = 1; i <= numPages; i++) {
+          const page = await doc.getPage(i);
+          const viewport = page.getViewport({ scale: PDF_PAGE_SCALE });
+          let w = viewport.width;
+          let h = viewport.height;
+          if (h > PDF_PAGE_MAX_HEIGHT_PX) {
+            const ratio = PDF_PAGE_MAX_HEIGHT_PX / h;
+            h = PDF_PAGE_MAX_HEIGHT_PX;
+            w = w * ratio;
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.round(w);
+          canvas.height = Math.round(h);
+          const ctx = canvas.getContext("2d");
+          if (!ctx) continue;
+          const scaledViewport = page.getViewport({ scale: w / viewport.width });
+          await page.render({ canvasContext: ctx, viewport: scaledViewport, canvas }).promise;
+          results.push({
+            dataUrl: canvas.toDataURL("image/png"),
+            width: canvas.width,
+            height: canvas.height,
+          });
+        }
+        if (!cancelled) setPdfPages(results);
+      } catch (err) {
+        if (!cancelled) {
+          const message = err instanceof Error ? err.message : "PDF failed to load";
+          setPdfError(message);
+          setPdfPages([]);
+        }
+      } finally {
+        if (!cancelled) setPdfLoading(false);
+      }
+    }
+
+    loadPdf();
+    return () => {
+      cancelled = true;
+    };
   }, [documentType, documentUrl]);
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -138,7 +227,8 @@ function DocumentSignPageInner() {
     setAnchors([]);
     setMenuAnchorId(null);
     setDocId(null);
-    setPdfPageUrls([]);
+    setPdfPages([]);
+    setPdfError(null);
     if (!isPdf) setPdfLoading(false);
     setLoadError(null);
     e.target.value = "";
@@ -165,41 +255,10 @@ function DocumentSignPageInner() {
     setContactSearch("");
   }, [anchors, currentSignerId]);
 
-  const addMySignature = useCallback((anchorId: string) => {
-    if (!signatureUrl) return;
-    setAnchors((prev) =>
-      prev.map((a) =>
-        a.id === anchorId
-          ? { ...a, kind: "signature" as const, signatureUrl, isLocked: true, contactName: currentSignerId ? a.contactName : undefined, contactId: currentSignerId ? a.contactId : undefined }
-          : a
-      )
-    );
-    setMenuAnchorId(null);
-  }, [signatureUrl, currentSignerId]);
-
-  const assignContact = useCallback((anchorId: string, contact: Contact) => {
-    setAnchors((prev) =>
-      prev.map((a) =>
-        a.id === anchorId ? { ...a, kind: "contact" as const, contactName: contact.name, contactId: contact.id } : a
-      )
-    );
-    setMenuAnchorId(null);
-  }, []);
-
-  const clearDocument = useCallback(() => {
-    if (documentUrl && documentUrl.startsWith("blob:")) URL.revokeObjectURL(documentUrl);
-    setDocumentUrl(null);
-    setDocumentType("image");
-    setPdfPageUrls([]);
-    setAnchors([]);
-    setMenuAnchorId(null);
-    setDocId(null);
-    setLoadError(null);
-  }, [documentUrl]);
-
-  const saveToBackend = useCallback(async (overrideDocId?: string) => {
+  const saveToBackend = useCallback(async (overrideDocId?: string, anchorsOverride?: Anchor[]) => {
     const id = overrideDocId ?? docId;
     if (!id) return;
+    const anchorsToSave = anchorsOverride ?? anchors;
     setSaveLoading(true);
     let docUrl: string | null = null;
     if (documentUrl?.startsWith("data:")) docUrl = documentUrl;
@@ -219,24 +278,97 @@ function DocumentSignPageInner() {
     const payload = {
       docId: id,
       documentType,
-      pdfNumPages: pdfPageUrls.length || 1,
+      pdfNumPages: pdfPages.length || 1,
       documentUrl: docUrl,
-      anchors: anchors.map((a) => ({ ...a, isLocked: a.kind === "signature" })),
+      anchors: anchorsToSave.map((a) => ({ ...a, isLocked: a.kind === "signature" })),
     };
     try {
       const res = await fetch("/api/sign-doc", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "Save failed");
       if (!docId) setDocId(id);
+      if (typeof window !== "undefined") {
+        let urlForStorage = docUrl ?? documentUrl ?? null;
+        if (documentType === "pdf" && documentUrl?.startsWith("blob:")) {
+          try {
+            const r = await fetch(documentUrl);
+            const blob = await r.blob();
+            urlForStorage = await new Promise<string>((res, rej) => {
+              const reader = new FileReader();
+              reader.onload = () => res(reader.result as string);
+              reader.onerror = rej;
+              reader.readAsDataURL(blob);
+            });
+          } catch (_) {}
+        }
+        const toStore = { docId: id, documentType, pdfNumPages: pdfPages.length || 1, documentUrl: urlForStorage, anchors: anchorsToSave.map((a) => ({ ...a, isLocked: a.kind === "signature" })) };
+        try {
+          window.localStorage.setItem(SIGN_DOC_STORAGE_PREFIX + id, JSON.stringify(toStore));
+        } catch (_) {}
+      }
     } finally {
       setSaveLoading(false);
     }
-  }, [docId, documentType, documentUrl, pdfPageUrls.length, anchors]);
+  }, [docId, documentType, documentUrl, pdfPages.length, anchors]);
+
+  const addMySignature = useCallback(
+    (anchorId: string) => {
+      if (!signatureUrl) return;
+      const anchor = anchors.find((a) => a.id === anchorId);
+      if (anchor?.kind === "signature") return; // READ-ONLY: never sign over an existing signature
+      const updatedAnchors = anchors.map((a) =>
+        a.id === anchorId
+          ? { ...a, kind: "signature" as const, signatureUrl, isLocked: true, contactName: currentSignerId ? a.contactName : a.contactName, contactId: currentSignerId ? a.contactId : a.contactId }
+          : a
+      );
+      setAnchors(updatedAnchors);
+      setMenuAnchorId(null);
+      const nextDocId = docId ?? crypto.randomUUID();
+      if (!docId) setDocId(nextDocId);
+      saveToBackend(nextDocId, updatedAnchors);
+    },
+    [signatureUrl, currentSignerId, anchors, docId, saveToBackend]
+  );
+
+  const assignContact = useCallback((anchorId: string, contact: Contact) => {
+    setAnchors((prev) => {
+      const anchor = prev.find((a) => a.id === anchorId);
+      if (anchor?.kind === "signature") return prev; // READ-ONLY: never move/delete/overwrite a signature
+      const maxOrder = Math.max(-1, ...prev.map((a) => a.signerOrder ?? -1));
+      return prev.map((a) =>
+        a.id === anchorId
+          ? { ...a, kind: "contact" as const, contactName: contact.name, contactId: contact.id, signerOrder: maxOrder + 1 }
+          : a
+      );
+    });
+    setMenuAnchorId(null);
+  }, []);
+
+  const clearDocument = useCallback(() => {
+    if (documentUrl && documentUrl.startsWith("blob:")) URL.revokeObjectURL(documentUrl);
+    setDocumentUrl(null);
+    setDocumentType("image");
+    setPdfPages([]);
+    setPdfError(null);
+    setUseImageFallbackHint(false);
+    setAnchors([]);
+    setMenuAnchorId(null);
+    setDocId(null);
+    setLoadError(null);
+  }, [documentUrl]);
+
+  const fallbackToImage = useCallback(() => {
+    if (documentUrl && documentUrl.startsWith("blob:")) URL.revokeObjectURL(documentUrl);
+    setDocumentUrl(null);
+    setDocumentType("image");
+    setPdfPages([]);
+    setPdfError(null);
+    setUseImageFallbackHint(true);
+  }, [documentUrl]);
 
   const saveAndShare = useCallback(async () => {
     const id = docId ?? crypto.randomUUID();
     await saveToBackend(id);
-    if (!docId) setDocId(id);
     const signLink = typeof window !== "undefined" ? `${window.location.origin}${window.location.pathname}?doc=${id}` : "";
     if (signLink && navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(signLink);
@@ -261,12 +393,52 @@ function DocumentSignPageInner() {
     });
   }, [docId, anchors, contacts]);
 
+  /** Next tenant = first anchor that is assigned (contact) but not yet signed. Share current progress link with them via WhatsApp. */
+  const nextTenantAnchor = anchors.find((a) => a.kind === "contact" && a.contactId);
+  const shareProgressWithNextTenant = useCallback(() => {
+    if (!docId || !nextTenantAnchor?.contactId) return;
+    const progressLink = typeof window !== "undefined" ? `${window.location.origin}${window.location.pathname}?doc=${docId}&signer=${encodeURIComponent(nextTenantAnchor.contactId)}` : "";
+    const contact = contacts.find((c) => c.id === nextTenantAnchor.contactId);
+    const phone = contact?.phone?.replace(/\D/g, "") || "";
+    const text = encodeURIComponent(`Your turn to sign. Current progress: ${progressLink}`);
+    const waUrl = phone ? `https://wa.me/${phone}?text=${text}` : null;
+    if (waUrl) window.open(waUrl, "_blank");
+    else if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(progressLink);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    }
+  }, [docId, nextTenantAnchor, contacts]);
+
   const filteredContacts = contactSearch.trim()
     ? contacts.filter((c) => c.name.toLowerCase().includes(contactSearch.toLowerCase()))
     : contacts;
   const menuAnchor = menuAnchorId ? anchors.find((a) => a.id === menuAnchorId) : null;
   const signers = getSignersFromAnchors(anchors);
-  const hasDocument = documentUrl || (docId && pdfPageUrls.length > 0);
+  const hasDocument = documentUrl || (docId && pdfPages.length > 0);
+  const pdfReady = documentType === "pdf" && !pdfLoading && pdfPages.length > 0;
+
+  useEffect(() => {
+    if (!pdfReady || pdfPages.length === 0) return;
+    const refs = pageWrapperRefs.current;
+    const observers: ResizeObserver[] = [];
+    const widths: Record<number, number> = {};
+    pdfPages.forEach((_, i) => {
+      const el = refs[i];
+      if (!el) return;
+      const ro = new ResizeObserver((entries) => {
+        const entry = entries[0];
+        if (!entry) return;
+        const w = entry.contentRect.width;
+        setPageRenderedWidths((prev) => (prev[i] === w ? prev : { ...prev, [i]: w }));
+      });
+      ro.observe(el);
+      observers.push(ro);
+      widths[i] = el.getBoundingClientRect().width;
+    });
+    if (Object.keys(widths).length > 0) setPageRenderedWidths((prev) => ({ ...prev, ...widths }));
+    return () => observers.forEach((ro) => ro.disconnect());
+  }, [pdfReady, pdfPages.length]);
   const canEdit = !currentSignerId || currentSignerId === profile?.userId;
 
   const resolveAnchorLock = useCallback((a: Anchor): boolean => {
@@ -293,8 +465,8 @@ function DocumentSignPageInner() {
           <>
             <button
               type="button"
-              onClick={saveToBackend}
-              disabled={saveLoading || !docId}
+              onClick={() => saveToBackend(docId ?? crypto.randomUUID())}
+              disabled={saveLoading}
               className="text-sm font-medium px-3 py-1.5 rounded-lg disabled:opacity-50"
               style={{ color: TEAL }}
             >
@@ -318,6 +490,17 @@ function DocumentSignPageInner() {
               >
                 <MessageCircle className="w-4 h-4" />
                 Send to all signers
+              </button>
+            )}
+            {nextTenantAnchor && (
+              <button
+                type="button"
+                onClick={shareProgressWithNextTenant}
+                className="flex items-center gap-2 text-sm font-medium px-3 py-1.5 rounded-lg border border-green-600 text-green-700 bg-green-50 hover:bg-green-100"
+                title="Share current progress link with the next signer via WhatsApp"
+              >
+                <MessageCircle className="w-4 h-4" />
+                Share progress with next signer
               </button>
             )}
             <button
@@ -367,11 +550,16 @@ function DocumentSignPageInner() {
               <input
                 type="file"
                 accept="image/*,.pdf,application/pdf"
-                onChange={handleFileChange}
+                onChange={(e) => {
+                  setUseImageFallbackHint(false);
+                  handleFileChange(e);
+                }}
                 className="hidden"
               />
               <Upload className="w-12 h-12 mb-4" style={{ color: TEAL }} />
-              <span className="text-base font-medium text-gray-700">Upload image or PDF</span>
+              <span className="text-base font-medium text-gray-700">
+                {useImageFallbackHint ? "PDF could not be loaded. Upload an image (e.g. screenshot) of the document." : "Upload image or PDF"}
+              </span>
             </label>
           ) : documentType === "image" && documentUrl ? (
             <div ref={containerRef} className="relative inline-block cursor-crosshair" onClick={canEdit ? handleContainerClick : undefined}>
@@ -401,26 +589,62 @@ function DocumentSignPageInner() {
                 />
               )}
             </div>
-          ) : documentType === "pdf" && (documentUrl || pdfPageUrls.length > 0) ? (
+          ) : documentType === "pdf" && (documentUrl || pdfPages.length > 0) ? (
             <div ref={containerRef} className="relative cursor-crosshair" onClick={canEdit ? handleContainerClick : undefined}>
-              {pdfLoading ? (
-                <p className="text-gray-500 py-8">Rendering PDF…</p>
-              ) : (
-                pdfPageUrls.map((pageUrl, i) => (
-                  <div key={i} data-page-index={i} className="relative mb-4">
-                    <img src={pageUrl} alt={`Page ${i + 1}`} className="max-h-[85vh] w-auto block pointer-events-none" />
-                    {anchors
-                      .filter((a) => a.pageIndex === i)
-                      .map((a) => (
-                        <AnchorBox
-                          key={a.id}
-                          anchor={a}
-                          locked={resolveAnchorLock(a)}
-                          label={resolveAnchorLabel(a)}
-                          onAnchorClick={handleAnchorClick}
-                          canEdit={canEdit}
-                        />
-                      ))}
+              {pdfLoading && (
+                <div className="min-h-[200px] flex flex-col items-center justify-center py-12">
+                  <p className="text-gray-500">Rendering PDF…</p>
+                </div>
+              )}
+              {pdfError && !pdfLoading && (
+                <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-red-800 text-sm max-w-md space-y-3">
+                  <p className="font-medium">PDF failed to load</p>
+                  <p className="mt-1">{pdfError}</p>
+                  <p className="text-xs text-red-600">Try uploading again or use a different PDF. If the problem continues, use an image (e.g. screenshot) instead.</p>
+                  <button
+                    type="button"
+                    onClick={fallbackToImage}
+                    className="w-full py-2.5 px-4 rounded-lg font-medium bg-white border-2 border-teal-500 text-teal-700 hover:bg-teal-50 transition-colors"
+                    style={{ borderColor: TEAL, color: TEAL }}
+                  >
+                    Use Image instead
+                  </button>
+                </div>
+              )}
+              {pdfReady &&
+                pdfPages.map((page, i) => {
+                  const renderedW = pageRenderedWidths[i];
+                  const scaleFactor = renderedW != null && page.width > 0 ? renderedW / page.width : 1;
+                  return (
+                    <div
+                      key={i}
+                      ref={(el) => {
+                        pageWrapperRefs.current[i] = el;
+                      }}
+                      data-page-index={i}
+                      className="relative mb-4 inline-block max-w-full min-h-[120px]"
+                    >
+                      <img
+                        src={page.dataUrl}
+                        alt={`Page ${i + 1}`}
+                        width={page.width}
+                        height={page.height}
+                        className="block w-full h-auto max-h-[85vh] object-contain pointer-events-none"
+                        style={{ maxWidth: "100%", maxHeight: "85vh" }}
+                      />
+                      {anchors
+                        .filter((a) => a.pageIndex === i)
+                        .map((a) => (
+                          <AnchorBox
+                            key={a.id}
+                            anchor={a}
+                            locked={resolveAnchorLock(a)}
+                            label={resolveAnchorLabel(a)}
+                            onAnchorClick={handleAnchorClick}
+                            canEdit={canEdit}
+                            scaleFactor={scaleFactor}
+                          />
+                        ))}
                     {menuAnchor && menuAnchor.pageIndex === i && canEdit && (
                       <AnchorMenu
                         menuAnchor={menuAnchor}
@@ -434,8 +658,8 @@ function DocumentSignPageInner() {
                       />
                     )}
                   </div>
-                ))
-              )}
+                  );
+                })}
             </div>
           ) : null}
         </main>
@@ -450,29 +674,55 @@ function AnchorBox({
   label,
   onAnchorClick,
   canEdit,
+  scaleFactor = 1,
 }: {
   anchor: Anchor;
   locked: boolean;
   label: string;
   onAnchorClick: (e: React.MouseEvent, id: string) => void;
   canEdit: boolean;
+  scaleFactor?: number;
 }) {
   const isOpen = anchor.kind === "placeholder";
   const isAssigned = anchor.kind === "contact";
   const isCompleted = anchor.kind === "signature";
+  const isBurnedSignature = isCompleted && anchor.signatureUrl;
+
+  if (isBurnedSignature) {
+    return (
+      <div
+        data-anchor
+        data-signature-burned
+        className="absolute z-10 flex items-center justify-center origin-center pointer-events-none select-none"
+        style={{
+          left: `${anchor.x}%`,
+          top: `${anchor.y}%`,
+          transform: `translate(-50%, -50%) scale(${scaleFactor})`,
+        }}
+        aria-hidden
+      >
+        <img
+          src={anchor.signatureUrl}
+          alt=""
+          role="presentation"
+          className="max-w-[140px] max-h-10 w-auto h-auto object-contain bg-transparent"
+        />
+      </div>
+    );
+  }
 
   return (
     <div
       data-anchor
       onClick={(e) => canEdit && !locked && onAnchorClick(e, anchor.id)}
-      className={`absolute z-10 flex items-center justify-center rounded border-2 select-none min-w-[6rem] min-h-[2.25rem] ${
+      className={`absolute z-10 flex items-center justify-center rounded border-2 select-none min-w-[6rem] min-h-[2.25rem] origin-center ${
         locked ? "cursor-default pointer-events-none" : "cursor-pointer"
       }`}
       style={{
         pointerEvents: locked ? "none" : "auto",
         left: `${anchor.x}%`,
         top: `${anchor.y}%`,
-        transform: "translate(-50%, -50%)",
+        transform: `translate(-50%, -50%) scale(${scaleFactor})`,
         ...(isOpen && !locked && {
           borderColor: "#ef4444",
           backgroundColor: "rgba(239, 68, 68, 0.25)",
@@ -488,9 +738,6 @@ function AnchorBox({
     >
       {isOpen && <span className="text-xs font-medium px-2">{label || "Sign Here"}</span>}
       {isAssigned && <span className="text-xs font-medium px-2 truncate max-w-[140px]">{label}</span>}
-      {isCompleted && anchor.signatureUrl && (
-        <img src={anchor.signatureUrl} alt="Signature" className="max-w-[140px] max-h-10 w-auto h-auto object-contain bg-transparent" />
-      )}
     </div>
   );
 }
