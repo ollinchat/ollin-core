@@ -3,10 +3,8 @@
 import { useState, useRef, useCallback, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Document, Page, pdfjs } from "react-pdf";
-import "react-pdf/dist/Page/AnnotationLayer.css";
-import "react-pdf/dist/Page/TextLayer.css";
-import { ChevronLeft, Upload, Share2, User, CheckCircle, Clock } from "lucide-react";
+import { pdfjs } from "react-pdf";
+import { ChevronLeft, Upload, Share2, User, CheckCircle, Clock, MessageCircle } from "lucide-react";
 import { useProfile } from "@/contexts/ProfileContext";
 import { useContacts } from "@/contexts/ContactsContext";
 import type { Contact } from "@/contexts/ContactsContext";
@@ -24,7 +22,6 @@ export default function DocumentSignPage() {
 }
 
 const TEAL = "#14b8a6";
-const STORAGE_PREFIX = "sign_doc_";
 
 type AnchorKind = "placeholder" | "contact" | "signature";
 
@@ -40,24 +37,35 @@ interface Anchor {
   isLocked?: boolean;
 }
 
-interface SavedDoc {
-  documentType: "image" | "pdf";
-  documentUrl: string;
-  pdfNumPages?: number;
-  anchors: Anchor[];
-}
-
 function nextId() {
   return "a-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
 }
 
-function getSignersFromAnchors(anchors: Anchor[]): { name: string; status: "Pending" | "Signed" }[] {
-  const byName = new Map<string, "Pending" | "Signed">();
+function getSignersFromAnchors(anchors: Anchor[]): { name: string; contactId?: string; status: "Pending" | "Signed" }[] {
+  const byId = new Map<string, { name: string; status: "Pending" | "Signed" }>();
   anchors.forEach((a) => {
-    if (a.kind === "contact") byName.set(a.contactName ?? a.id, "Pending");
-    if (a.kind === "signature" && a.contactName) byName.set(a.contactName, "Signed");
+    if (a.kind === "contact") byId.set(a.contactId ?? a.id, { name: a.contactName ?? "Unknown", status: "Pending" });
+    if (a.kind === "signature" && a.contactId) byId.set(a.contactId, { name: a.contactName ?? "Unknown", status: "Signed" });
   });
-  return Array.from(byName.entries()).map(([name, status]) => ({ name, status }));
+  return Array.from(byId.entries()).map(([contactId, v]) => ({ ...v, contactId }));
+}
+
+async function pdfToPageImageUrls(url: string): Promise<string[]> {
+  const doc = await pdfjs.getDocument(url).promise;
+  const numPages = doc.numPages;
+  const urls: string[] = [];
+  for (let i = 1; i <= numPages; i++) {
+    const page = await doc.getPage(i);
+    const viewport = page.getViewport({ scale: 2 });
+    const canvas = document.createElement("canvas");
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) continue;
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    urls.push(canvas.toDataURL("image/png"));
+  }
+  return urls;
 }
 
 function DocumentSignPageInner() {
@@ -66,36 +74,63 @@ function DocumentSignPageInner() {
   const { contacts } = useContacts();
   const [documentType, setDocumentType] = useState<"image" | "pdf">("image");
   const [documentUrl, setDocumentUrl] = useState<string | null>(null);
-  const [pdfNumPages, setPdfNumPages] = useState<number>(0);
+  const [pdfPageUrls, setPdfPageUrls] = useState<string[]>([]);
+  const [pdfLoading, setPdfLoading] = useState(false);
   const [anchors, setAnchors] = useState<Anchor[]>([]);
   const [menuAnchorId, setMenuAnchorId] = useState<string | null>(null);
   const [contactSearch, setContactSearch] = useState("");
   const [docId, setDocId] = useState<string | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
+  const [saveLoading, setSaveLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
 
+  const currentSignerId = searchParams.get("signer") ?? null;
   const signatureUrl = profile?.signatureImage ?? undefined;
 
   useEffect(() => {
     const id = searchParams.get("doc");
     if (!id) return;
-    try {
-      const raw = typeof window !== "undefined" ? localStorage.getItem(STORAGE_PREFIX + id) : null;
-      if (!raw) return;
-      const saved: SavedDoc = JSON.parse(raw);
-      setDocumentType(saved.documentType);
-      setDocumentUrl(saved.documentUrl);
-      setPdfNumPages(saved.pdfNumPages ?? 1);
-      setAnchors(saved.anchors ?? []);
-      setDocId(id);
-    } catch (_) {}
+    setLoadError(null);
+    fetch(`/api/sign-doc?docId=${encodeURIComponent(id)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data || data.error) {
+          setLoadError(data?.error ?? "Failed to load");
+          return;
+        }
+        setDocId(id);
+        setDocumentType(data.documentType ?? "image");
+        setAnchors(Array.isArray(data.anchors) ? data.anchors : []);
+        if (data.documentUrl) {
+          setDocumentUrl(data.documentUrl);
+          if (data.documentType === "pdf") {
+            setPdfLoading(true);
+            pdfToPageImageUrls(data.documentUrl)
+              .then(setPdfPageUrls)
+              .catch(() => setPdfPageUrls([]))
+              .finally(() => setPdfLoading(false));
+          }
+        } else if (data.documentType === "pdf" && data.pdfNumPages) {
+          setLoadError("PDF document not available for viewing.");
+        }
+      })
+      .catch(() => setLoadError("Failed to fetch document"));
   }, [searchParams]);
+
+  useEffect(() => {
+    if (documentType !== "pdf" || !documentUrl) return;
+    setPdfLoading(true);
+    pdfToPageImageUrls(documentUrl)
+      .then(setPdfPageUrls)
+      .catch(() => setPdfPageUrls([]))
+      .finally(() => setPdfLoading(false));
+  }, [documentType, documentUrl]);
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (documentUrl) URL.revokeObjectURL(documentUrl);
+    if (documentUrl && documentUrl.startsWith("blob:")) URL.revokeObjectURL(documentUrl);
     const url = URL.createObjectURL(file);
     const isPdf = file.type === "application/pdf";
     setDocumentType(isPdf ? "pdf" : "image");
@@ -103,13 +138,11 @@ function DocumentSignPageInner() {
     setAnchors([]);
     setMenuAnchorId(null);
     setDocId(null);
-    if (!isPdf) setPdfNumPages(0);
+    setPdfPageUrls([]);
+    if (!isPdf) setPdfLoading(false);
+    setLoadError(null);
     e.target.value = "";
   }, [documentUrl]);
-
-  const onPdfLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
-    setPdfNumPages(numPages);
-  }, []);
 
   const handleContainerClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
@@ -127,67 +160,127 @@ function DocumentSignPageInner() {
     e.stopPropagation();
     const a = anchors.find((x) => x.id === id);
     if (a?.isLocked) return;
+    if (a?.kind === "contact" && currentSignerId && a.contactId !== currentSignerId) return;
     setMenuAnchorId((prev) => (prev === id ? null : id));
     setContactSearch("");
-  }, [anchors]);
+  }, [anchors, currentSignerId]);
 
   const addMySignature = useCallback((anchorId: string) => {
     if (!signatureUrl) return;
     setAnchors((prev) =>
-      prev.map((a) => (a.id === anchorId ? { ...a, kind: "signature" as const, signatureUrl, isLocked: false } : a))
+      prev.map((a) =>
+        a.id === anchorId
+          ? { ...a, kind: "signature" as const, signatureUrl, isLocked: true, contactName: currentSignerId ? a.contactName : undefined, contactId: currentSignerId ? a.contactId : undefined }
+          : a
+      )
     );
     setMenuAnchorId(null);
-  }, [signatureUrl]);
+  }, [signatureUrl, currentSignerId]);
 
   const assignContact = useCallback((anchorId: string, contact: Contact) => {
     setAnchors((prev) =>
       prev.map((a) =>
-        a.id === anchorId
-          ? { ...a, kind: "contact" as const, contactName: contact.name, contactId: contact.id }
-          : a
+        a.id === anchorId ? { ...a, kind: "contact" as const, contactName: contact.name, contactId: contact.id } : a
       )
     );
     setMenuAnchorId(null);
   }, []);
 
   const clearDocument = useCallback(() => {
-    if (documentUrl) URL.revokeObjectURL(documentUrl);
+    if (documentUrl && documentUrl.startsWith("blob:")) URL.revokeObjectURL(documentUrl);
     setDocumentUrl(null);
     setDocumentType("image");
-    setPdfNumPages(0);
+    setPdfPageUrls([]);
     setAnchors([]);
     setMenuAnchorId(null);
     setDocId(null);
+    setLoadError(null);
   }, [documentUrl]);
 
-  const saveAndShare = useCallback(() => {
-    if (!documentUrl) return;
-    const id = docId ?? crypto.randomUUID();
-    const saved: SavedDoc = {
+  const saveToBackend = useCallback(async (overrideDocId?: string) => {
+    const id = overrideDocId ?? docId;
+    if (!id) return;
+    setSaveLoading(true);
+    let docUrl: string | null = null;
+    if (documentUrl?.startsWith("data:")) docUrl = documentUrl;
+    else if (documentUrl?.startsWith("blob:") && documentType === "image") {
+      try {
+        const r = await fetch(documentUrl);
+        const blob = await r.blob();
+        const dataUrl = await new Promise<string>((res, rej) => {
+          const reader = new FileReader();
+          reader.onload = () => res(reader.result as string);
+          reader.onerror = rej;
+          reader.readAsDataURL(blob);
+        });
+        docUrl = dataUrl;
+      } catch (_) {}
+    }
+    const payload = {
+      docId: id,
       documentType,
-      documentUrl,
-      pdfNumPages: documentType === "pdf" ? pdfNumPages : undefined,
+      pdfNumPages: pdfPageUrls.length || 1,
+      documentUrl: docUrl,
       anchors: anchors.map((a) => ({ ...a, isLocked: a.kind === "signature" })),
     };
     try {
-      localStorage.setItem(STORAGE_PREFIX + id, JSON.stringify(saved));
-    } catch (_) {
-      return;
+      const res = await fetch("/api/sign-doc", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "Save failed");
+      if (!docId) setDocId(id);
+    } finally {
+      setSaveLoading(false);
     }
-    setDocId(id);
-    const url = typeof window !== "undefined" ? `${window.location.origin}${window.location.pathname}?doc=${id}` : "";
-    if (url && navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(url);
+  }, [docId, documentType, documentUrl, pdfPageUrls.length, anchors]);
+
+  const saveAndShare = useCallback(async () => {
+    const id = docId ?? crypto.randomUUID();
+    await saveToBackend(id);
+    if (!docId) setDocId(id);
+    const signLink = typeof window !== "undefined" ? `${window.location.origin}${window.location.pathname}?doc=${id}` : "";
+    if (signLink && navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(signLink);
       setShareCopied(true);
       setTimeout(() => setShareCopied(false), 2000);
     }
-  }, [documentUrl, documentType, pdfNumPages, anchors, docId]);
+  }, [docId, saveToBackend]);
+
+  const sendToAllSigners = useCallback(() => {
+    if (!docId) return;
+    const baseUrl = typeof window !== "undefined" ? `${window.location.origin}${window.location.pathname}?doc=${docId}` : "";
+    const assigned = anchors.filter((a) => a.kind === "contact" && a.contactId);
+    assigned.forEach((a, i) => {
+      const contact = contacts.find((c) => c.id === a.contactId);
+      const signLink = `${baseUrl}&signer=${encodeURIComponent(a.contactId!)}`;
+      const phone = contact?.phone?.replace(/\D/g, "") || "";
+      const text = encodeURIComponent(`Please sign this document: ${signLink}`);
+      const waUrl = phone ? `https://wa.me/${phone}?text=${text}` : null;
+      setTimeout(() => {
+        if (waUrl) window.open(waUrl, "_blank");
+      }, i * 800);
+    });
+  }, [docId, anchors, contacts]);
 
   const filteredContacts = contactSearch.trim()
     ? contacts.filter((c) => c.name.toLowerCase().includes(contactSearch.toLowerCase()))
     : contacts;
   const menuAnchor = menuAnchorId ? anchors.find((a) => a.id === menuAnchorId) : null;
   const signers = getSignersFromAnchors(anchors);
+  const hasDocument = documentUrl || (docId && pdfPageUrls.length > 0);
+  const canEdit = !currentSignerId || currentSignerId === profile?.userId;
+
+  const resolveAnchorLock = useCallback((a: Anchor): boolean => {
+    if (a.kind === "signature") return true;
+    if (a.kind === "contact" && currentSignerId) return a.contactId !== currentSignerId;
+    return a.isLocked ?? false;
+  }, [currentSignerId]);
+
+  const resolveAnchorLabel = useCallback((a: Anchor): string => {
+    if (a.kind === "placeholder") return "Sign Here";
+    if (a.kind === "signature") return "";
+    if (a.kind === "contact" && currentSignerId && a.contactId !== currentSignerId) return `Pending - ${a.contactName ?? ""}`;
+    return a.contactName ?? "";
+  }, [currentSignerId]);
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-100">
@@ -196,17 +289,37 @@ function DocumentSignPageInner() {
           <ChevronLeft className="w-5 h-5" />
         </Link>
         <h1 className="flex-1 text-lg font-semibold text-gray-900">Sign document</h1>
-        {documentUrl && (
+        {hasDocument && (
           <>
             <button
               type="button"
+              onClick={saveToBackend}
+              disabled={saveLoading || !docId}
+              className="text-sm font-medium px-3 py-1.5 rounded-lg disabled:opacity-50"
+              style={{ color: TEAL }}
+            >
+              {saveLoading ? "Saving…" : "Save"}
+            </button>
+            <button
+              type="button"
               onClick={saveAndShare}
+              disabled={saveLoading}
               className="flex items-center gap-2 text-sm font-medium px-3 py-1.5 rounded-lg"
               style={{ color: TEAL }}
             >
               <Share2 className="w-4 h-4" />
               {shareCopied ? "Copied!" : "Save & Share"}
             </button>
+            {signers.length > 0 && (
+              <button
+                type="button"
+                onClick={sendToAllSigners}
+                className="flex items-center gap-2 text-sm font-medium px-3 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700"
+              >
+                <MessageCircle className="w-4 h-4" />
+                Send to all signers
+              </button>
+            )}
             <button
               type="button"
               onClick={clearDocument}
@@ -219,12 +332,12 @@ function DocumentSignPageInner() {
       </header>
 
       <div className="flex-1 min-h-0 flex overflow-hidden">
-        {documentUrl && signers.length > 0 && (
+        {hasDocument && signers.length > 0 && (
           <aside className="w-56 flex-shrink-0 border-r border-gray-200 bg-white p-4 overflow-y-auto">
             <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Signers</h2>
             <ul className="space-y-2">
               {signers.map((s) => (
-                <li key={s.name} className="flex items-center gap-2 text-sm">
+                <li key={s.contactId ?? s.name} className="flex items-center gap-2 text-sm">
                   {s.status === "Signed" ? (
                     <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
                   ) : (
@@ -241,7 +354,12 @@ function DocumentSignPageInner() {
         )}
 
         <main className="flex-1 min-h-0 flex flex-col items-center justify-center p-4 overflow-auto">
-          {!documentUrl ? (
+          {loadError && (
+            <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-amber-800 text-sm mb-4">
+              {loadError}
+            </div>
+          )}
+          {!hasDocument && !loadError ? (
             <label
               className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed py-16 px-8 cursor-pointer"
               style={{ borderColor: TEAL, backgroundColor: "rgba(20, 184, 166, 0.06)" }}
@@ -255,25 +373,22 @@ function DocumentSignPageInner() {
               <Upload className="w-12 h-12 mb-4" style={{ color: TEAL }} />
               <span className="text-base font-medium text-gray-700">Upload image or PDF</span>
             </label>
-          ) : documentType === "image" ? (
-            <div
-              ref={containerRef}
-              className="relative inline-block cursor-crosshair"
-              onClick={handleContainerClick}
-            >
-              <div ref={(el) => { pageRefs.current[0] = el; }} data-page-index={0} className="relative">
-                <img
-                  src={documentUrl}
-                  alt="Document"
-                  className="max-h-[85vh] w-auto block pointer-events-none"
-                />
-                {anchors
-                  .filter((a) => a.pageIndex === 0)
-                  .map((a) => (
-                    <AnchorBox key={a.id} anchor={a} onAnchorClick={handleAnchorClick} />
-                  ))}
+          ) : documentType === "image" && documentUrl ? (
+            <div ref={containerRef} className="relative inline-block cursor-crosshair" onClick={canEdit ? handleContainerClick : undefined}>
+              <div data-page-index={0} className="relative">
+                <img src={documentUrl} alt="Document" className="max-h-[85vh] w-auto block pointer-events-none" />
+                {anchors.filter((a) => a.pageIndex === 0).map((a) => (
+                  <AnchorBox
+                    key={a.id}
+                    anchor={a}
+                    locked={resolveAnchorLock(a)}
+                    label={resolveAnchorLabel(a)}
+                    onAnchorClick={handleAnchorClick}
+                    canEdit={canEdit}
+                  />
+                ))}
               </div>
-              {menuAnchor && menuAnchor.pageIndex === 0 && (
+              {menuAnchor && menuAnchor.pageIndex === 0 && canEdit && (
                 <AnchorMenu
                   menuAnchor={menuAnchor}
                   signatureUrl={signatureUrl}
@@ -282,30 +397,31 @@ function DocumentSignPageInner() {
                   filteredContacts={filteredContacts}
                   addMySignature={addMySignature}
                   assignContact={assignContact}
+                  currentSignerId={currentSignerId}
                 />
               )}
             </div>
-          ) : (
-            <div
-              ref={containerRef}
-              className="relative cursor-crosshair"
-              onClick={handleContainerClick}
-            >
-              <Document file={documentUrl} onLoadSuccess={onPdfLoadSuccess} className="flex flex-col gap-4">
-                {Array.from({ length: pdfNumPages }, (_, i) => (
-                  <div
-                    key={i}
-                    ref={(el) => { pageRefs.current[i] = el; }}
-                    data-page-index={i}
-                    className="relative bg-white"
-                  >
-                    <Page pageNumber={i + 1} width={Math.min(600, typeof window !== "undefined" ? window.innerWidth - 48 : 600)} />
+          ) : documentType === "pdf" && (documentUrl || pdfPageUrls.length > 0) ? (
+            <div ref={containerRef} className="relative cursor-crosshair" onClick={canEdit ? handleContainerClick : undefined}>
+              {pdfLoading ? (
+                <p className="text-gray-500 py-8">Rendering PDF…</p>
+              ) : (
+                pdfPageUrls.map((pageUrl, i) => (
+                  <div key={i} data-page-index={i} className="relative mb-4">
+                    <img src={pageUrl} alt={`Page ${i + 1}`} className="max-h-[85vh] w-auto block pointer-events-none" />
                     {anchors
                       .filter((a) => a.pageIndex === i)
                       .map((a) => (
-                        <AnchorBox key={a.id} anchor={a} onAnchorClick={handleAnchorClick} />
+                        <AnchorBox
+                          key={a.id}
+                          anchor={a}
+                          locked={resolveAnchorLock(a)}
+                          label={resolveAnchorLabel(a)}
+                          onAnchorClick={handleAnchorClick}
+                          canEdit={canEdit}
+                        />
                       ))}
-                    {menuAnchor && menuAnchor.pageIndex === i && (
+                    {menuAnchor && menuAnchor.pageIndex === i && canEdit && (
                       <AnchorMenu
                         menuAnchor={menuAnchor}
                         signatureUrl={signatureUrl}
@@ -314,13 +430,14 @@ function DocumentSignPageInner() {
                         filteredContacts={filteredContacts}
                         addMySignature={addMySignature}
                         assignContact={assignContact}
+                        currentSignerId={currentSignerId}
                       />
                     )}
                   </div>
-                ))}
-              </Document>
+                ))
+              )}
             </div>
-          )}
+          ) : null}
         </main>
       </div>
     </div>
@@ -329,20 +446,25 @@ function DocumentSignPageInner() {
 
 function AnchorBox({
   anchor,
+  locked,
+  label,
   onAnchorClick,
+  canEdit,
 }: {
   anchor: Anchor;
+  locked: boolean;
+  label: string;
   onAnchorClick: (e: React.MouseEvent, id: string) => void;
+  canEdit: boolean;
 }) {
   const isOpen = anchor.kind === "placeholder";
   const isAssigned = anchor.kind === "contact";
   const isCompleted = anchor.kind === "signature";
-  const locked = anchor.isLocked;
 
   return (
     <div
       data-anchor
-      onClick={(e) => onAnchorClick(e, anchor.id)}
+      onClick={(e) => canEdit && !locked && onAnchorClick(e, anchor.id)}
       className={`absolute z-10 flex items-center justify-center rounded border-2 select-none min-w-[6rem] min-h-[2.25rem] ${
         locked ? "cursor-default pointer-events-none" : "cursor-pointer"
       }`}
@@ -351,29 +473,23 @@ function AnchorBox({
         left: `${anchor.x}%`,
         top: `${anchor.y}%`,
         transform: "translate(-50%, -50%)",
-        ...(isOpen && {
+        ...(isOpen && !locked && {
           borderColor: "#ef4444",
           backgroundColor: "rgba(239, 68, 68, 0.25)",
           color: "#b91c1c",
         }),
-        ...(isAssigned && {
+        ...((isAssigned || (isCompleted && label)) && {
           borderColor: "#3b82f6",
           backgroundColor: "rgba(59, 130, 246, 0.2)",
           color: "#1e40af",
         }),
-        ...(isCompleted && { borderColor: "transparent", backgroundColor: "transparent" }),
+        ...(isCompleted && !label && { borderColor: "transparent", backgroundColor: "transparent" }),
       }}
     >
-      {isOpen && <span className="text-xs font-medium px-2">Sign Here</span>}
-      {isAssigned && (
-        <span className="text-xs font-medium px-2 truncate max-w-[120px]">{anchor.contactName}</span>
-      )}
+      {isOpen && <span className="text-xs font-medium px-2">{label || "Sign Here"}</span>}
+      {isAssigned && <span className="text-xs font-medium px-2 truncate max-w-[140px]">{label}</span>}
       {isCompleted && anchor.signatureUrl && (
-        <img
-          src={anchor.signatureUrl}
-          alt="Signature"
-          className="max-w-[140px] max-h-10 w-auto h-auto object-contain bg-transparent"
-        />
+        <img src={anchor.signatureUrl} alt="Signature" className="max-w-[140px] max-h-10 w-auto h-auto object-contain bg-transparent" />
       )}
     </div>
   );
@@ -387,6 +503,7 @@ function AnchorMenu({
   filteredContacts,
   addMySignature,
   assignContact,
+  currentSignerId,
 }: {
   menuAnchor: Anchor;
   signatureUrl: string | undefined;
@@ -395,7 +512,9 @@ function AnchorMenu({
   filteredContacts: Contact[];
   addMySignature: (id: string) => void;
   assignContact: (id: string, c: Contact) => void;
+  currentSignerId: string | null;
 }) {
+  const showSign = !currentSignerId || menuAnchor.contactId === currentSignerId;
   return (
     <div
       data-menu
@@ -407,15 +526,19 @@ function AnchorMenu({
       }}
       onClick={(e) => e.stopPropagation()}
     >
-      <button
-        type="button"
-        onClick={() => addMySignature(menuAnchor.id)}
-        disabled={!signatureUrl}
-        className="w-full px-4 py-2.5 text-left text-sm font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50 flex items-center gap-2"
-      >
-        Add My Signature
-      </button>
-      <div className="border-t border-gray-100 my-2" />
+      {showSign && (
+        <>
+          <button
+            type="button"
+            onClick={() => addMySignature(menuAnchor.id)}
+            disabled={!signatureUrl}
+            className="w-full px-4 py-2.5 text-left text-sm font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50 flex items-center gap-2"
+          >
+            Add My Signature
+          </button>
+          <div className="border-t border-gray-100 my-2" />
+        </>
+      )}
       <div className="px-3 pb-2">
         <p className="text-xs text-gray-500 mb-1">Assign Contact</p>
         <input
