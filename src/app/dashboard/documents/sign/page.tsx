@@ -78,34 +78,41 @@ function HotspotBox({
   );
 }
 
-export default function DocumentSignPage() {
+function DocumentSigner() {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewType, setPreviewType] = useState<"image" | "pdf" | null>(null);
   const [hotspots, setHotspots] = useState<Hotspot[]>([]);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const previewUrlRef = useRef<string | null>(null);
 
   const clearPreview = useCallback(() => {
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
     setPreviewUrl(null);
     setPreviewType(null);
     setFile(null);
     setHotspots([]);
-  }, [previewUrl]);
+  }, []);
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    const isPdf = f.type === "application/pdf";
-    const url = URL.createObjectURL(f);
-    setFile(f);
-    setPreviewUrl(url);
-    setPreviewType(isPdf ? "pdf" : "image");
+    const selectedFile = e.target.files?.[0];
+    if (!selectedFile) return;
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
+    const url = URL.createObjectURL(selectedFile);
+    previewUrlRef.current = url;
+    setFile(selectedFile);
+    setPreviewType(selectedFile.type === "application/pdf" ? "pdf" : "image");
     setHotspots([]);
-    console.log("File uploaded:", f);
+    setPreviewUrl(url);
+    console.log("File uploaded:", selectedFile);
     e.target.value = "";
-  }, [previewUrl]);
+  }, []);
 
   const handleOverlayClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const el = wrapperRef.current;
@@ -140,8 +147,8 @@ export default function DocumentSignPage() {
         </h1>
       </header>
 
-      <main className="flex-1 flex flex-col p-4 max-w-4xl mx-auto w-full min-h-0">
-        {!file && !previewUrl ? (
+      <main className="flex-1 flex flex-col p-4 max-w-4xl mx-auto w-full min-h-0" key={previewUrl ?? "upload"}>
+        {!previewUrl && (
           <label className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-teal-200 bg-teal-50/50 py-12 px-6 cursor-pointer hover:bg-teal-50 hover:border-teal-300 transition-colors">
             <input
               type="file"
@@ -158,7 +165,9 @@ export default function DocumentSignPage() {
             <span className="text-base font-semibold text-gray-800">Upload / Scan document</span>
             <span className="text-sm text-gray-500 mt-1">PDF, JPG or PNG</span>
           </label>
-        ) : (
+        )}
+
+        {previewUrl && (
           <>
             <div className="flex items-center justify-between gap-2 mb-4 flex-shrink-0">
               <p className="text-sm text-gray-600 truncate flex-1 min-w-0">{file?.name ?? "Document"}</p>
@@ -174,12 +183,14 @@ export default function DocumentSignPage() {
 
             <div className="flex-1 min-h-[300px] rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm flex flex-col">
               <div className="flex-1 min-h-[280px] overflow-auto p-4">
-                {previewType === "image" && previewUrl && (
-                  <div
-                    ref={wrapperRef}
-                    className="relative inline-block min-w-full max-w-full"
-                  >
-                    <img src={previewUrl} alt="Document" className="block max-w-full h-auto" />
+                {previewType === "image" && (
+                  <div ref={wrapperRef} className="relative inline-block min-w-full max-w-full">
+                    <img
+                      src={previewUrl}
+                      alt="Document"
+                      className="block max-w-full h-auto"
+                      onLoad={() => console.log("Image loaded successfully")}
+                    />
                     <div
                       className="absolute inset-0 cursor-crosshair z-10"
                       onClick={handleOverlayClick}
@@ -199,7 +210,7 @@ export default function DocumentSignPage() {
                   </div>
                 )}
 
-                {previewType === "pdf" && previewUrl && (
+                {previewType === "pdf" && (
                   <div className="relative w-full" style={{ height: "900px" }}>
                     <iframe
                       src={previewUrl}
@@ -227,7 +238,7 @@ export default function DocumentSignPage() {
                   </div>
                 )}
 
-                {previewUrl && !previewType && (
+                {!previewType && (
                   <p className="text-sm text-gray-500 py-8 text-center">Loading preview…</p>
                 )}
               </div>
@@ -242,3 +253,5 @@ export default function DocumentSignPage() {
     </div>
   );
 }
+
+export default DocumentSigner;
