@@ -1,176 +1,104 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, Plus, Settings, Trash2, Pencil } from "lucide-react";
-import { ProfileBuilderProvider, useProfileBuilder } from "@/contexts/ProfileBuilderContext";
-import { ProfileHeader } from "@/components/profile-builder/ProfileHeader";
-import { BlockRenderer } from "@/components/profile-builder/BlockRenderer";
-import { BlockPicker } from "@/components/profile-builder/BlockPicker";
+import { ChevronLeft } from "lucide-react";
+import { BLOCK_LIBRARY } from "@/components/profile-builder/block-registry";
 
 const TEAL = "#008080";
 
-function ProfileBuilderContent() {
-  const { data, setHeader, addBlock, updateBlock, removeBlock } = useProfileBuilder();
-  const [editMode, setEditMode] = useState(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [settingsBlockId, setSettingsBlockId] = useState<string | null>(null);
+export default function ProfileBuilderPage() {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [blocks, setBlocks] = useState<{ id: string; label: string }[]>([]);
 
-  const handleCoverUpload = useCallback(
-    (file: File) => {
-      const reader = new FileReader();
-      reader.onload = () => setHeader((h) => ({ ...h, coverImage: reader.result as string }));
-      reader.readAsDataURL(file);
-    },
-    [setHeader]
-  );
-
-  const handleAvatarUpload = useCallback(
-    (file: File) => {
-      const reader = new FileReader();
-      reader.onload = () => setHeader((h) => ({ ...h, profileImage: reader.result as string }));
-      reader.readAsDataURL(file);
-    },
-    [setHeader]
-  );
-
-  const sortedBlocks = [...data.blocks].sort((a, b) => a.order - b.order);
+  const addPlaceholderBlock = (label: string) => {
+    setBlocks((prev) => [...prev, { id: crypto.randomUUID(), label }]);
+    setMenuOpen(false);
+  };
 
   return (
     <div className="min-h-screen flex flex-col max-w-2xl mx-auto bg-gray-50">
-      <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-white z-10">
+      {/* Top bar */}
+      <div className="flex-shrink-0 flex items-center px-4 py-3 border-b border-gray-100 bg-white z-10">
         <Link href="/dashboard" className="p-2 rounded-xl text-gray-500 hover:bg-gray-100 flex items-center gap-1">
           <ChevronLeft className="w-5 h-5" />
           <span className="text-sm font-medium">Back</span>
         </Link>
-        <button
-          type="button"
-          onClick={() => setEditMode((e) => !e)}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-medium"
-          style={{ backgroundColor: TEAL }}
-        >
-          <Pencil className="w-4 h-4" />
-          {editMode ? "Done" : "Edit"}
-        </button>
       </div>
 
-      <ProfileHeader
-        header={data.header}
-        editMode={editMode}
-        onCoverUpload={editMode ? handleCoverUpload : undefined}
-        onAvatarUpload={editMode ? handleAvatarUpload : undefined}
-      />
-
-      {editMode ? (
-        <section className="px-4 py-4 bg-white border-b border-gray-100 space-y-3">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500">Edit header</h3>
-          <input type="text" value={data.header.fullName} onChange={(e) => setHeader((h) => ({ ...h, fullName: e.target.value }))} placeholder="Full name" className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-gray-900" />
-          <input type="text" value={data.header.title} onChange={(e) => setHeader((h) => ({ ...h, title: e.target.value }))} placeholder="Professional title / Headline" className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-gray-900" />
-          <textarea value={data.header.bio} onChange={(e) => setHeader((h) => ({ ...h, bio: e.target.value }))} placeholder="Short bio (About me)" rows={3} className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-gray-900 resize-none" />
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <input type="text" value={data.header.whatsapp ?? ""} onChange={(e) => setHeader((h) => ({ ...h, whatsapp: e.target.value }))} placeholder="WhatsApp number" className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm" />
-            <input type="text" value={data.header.mobile ?? ""} onChange={(e) => setHeader((h) => ({ ...h, mobile: e.target.value }))} placeholder="Mobile" className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm" />
-            <input type="email" value={data.header.email ?? ""} onChange={(e) => setHeader((h) => ({ ...h, email: e.target.value }))} placeholder="Email" className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm" />
+      {/* Fixed Header: Cover + Profile Picture + Social Icons */}
+      <header className="relative w-full flex-shrink-0">
+        {/* Cover Photo */}
+        <div className="w-full h-44 sm:h-52 bg-gradient-to-br from-teal-600 to-teal-800" />
+        {/* Profile Picture - circular, overlapping cover */}
+        <div className="flex flex-col items-center -mt-16 relative z-10 pb-4">
+          <div className="w-28 h-28 rounded-full overflow-hidden bg-white border-4 border-white shadow-lg flex items-center justify-center text-4xl font-bold text-teal-600">
+            A
           </div>
-        </section>
-      ) : null}
-
-      {editMode ? (
-        <div className="px-4 py-2 bg-amber-50 border-b border-amber-100 text-amber-800 text-sm font-medium text-center">
-          Add blocks below; use the gear icon to edit block content and trash to remove.
+          <h1 className="mt-3 text-xl font-bold text-gray-900">Your Name</h1>
+          <p className="text-teal-600 font-medium text-sm">Professional Title</p>
+          {/* Social Icons row */}
+          <div className="flex items-center justify-center gap-3 mt-4">
+            <a href="#" className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 hover:bg-teal-100 hover:text-teal-600" aria-label="Instagram">IG</a>
+            <a href="#" className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 hover:bg-teal-100 hover:text-teal-600" aria-label="LinkedIn">in</a>
+            <a href="#" className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 hover:bg-teal-100 hover:text-teal-600" aria-label="Facebook">f</a>
+          </div>
         </div>
-      ) : null}
+      </header>
 
-      <main className="flex-1 px-4 py-6 space-y-6">
-        {sortedBlocks.length === 0 && !editMode ? (
-          <p className="text-gray-500 text-center py-8">No blocks yet. Turn on Edit to add blocks.</p>
-        ) : null}
-
-        {sortedBlocks.map((block, index) => (
-          <div key={block.id} className="relative group">
-            {editMode ? (
-              <div className="absolute -top-2 right-0 z-10 flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => setSettingsBlockId(settingsBlockId === block.id ? null : block.id)}
-                  className="w-8 h-8 rounded-lg bg-white border border-gray-200 shadow flex items-center justify-center text-gray-600 hover:bg-gray-50"
-                  aria-label="Block settings"
-                >
-                  <Settings className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => removeBlock(block.id)}
-                  className="w-8 h-8 rounded-lg bg-white border border-red-200 shadow flex items-center justify-center text-red-600 hover:bg-red-50"
-                  aria-label="Remove block"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            ) : null}
-            <BlockRenderer block={block} />
-            {editMode ? (
-              <div className="flex justify-center py-3">
-                <button
-                  type="button"
-                  onClick={() => setPickerOpen(true)}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-dashed border-gray-200 text-gray-500 text-sm font-medium hover:border-teal-300 hover:text-teal-600"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add block
-                </button>
-              </div>
-            ) : null}
+      {/* Placeholder cards (blocks added by user) */}
+      <main className="flex-1 px-4 py-6 space-y-4">
+        {blocks.map((b) => (
+          <div key={b.id} className="rounded-2xl border-2 border-dashed border-gray-200 bg-white p-6 text-center">
+            <p className="text-gray-500 text-sm font-medium uppercase tracking-wider">{b.label}</p>
+            <p className="text-gray-400 text-xs mt-1">Placeholder block</p>
           </div>
         ))}
-
-        {editMode && sortedBlocks.length > 0 ? (
-          <div className="flex justify-center pt-2">
-            <button
-              type="button"
-              onClick={() => setPickerOpen(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-dashed border-gray-200 text-gray-500 text-sm font-medium hover:border-teal-300 hover:text-teal-600"
-            >
-              <Plus className="w-4 h-4" />
-              Add block
-            </button>
-          </div>
-        ) : null}
-
-        {editMode && sortedBlocks.length === 0 ? (
-          <div className="flex justify-center py-8">
-            <button
-              type="button"
-              onClick={() => setPickerOpen(true)}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-white text-sm font-medium"
-              style={{ backgroundColor: TEAL }}
-            >
-              <Plus className="w-5 h-5" />
-              Add your first block
-            </button>
-          </div>
-        ) : null}
       </main>
 
-      <BlockPicker open={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={(type) => { addBlock(type); setPickerOpen(false); }} />
+      {/* Floating Add Block button - bottom center */}
+      <div className="fixed bottom-6 left-0 right-0 flex justify-center pointer-events-none z-20">
+        <div className="pointer-events-auto">
+          <button
+            type="button"
+            onClick={() => setMenuOpen(true)}
+            className="px-6 py-4 rounded-2xl text-white font-semibold shadow-lg hover:opacity-90 flex items-center gap-2"
+            style={{ backgroundColor: TEAL }}
+          >
+            Add Block
+          </button>
+        </div>
+      </div>
 
-      {settingsBlockId ? (
-        <div className="fixed inset-0 z-[210] flex items-center justify-center p-4 bg-black/50" onClick={() => setSettingsBlockId(null)}>
+      {/* Grid Menu - 9 options */}
+      {menuOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50" onClick={() => setMenuOpen(false)}>
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
-            <h3 className="font-semibold text-gray-900 mb-2">Block settings</h3>
-            <p className="text-sm text-gray-500 mb-4">Per-block editing (e.g. address text, team members, gallery images) can be implemented here. For now, block content is defined when added.</p>
-            <button type="button" onClick={() => setSettingsBlockId(null)} className="w-full py-2 rounded-xl bg-gray-100 text-gray-700 font-medium">Close</button>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4 text-center">Choose a block</h2>
+            <div className="grid grid-cols-3 gap-3">
+              {BLOCK_LIBRARY.map((meta) => {
+                const Icon = meta.icon;
+                return (
+                  <button
+                    key={meta.type}
+                    type="button"
+                    onClick={() => addPlaceholderBlock(meta.label)}
+                    className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl border border-gray-100 hover:border-teal-200 hover:bg-teal-50/50 transition-colors"
+                  >
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white" style={{ backgroundColor: TEAL }}>
+                      <Icon className="w-6 h-6" />
+                    </div>
+                    <span className="text-xs font-medium text-gray-700 text-center leading-tight">{meta.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <button type="button" onClick={() => setMenuOpen(false)} className="w-full mt-4 py-2.5 rounded-xl bg-gray-100 text-gray-700 font-medium">
+              Cancel
+            </button>
           </div>
         </div>
-      ) : null}
+      )}
     </div>
-  );
-}
-
-export default function ProfileBuilderPage() {
-  return (
-    <ProfileBuilderProvider>
-      <ProfileBuilderContent />
-    </ProfileBuilderProvider>
   );
 }
