@@ -21,8 +21,11 @@ export interface PressMediaLink {
   url: string;
 }
 
-/** Modular profile block: LinkedIn-style + Trust Engine */
-export type ProfileBlockType = "cv" | "portfolio" | "productService" | "socialBio" | "reviewsRatings" | "experience" | "banner" | "articles" | "gallery";
+/** Primary CTA for mini-site header: Chat (internal), WhatsApp, or Call */
+export type PrimaryActionType = "Chat" | "WhatsApp" | "Call";
+
+/** Modular profile block: LinkedIn-style + Trust Engine + Mini-Site 2.0 */
+export type ProfileBlockType = "cv" | "portfolio" | "productService" | "socialBio" | "reviewsRatings" | "experience" | "banner" | "articles" | "gallery" | "testimonials" | "faq" | "lead_form" | "countdown";
 
 export interface WorkExperienceItem {
   id: string;
@@ -69,6 +72,22 @@ export interface ReviewRatingItem {
   createdAt: number;
 }
 
+/** Testimonials block: name, text, stars, avatar */
+export interface TestimonialItem {
+  id: string;
+  name: string;
+  text: string;
+  stars: number;
+  avatar: string;
+}
+
+/** FAQ block: accordion items */
+export interface FAQItem {
+  id: string;
+  question: string;
+  answer: string;
+}
+
 export interface ProfileBlock {
   id: string;
   type: ProfileBlockType;
@@ -84,6 +103,10 @@ export interface ProfileBlock {
     banner?: { headline: string; subline?: string; imageUrl?: string };
     articles?: { title: string; items: ArticleLinkItem[] };
     gallery?: { title: string; imageUrls: string[] };
+    testimonials?: { items: TestimonialItem[] };
+    faq?: { faqs: FAQItem[] };
+    lead_form?: { title?: string; successMessage?: string };
+    countdown?: { target_date: string; label?: string };
   };
 }
 
@@ -112,6 +135,8 @@ export interface Profile {
   pressMedia?: PressMediaLink[];
   /** Modular blocks for personal landing page (add/remove/reorder) */
   blocks?: ProfileBlock[];
+  /** Mini-site primary CTA: Chat (internal messaging), WhatsApp, or Call */
+  primary_action_type?: PrimaryActionType;
 }
 
 export const defaultProfile: Profile = {
@@ -134,6 +159,7 @@ export const defaultProfile: Profile = {
   projects: [],
   pressMedia: [],
   blocks: [],
+  primary_action_type: undefined,
 };
 
 export function slugFromUsername(username: string): string {

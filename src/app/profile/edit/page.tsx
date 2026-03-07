@@ -34,6 +34,7 @@ import {
   Plus,
 } from "lucide-react";
 import { ModularProfileGrid, PROFILE_TEMPLATES, ADDABLE_BLOCK_TYPES } from "@/components/profile/ModularProfileGrid";
+import { BlockSettingsDrawer } from "@/components/profile/BlockSettingsDrawer";
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -192,6 +193,10 @@ export default function ProfileEditPage() {
       if (type === "banner") defaultConfig.banner = { headline: "", subline: "" };
       if (type === "articles") defaultConfig.articles = { title: "", items: [] };
       if (type === "gallery") defaultConfig.gallery = { title: "", imageUrls: [] };
+      if (type === "testimonials") defaultConfig.testimonials = { items: [] };
+      if (type === "faq") defaultConfig.faq = { faqs: [] };
+      if (type === "lead_form") defaultConfig.lead_form = { title: "Get in touch", successMessage: "Thanks! We'll be in touch soon." };
+      if (type === "countdown") defaultConfig.countdown = { target_date: new Date(Date.now() + 86400000 * 7).toISOString().slice(0, 16), label: "Countdown" };
       const newBlock: ProfileBlock = {
         id: crypto.randomUUID(),
         type,
@@ -207,6 +212,17 @@ export default function ProfileEditPage() {
   const removeBlock = useCallback(
     (id: string) => {
       updateProfile({ blocks: blocks.filter((b) => b.id !== id) });
+    },
+    [blocks, updateProfile]
+  );
+
+  const [settingsBlock, setSettingsBlock] = useState<ProfileBlock | null>(null);
+  const updateBlock = useCallback(
+    (updated: ProfileBlock) => {
+      updateProfile({
+        blocks: blocks.map((b) => (b.id === updated.id ? updated : b)),
+      });
+      setSettingsBlock(null);
     },
     [blocks, updateProfile]
   );
@@ -404,6 +420,21 @@ export default function ProfileEditPage() {
             <Phone className="w-4 h-4" />
             {t(locale, "profile.contact")}
           </h2>
+          <div className="mb-3">
+            <p className="text-xs font-medium text-gray-500 mb-2">{locale === "he" ? "כפתור ראשי במיני-אתר" : "Mini-site primary button"}</p>
+            <div className="flex gap-2">
+              {(["WhatsApp", "Call", "Chat"] as const).map((action) => (
+                <button
+                  key={action}
+                  type="button"
+                  onClick={() => updateProfile({ primary_action_type: action })}
+                  className={`px-3 py-2 rounded-xl text-sm font-medium ${profile.primary_action_type === action ? "bg-[#008080] text-white" : "border border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+                >
+                  {action}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="space-y-3">
             <Input
               label={t(locale, "profile.phone")}
@@ -710,13 +741,30 @@ export default function ProfileEditPage() {
                   {type === "productService" && (locale === "he" ? "מוצרים/שירותים" : "Product/Service")}
                   {type === "socialBio" && (locale === "he" ? "קישורים ואודות" : "Social & Bio")}
                   {type === "reviewsRatings" && (locale === "he" ? "ביקורות ודירוגים" : "Reviews & Ratings")}
+                  {type === "testimonials" && (locale === "he" ? "ממליצים" : "Testimonials")}
+                  {type === "faq" && (locale === "he" ? "שאלות נפוצות" : "FAQ")}
+                  {type === "lead_form" && (locale === "he" ? "טופס לידים" : "Lead Form")}
+                  {type === "countdown" && (locale === "he" ? "ספירה לאחור" : "Countdown")}
                 </button>
               ))}
             </div>
           </div>
           {blocks.length > 0 && (
-            <ModularProfileGrid profile={profile} locale={locale} editMode onRemoveBlock={removeBlock} />
+            <ModularProfileGrid
+              profile={profile}
+              locale={locale}
+              editMode
+              onRemoveBlock={removeBlock}
+              onOpenBlockSettings={setSettingsBlock}
+            />
           )}
+        {settingsBlock && (
+          <BlockSettingsDrawer
+            block={settingsBlock}
+            onClose={() => setSettingsBlock(null)}
+            onSave={updateBlock}
+          />
+        )}
         </section>
       </main>
     </div>

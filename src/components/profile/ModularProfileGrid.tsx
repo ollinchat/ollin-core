@@ -2,7 +2,7 @@
 
 import React from "react";
 import type { Profile, ProfileBlock, ProfileBlockType } from "@/lib/profile-types";
-import { Briefcase, Image, ShoppingBag, Link2, Star, List } from "lucide-react";
+import { Briefcase, Image, ShoppingBag, Link2, Star, List, HelpCircle, FileText, Clock, Settings } from "lucide-react";
 
 const TEAL = "#008080";
 
@@ -16,9 +16,13 @@ const BLOCK_LABELS: Record<string, { en: string; he: string; icon: typeof Briefc
   banner: { en: "Banner", he: "באנר", icon: Image },
   articles: { en: "Articles", he: "מאמרים", icon: List },
   gallery: { en: "Gallery", he: "גלריה", icon: Image },
+  testimonials: { en: "Testimonials", he: "ממליצים", icon: Star },
+  faq: { en: "FAQ", he: "שאלות נפוצות", icon: HelpCircle },
+  lead_form: { en: "Lead Form", he: "טופס לידים", icon: FileText },
+  countdown: { en: "Countdown", he: "ספירה לאחור", icon: Clock },
 };
 
-function BlockCard({ block, locale, editMode, onRemove }: { block: ProfileBlock; locale: "en" | "he"; editMode?: boolean; onRemove?: (id: string) => void }) {
+function BlockCard({ block, locale, editMode, onRemove, onOpenSettings }: { block: ProfileBlock; locale: "en" | "he"; editMode?: boolean; onRemove?: (id: string) => void; onOpenSettings?: (block: ProfileBlock) => void }) {
   const isHe = locale === "he";
   const meta = BLOCK_LABELS[block.type] ?? { en: block.type, he: block.type, icon: List };
 
@@ -107,22 +111,29 @@ function BlockCard({ block, locale, editMode, onRemove }: { block: ProfileBlock;
           <Icon className="w-4 h-4 text-[#008080]" />
           {isHe ? meta.he : meta.en}
         </span>
-        {editMode && onRemove && (
-          <button type="button" onClick={() => onRemove(block.id)} className="text-red-500 text-xs hover:underline">Remove</button>
-        )}
+        <div className="flex items-center gap-2">
+          {editMode && onOpenSettings && (
+            <button type="button" onClick={() => onOpenSettings(block)} className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-[#008080]" aria-label="Block settings">
+              <Settings className="w-4 h-4" />
+            </button>
+          )}
+          {editMode && onRemove && (
+            <button type="button" onClick={() => onRemove(block.id)} className="text-red-500 text-xs hover:underline">Remove</button>
+          )}
+        </div>
       </div>
       <div className="p-3">{content()}</div>
     </div>
   );
 }
 
-export function ModularProfileGrid({ profile, locale, editMode, onRemoveBlock }: { profile: Profile; locale: "en" | "he"; editMode?: boolean; onRemoveBlock?: (id: string) => void }) {
+export function ModularProfileGrid({ profile, locale, editMode, onRemoveBlock, onOpenBlockSettings }: { profile: Profile; locale: "en" | "he"; editMode?: boolean; onRemoveBlock?: (id: string) => void; onOpenBlockSettings?: (block: ProfileBlock) => void }) {
   const blocks = (profile.blocks ?? []).filter((b) => b.visible).sort((a, b) => a.order - b.order);
   if (blocks.length === 0 && !editMode) return null;
   return (
     <div className="grid gap-4">
       {blocks.map((block) => (
-        <BlockCard key={block.id} block={block} locale={locale} editMode={editMode} onRemove={onRemoveBlock} />
+        <BlockCard key={block.id} block={block} locale={locale} editMode={editMode} onRemove={onRemoveBlock} onOpenSettings={onOpenBlockSettings} />
       ))}
     </div>
   );
@@ -160,4 +171,4 @@ export const PROFILE_TEMPLATES: { id: string; labelEn: string; labelHe: string; 
   },
 ];
 
-export const ADDABLE_BLOCK_TYPES: ProfileBlockType[] = ["cv", "portfolio", "productService", "socialBio", "reviewsRatings"];
+export const ADDABLE_BLOCK_TYPES: ProfileBlockType[] = ["cv", "portfolio", "productService", "socialBio", "reviewsRatings", "testimonials", "faq", "lead_form", "countdown"];

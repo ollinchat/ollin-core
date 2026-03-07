@@ -2,6 +2,9 @@
  * Modular Profile Builder (Mini-Site) – types for fixed header + dynamic blocks.
  */
 
+/** Primary CTA for ActionCenter */
+export type PrimaryActionType = "Chat" | "WhatsApp" | "Call";
+
 /** Fixed header – same for everyone */
 export interface ProfileBuilderHeader {
   coverImage: string;
@@ -9,11 +12,13 @@ export interface ProfileBuilderHeader {
   fullName: string;
   title: string;
   bio: string;
+  /** Primary button: Chat (internal), WhatsApp, or Call */
+  primary_action_type?: PrimaryActionType;
   /** Quick contact – clickable links */
   whatsapp?: string;
   mobile?: string;
   email?: string;
-  /** Social links – URLs */
+  /** Social links – URLs (only render icon if URL is non-empty) */
   socialLinks?: {
     instagram?: string;
     linkedin?: string;
@@ -21,6 +26,7 @@ export interface ProfileBuilderHeader {
     twitter?: string;
     youtube?: string;
     tiktok?: string;
+    behance?: string;
     [key: string]: string | undefined;
   };
 }

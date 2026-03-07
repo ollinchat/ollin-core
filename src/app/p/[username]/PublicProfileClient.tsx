@@ -9,6 +9,10 @@ import { slugFromUsername } from "@/lib/profile-types";
 import { useLocale } from "@/contexts/LocaleContext";
 import { t } from "@/lib/translations";
 import { Star, Briefcase, GraduationCap, MessageCircle, Link2, Image as ImageIcon, FileText, ShoppingBag, Newspaper } from "lucide-react";
+import { TestimonialsBlock } from "@/components/profile/blocks/TestimonialsBlock";
+import { FAQBlock } from "@/components/profile/blocks/FAQBlock";
+import { LeadFormBlock } from "@/components/profile/blocks/LeadFormBlock";
+import { CountdownBlock } from "@/components/profile/blocks/CountdownBlock";
 
 const TEAL = "#008080";
 
@@ -23,6 +27,7 @@ function profileToHeader(profile: Profile): ProfileBuilderHeader {
     fullName: profile.name ?? "",
     title: profile.professionalTitle ?? "",
     bio: profile.bio ?? "",
+    primary_action_type: profile.primary_action_type,
     whatsapp: profile.whatsapp?.trim() || undefined,
     mobile: profile.phone?.trim() || undefined,
     email: profile.email?.trim() || undefined,
@@ -44,7 +49,7 @@ function BlockEmptyCard({ blockTypeLabel, editHref }: { blockTypeLabel: string; 
   );
 }
 
-function PublicBlockCard({ block }: { block: ProfileBlock }) {
+function PublicBlockCard({ block, profileUsername, profileUserId }: { block: ProfileBlock; profileUsername?: string; profileUserId?: string }) {
   const cardClass = "rounded-xl border border-gray-200 bg-white p-6 shadow-sm";
   const editHref = "/profile/edit";
 
@@ -251,7 +256,48 @@ function PublicBlockCard({ block }: { block: ProfileBlock }) {
     );
   }
 
+  if (block.type === "testimonials" && block.config.testimonials?.items?.length) {
+    return <TestimonialsBlock items={block.config.testimonials.items} />;
+  }
+
+  if (block.type === "faq" && block.config.faq?.faqs?.length) {
+    return <FAQBlock faqs={block.config.faq.faqs} />;
+  }
+
+  if (block.type === "lead_form") {
+    return <LeadFormBlock block={block} profileUsername={profileUsername} profileUserId={profileUserId} />;
+  }
+
+  if (block.type === "countdown" && block.config.countdown?.target_date) {
+    return (
+      <CountdownBlock
+        targetDate={block.config.countdown.target_date}
+        label={block.config.countdown.label}
+      />
+    );
+  }
+
   return <BlockEmptyCard blockTypeLabel={block.type} editHref={editHref} />;
+}
+
+function ProfileSkeleton() {
+  return (
+    <div className="min-h-screen bg-gray-50 animate-pulse" dir="auto">
+      <div className="w-full h-48 sm:h-56 bg-gray-200" />
+      <div className="px-4 -mt-16 flex flex-col items-center">
+        <div className="w-28 h-28 rounded-full bg-gray-300" />
+        <div className="h-6 w-40 bg-gray-300 rounded mt-4" />
+        <div className="h-4 w-24 bg-gray-200 rounded mt-2" />
+        <div className="h-4 w-64 bg-gray-200 rounded mt-3" />
+        <div className="h-10 w-32 bg-gray-200 rounded-xl mt-4" />
+      </div>
+      <main className="mx-auto max-w-2xl px-4 py-8 space-y-6">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="h-32 rounded-xl bg-gray-200" />
+        ))}
+      </main>
+    </div>
+  );
 }
 
 function NotFound() {
@@ -274,11 +320,7 @@ export function PublicProfileClient({ username }: { username: string }) {
   const profile = getProfileByUsername(slug);
 
   if (!hasHydrated) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center" dir="auto">
-        <p className="text-gray-500">Loading…</p>
-      </div>
-    );
+    return <ProfileSkeleton />;
   }
 
   if (!profile || !profile.username) {
@@ -295,7 +337,11 @@ export function PublicProfileClient({ username }: { username: string }) {
       <main className="mx-auto max-w-2xl px-4 py-8">
         {blocks.map((block) => (
           <div key={block.id} className="mb-6">
-            <PublicBlockCard block={block} />
+            <PublicBlockCard
+              block={block}
+              profileUsername={profile.username}
+              profileUserId={profile.userId}
+            />
           </div>
         ))}
       </main>
