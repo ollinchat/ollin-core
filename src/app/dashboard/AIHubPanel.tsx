@@ -744,13 +744,16 @@ const AIHubPanelInner = forwardRef<AIHubPanelHandle, { locale: "en" | "he"; pane
                     initial={{ opacity: 0, y: 4 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 4 }}
-                    className="absolute bottom-full left-0 mb-2 rounded-xl bg-white shadow-lg border border-gray-200 py-2 z-50 min-w-[180px]"
+                    className="absolute bottom-full left-0 mb-2 rounded-xl bg-white shadow-lg border border-gray-200 py-2 z-[60] min-w-[180px]"
                   >
                     {PLUS_MENU_ITEMS.map(({ icon: Icon, labelKey, action }) => (
                       <button
                         key={labelKey}
                         type="button"
-                        onClick={() => handlePlusAction(action)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePlusAction(action);
+                        }}
                         className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-100 rounded-lg"
                       >
                         <Icon className="w-4 h-4 text-[#008080]" />
@@ -802,6 +805,40 @@ const AIHubPanelInner = forwardRef<AIHubPanelHandle, { locale: "en" | "he"; pane
       {gpsOpen && <GPSClockModal onClose={() => setGpsOpen(false)} />}
       {scannerOpen && <AIScannerModal onClose={() => setScannerOpen(false)} />}
       {shoppingOpen && <ShoppingAgentModal onClose={() => setShoppingOpen(false)} />}
+
+      {/* Create Poll modal */}
+      {isPollModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+          onClick={() => setIsPollModalOpen(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-label={locale === "he" ? "צור סקר" : "Create a Poll"}
+        >
+          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-xl border border-[#008080]/20" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 border-b border-[#008080]/10 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900">{locale === "he" ? "צור סקר" : "Create a Poll"}</h2>
+              <button type="button" onClick={() => setIsPollModalOpen(false)} className="p-2 rounded-xl text-gray-500 hover:bg-gray-100" aria-label={locale === "he" ? "סגור" : "Close"}>×</button>
+            </div>
+            <div className="p-4">
+              <PollCreator
+                locale={locale}
+                contacts={contacts}
+                compact
+                onSubmit={({ question, options }) => {
+                  addCard("quote", question, { title: question, body: options.join(" · ") });
+                  setIsPollModalOpen(false);
+                }}
+                onSendToContacts={(data, contactIds) => {
+                  const text = `Poll: ${data.question}\n${data.options.map((o, i) => `${i + 1}. ${o}`).join("\n")}`;
+                  contactIds.forEach((id) => sendText(id, text, currentUserId));
+                  setIsPollModalOpen(false);
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Share poll with contacts modal */}
       {sharePollMessageId && (() => {

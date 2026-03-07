@@ -8,6 +8,7 @@ import { useInternalMessages } from "@/contexts/ChatEngineContext";
 import { useBoard } from "@/contexts/BoardContext";
 import { useBilling } from "@/contexts/BillingContext";
 import { MessageSquare, Send, Trash2, Search, Camera, Plus, MapPin, FileText, ImagePlus, Forward, ListTodo, Instagram, Bot, Linkedin, ScanLine, BarChart3, Mic, ChevronLeft, Phone, Video, ClipboardList, CalendarDays, Users, Brain, Ban, UserPlus, Shield, CheckCheck, Pencil } from "lucide-react";
+import { PollCreator } from "@/components/board/PollCreator";
 import { SOURCE_ICONS, type ChatSourceId } from "@/components/dashboard/SourceBadge";
 import type { InternalMessageRecord } from "@/lib/chat-engine";
 import { formatOllinIdForDisplay } from "@/lib/user-id";
@@ -74,6 +75,7 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
   const [isRecording, setIsRecording] = useState(false);
   const [eventPopupOpen, setEventPopupOpen] = useState(false);
   const [meetingPopupOpen, setMeetingPopupOpen] = useState(false);
+  const [pollModalOpen, setPollModalOpen] = useState(false);
   const [eventMeetingTitle, setEventMeetingTitle] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const longPressRef = useRef<NodeJS.Timeout | null>(null);
@@ -576,7 +578,7 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
                               <Users className="w-4 h-4 shrink-0 text-[#008080]" strokeWidth={2} />
                               {isHe ? "צור פגישה" : "Create Meeting"}
                             </button>
-                            <button type="button" onClick={() => setAttachMenuOpen(false)} className="flex items-center gap-2 py-2.5 px-3 text-left text-xs font-medium text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl">
+                            <button type="button" onClick={() => { setPollModalOpen(true); setAttachMenuOpen(false); }} className="flex items-center gap-2 py-2.5 px-3 text-left text-xs font-medium text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl">
                               <BarChart3 className="w-4 h-4 shrink-0 text-[#008080]" strokeWidth={2} />
                               {isHe ? "צור סקר" : "Create Poll"}
                             </button>
@@ -613,6 +615,32 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
                             <div className="flex gap-2">
                               <button type="button" onClick={() => { setMeetingPopupOpen(false); setEventMeetingTitle(""); }} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50">{isHe ? "ביטול" : "Cancel"}</button>
                               <button type="button" onClick={handleCreateMeetingSubmit} className="flex-1 py-2.5 rounded-xl text-white text-sm font-medium" style={{ backgroundColor: TEAL }}>{isHe ? "צור" : "Create"}</button>
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                    {pollModalOpen && (
+                      <>
+                        <div className="fixed inset-0 z-40 bg-black/40" onClick={() => setPollModalOpen(false)} aria-hidden />
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-xl border border-[#008080]/20" onClick={(e) => e.stopPropagation()}>
+                            <div className="p-4 border-b border-[#008080]/10 flex items-center justify-between">
+                              <h2 className="text-lg font-semibold text-gray-900">{isHe ? "צור סקר" : "Create a Poll"}</h2>
+                              <button type="button" onClick={() => setPollModalOpen(false)} className="p-2 rounded-xl text-gray-500 hover:bg-gray-100" aria-label={isHe ? "סגור" : "Close"}>×</button>
+                            </div>
+                            <div className="p-4">
+                              <PollCreator
+                                locale={locale}
+                                contacts={contacts}
+                                compact
+                                onSendToContacts={(data, contactIds) => {
+                                  const text = `Poll: ${data.question}\n${data.options.map((o, i) => `${i + 1}. ${o}`).join("\n")}`;
+                                  contactIds.forEach((id) => sendText(id, text, currentUserId));
+                                  setPollModalOpen(false);
+                                }}
+                                onSubmit={() => setPollModalOpen(false)}
+                              />
                             </div>
                           </div>
                         </div>
@@ -876,7 +904,7 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
                     <button type="button" onClick={handleSendLocation} className="flex items-center gap-2 py-2.5 px-3 text-left text-xs font-medium text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl"><MapPin className="w-4 h-4 shrink-0 text-[#008080]" strokeWidth={2} />{isHe ? "מיקום" : "Location"}</button>
                     <button type="button" onClick={() => { setEventPopupOpen(true); setAttachMenuOpen(false); }} className="flex items-center gap-2 py-2.5 px-3 text-left text-xs font-medium text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl"><CalendarDays className="w-4 h-4 shrink-0 text-[#008080]" strokeWidth={2} />{isHe ? "צור אירוע" : "Create Event"}</button>
                     <button type="button" onClick={() => { setMeetingPopupOpen(true); setAttachMenuOpen(false); }} className="flex items-center gap-2 py-2.5 px-3 text-left text-xs font-medium text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl"><Users className="w-4 h-4 shrink-0 text-[#008080]" strokeWidth={2} />{isHe ? "צור פגישה" : "Create Meeting"}</button>
-                    <button type="button" onClick={() => setAttachMenuOpen(false)} className="flex items-center gap-2 py-2.5 px-3 text-left text-xs font-medium text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl"><BarChart3 className="w-4 h-4 shrink-0 text-[#008080]" strokeWidth={2} />{isHe ? "צור סקר" : "Create Poll"}</button>
+                    <button type="button" onClick={() => { setPollModalOpen(true); setAttachMenuOpen(false); }} className="flex items-center gap-2 py-2.5 px-3 text-left text-xs font-medium text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl"><BarChart3 className="w-4 h-4 shrink-0 text-[#008080]" strokeWidth={2} />{isHe ? "צור סקר" : "Create Poll"}</button>
                     <button type="button" onClick={() => setAttachMenuOpen(false)} className="flex items-center gap-2 py-2.5 px-3 text-left text-xs font-medium text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl"><ScanLine className="w-4 h-4 shrink-0 text-[#008080]" strokeWidth={2} />{isHe ? "סריקה (AI)" : "Scan (AI)"}</button>
                   </div>
                 </div>
@@ -907,6 +935,32 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
                     <div className="flex gap-2">
                       <button type="button" onClick={() => { setMeetingPopupOpen(false); setEventMeetingTitle(""); }} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50">{isHe ? "ביטול" : "Cancel"}</button>
                       <button type="button" onClick={handleCreateMeetingSubmit} className="flex-1 py-2.5 rounded-xl text-white text-sm font-medium" style={{ backgroundColor: TEAL }}>{isHe ? "צור" : "Create"}</button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+            {pollModalOpen && (
+              <>
+                <div className="fixed inset-0 z-40 bg-black/40" onClick={() => setPollModalOpen(false)} aria-hidden />
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                  <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-xl border border-[#008080]/20" onClick={(e) => e.stopPropagation()}>
+                    <div className="p-4 border-b border-[#008080]/10 flex items-center justify-between">
+                      <h2 className="text-lg font-semibold text-gray-900">{isHe ? "צור סקר" : "Create a Poll"}</h2>
+                      <button type="button" onClick={() => setPollModalOpen(false)} className="p-2 rounded-xl text-gray-500 hover:bg-gray-100" aria-label={isHe ? "סגור" : "Close"}>×</button>
+                    </div>
+                    <div className="p-4">
+                      <PollCreator
+                        locale={locale}
+                        contacts={contacts}
+                        compact
+                        onSendToContacts={(data, contactIds) => {
+                          const text = `Poll: ${data.question}\n${data.options.map((o, i) => `${i + 1}. ${o}`).join("\n")}`;
+                          contactIds.forEach((id) => sendText(id, text, currentUserId));
+                          setPollModalOpen(false);
+                        }}
+                        onSubmit={() => setPollModalOpen(false)}
+                      />
                     </div>
                   </div>
                 </div>
