@@ -64,6 +64,30 @@ export function ActionCenter({ header, chatHref = "/dashboard/messages", whatsap
         </a>
       );
     }
+    if (header.whatsapp) {
+      const num = header.whatsapp.replace(/\D/g, "");
+      const url = `https://wa.me/${num}${whatsappMessage ? `?text=${encodeURIComponent(whatsappMessage)}` : ""}`;
+      return (
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-3 rounded-xl bg-[#25D366] text-white font-medium text-sm hover:bg-[#20BD5A] transition-colors"
+        >
+          <MessageCircle className="w-5 h-5" /> WhatsApp
+        </a>
+      );
+    }
+    if (header.mobile) {
+      return (
+        <a
+          href={`tel:${header.mobile.replace(/\s/g, "")}`}
+          className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-3 rounded-xl bg-[#008080] text-white font-medium text-sm hover:bg-[#006666] transition-colors"
+        >
+          <Phone className="w-5 h-5" /> Call
+        </a>
+      );
+    }
     return null;
   };
 

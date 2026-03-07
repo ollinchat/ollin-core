@@ -14,7 +14,16 @@ export function TestimonialsBlock({ items }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [index, setIndex] = useState(0);
 
-  if (!items.length) return null;
+  if (!items.length) {
+    return (
+      <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+          <Star className="w-4 h-4 text-[#008080]" /> Testimonials
+        </h2>
+        <p className="text-sm text-gray-500">No testimonials yet.</p>
+      </section>
+    );
+  }
 
   const scrollTo = (i: number) => {
     const next = Math.max(0, Math.min(i, items.length - 1));

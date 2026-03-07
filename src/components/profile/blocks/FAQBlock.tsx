@@ -14,7 +14,16 @@ type Props = {
 export function FAQBlock({ faqs }: Props) {
   const [openId, setOpenId] = useState<string | null>(null);
 
-  if (!faqs.length) return null;
+  if (!faqs.length) {
+    return (
+      <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+          <HelpCircle className="w-4 h-4 text-[#008080]" /> FAQ
+        </h2>
+        <p className="text-sm text-gray-500">No questions yet.</p>
+      </section>
+    );
+  }
 
   return (
     <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">

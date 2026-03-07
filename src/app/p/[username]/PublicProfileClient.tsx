@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { useProfile } from "@/contexts/ProfileContext";
-import { ProfileHeader } from "@/components/profile-builder/ProfileHeader";
 import type { ProfileBuilderHeader } from "@/lib/profile-builder-types";
 import type { Profile, ProfileBlock } from "@/lib/profile-types";
 import { slugFromUsername } from "@/lib/profile-types";
 import { useLocale } from "@/contexts/LocaleContext";
 import { t } from "@/lib/translations";
 import { Star, Briefcase, GraduationCap, MessageCircle, Link2, Image as ImageIcon, FileText, ShoppingBag, Newspaper } from "lucide-react";
+import { ActionCenter } from "@/components/profile/ActionCenter";
 import { TestimonialsBlock } from "@/components/profile/blocks/TestimonialsBlock";
 import { FAQBlock } from "@/components/profile/blocks/FAQBlock";
 import { LeadFormBlock } from "@/components/profile/blocks/LeadFormBlock";
@@ -256,24 +256,30 @@ function PublicBlockCard({ block, profileUsername, profileUserId }: { block: Pro
     );
   }
 
-  if (block.type === "testimonials" && block.config.testimonials?.items?.length) {
-    return <TestimonialsBlock items={block.config.testimonials.items} />;
+  if (block.type === "testimonials") {
+    const items = block.config.testimonials?.items ?? [];
+    return <TestimonialsBlock items={items} />;
   }
 
-  if (block.type === "faq" && block.config.faq?.faqs?.length) {
-    return <FAQBlock faqs={block.config.faq.faqs} />;
+  if (block.type === "faq") {
+    const faqs = block.config.faq?.faqs ?? [];
+    return <FAQBlock faqs={faqs} />;
   }
 
   if (block.type === "lead_form") {
     return <LeadFormBlock block={block} profileUsername={profileUsername} profileUserId={profileUserId} />;
   }
 
-  if (block.type === "countdown" && block.config.countdown?.target_date) {
+  if (block.type === "countdown") {
+    const target_date = block.config.countdown?.target_date;
+    const label = block.config.countdown?.label;
+    if (target_date) {
+      return <CountdownBlock targetDate={target_date} label={label} />;
+    }
     return (
-      <CountdownBlock
-        targetDate={block.config.countdown.target_date}
-        label={block.config.countdown.label}
-      />
+      <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <p className="text-sm text-gray-500">Set a target date in block settings.</p>
+      </section>
     );
   }
 
@@ -328,11 +334,32 @@ export function PublicProfileClient({ username }: { username: string }) {
   }
 
   const header = profileToHeader(profile);
-  const blocks = (profile.blocks ?? []).filter((b) => b.visible).sort((a, b) => a.order - b.order);
+  const blocks = (profile.blocks ?? []).filter((b) => b.visible !== false).sort((a, b) => a.order - b.order);
+
+  const fullName = profile.name ?? "";
+  const title = profile.professionalTitle ?? "";
+  const bio = profile.bio ?? "";
+  const coverImage = profile.coverImage ?? "";
+  const profileImage = profile.profileImage ?? "";
 
   return (
     <div className="min-h-screen bg-gray-50" dir="auto">
-      <ProfileHeader header={header} editMode={false} />
+      <header className="relative w-full">
+        <div className="relative w-full h-48 sm:h-56 bg-gradient-to-br from-teal-700 to-teal-900 overflow-hidden">
+          {coverImage ? <img src={coverImage} alt="" className="w-full h-full object-cover" /> : null}
+        </div>
+        <div className="px-4 -mt-16 relative z-10 flex flex-col items-center text-center pb-4">
+          <div className="w-28 h-28 rounded-full overflow-hidden bg-gray-100 border-4 border-white shadow-lg flex items-center justify-center">
+            {profileImage ? <img src={profileImage} alt="" className="w-full h-full object-cover" /> : <span className="text-4xl font-bold text-gray-400">{fullName.slice(0, 1).toUpperCase() || "?"}</span>}
+          </div>
+          {fullName ? <h1 className="mt-4 text-xl font-bold text-gray-900">{fullName}</h1> : null}
+          {title ? <p className="text-teal-600 font-medium text-sm mt-0.5">{title}</p> : null}
+          {bio ? <p className="text-gray-600 text-sm mt-2 max-w-md">{bio}</p> : null}
+          <div className="mt-4 w-full flex flex-col items-center">
+            <ActionCenter header={header} />
+          </div>
+        </div>
+      </header>
 
       <main className="mx-auto max-w-2xl px-4 py-8">
         {blocks.map((block) => (
