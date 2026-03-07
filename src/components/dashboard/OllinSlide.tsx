@@ -31,15 +31,24 @@ import { GPSClockModal } from "@/components/tools/GPSClockModal";
 const EASE_SMOOTH = [0.32, 0.72, 0, 1];
 const TRANSITION_MS = 300;
 
-const FEATURE_GRID: { key: string; labelEn: string; labelHe: string; icon: typeof ScanLine; href: string }[] = [
-  { key: "scanner", labelEn: "Scanner", labelHe: "סורק", icon: ScanLine, href: "/dashboard" },
-  { key: "invoices", labelEn: "Invoices", labelHe: "חשבוניות", icon: FileText, href: "/dashboard/finances/documents" },
+type FeatureItem = {
+  key: string;
+  labelEn: string;
+  labelHe: string;
+  icon: typeof ScanLine;
+  href?: string;
+  action?: "scanner" | "meetings" | "converter";
+};
+
+const FEATURE_GRID: FeatureItem[] = [
+  { key: "scanner", labelEn: "Scanner", labelHe: "סורק", icon: ScanLine, action: "scanner" },
+  { key: "invoices", labelEn: "Invoices", labelHe: "חשבוניות", icon: FileText, href: "/dashboard/invoices" },
   { key: "files", labelEn: "Files", labelHe: "קבצים", icon: FileStack, href: "/dashboard" },
   { key: "sign", labelEn: "Sign Docs", labelHe: "חתימת מסמכים", icon: PenLine, href: "/dashboard/finances/documents" },
   { key: "poll", labelEn: "Create Poll", labelHe: "סקרים", icon: BarChart2, href: "/dashboard" },
   { key: "events", labelEn: "Events", labelHe: "אירועים", icon: CalendarDays, href: "/dashboard/events/new" },
-  { key: "meetings", labelEn: "Meetings", labelHe: "פגישות", icon: Users, href: "/dashboard" },
-  { key: "converter", labelEn: "File Converter", labelHe: "המרת קבצים", icon: FileOutput, href: "/dashboard" },
+  { key: "meetings", labelEn: "Meetings", labelHe: "פגישות", icon: Users, action: "meetings" },
+  { key: "converter", labelEn: "File Converter", labelHe: "המרת קבצים", icon: FileOutput, action: "converter" },
 ];
 
 const PLUS_ACTIONS: { action: "poll" | "event" | "task" | "converter"; labelEn: string; labelHe: string; icon: typeof BarChart2 }[] = [
@@ -53,9 +62,10 @@ export type OllinSlideProps = {
   onOpenNote?: (noteId: string) => void;
   onNewNote?: () => void;
   onOpenBoard?: () => void;
+  onOpenScanner?: () => void;
 };
 
-export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard: _onOpenBoard }: OllinSlideProps) {
+export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }: OllinSlideProps) {
   const { locale } = useLocale();
   const isHe = locale === "he";
   const { folders, getNotesInFolder } = useNotes();
@@ -224,14 +234,52 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard: _onOpenBoard }:
       >
           <div className="flex-shrink-0 pb-2 pt-1">
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-              {FEATURE_GRID.map(({ key, href, labelEn, labelHe, icon: Icon }) => (
-                <Link key={key} href={href} className="flex flex-col items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl bg-white/70 backdrop-blur-sm border border-[#008080]/15 hover:bg-white/95 hover:border-[#008080]/30 text-gray-700 hover:text-gray-900 transition-all shadow-sm">
-                  <div className="w-9 h-9 rounded-xl bg-[#008080]/10 flex items-center justify-center">
-                    <Icon className="w-4 h-4 text-[#008080]" strokeWidth={2} />
-                  </div>
-                  <span className="text-[11px] font-medium text-center leading-tight text-gray-700">{isHe ? labelHe : labelEn}</span>
-                </Link>
-              ))}
+              {FEATURE_GRID.map(({ key, href, action, labelEn, labelHe, icon: Icon }) => {
+                const tileContent = (
+                  <>
+                    <div className="w-9 h-9 rounded-xl bg-[#008080]/10 flex items-center justify-center">
+                      <Icon className="w-4 h-4 text-[#008080]" strokeWidth={2} />
+                    </div>
+                    <span className="text-[11px] font-medium text-center leading-tight text-gray-700">{isHe ? labelHe : labelEn}</span>
+                  </>
+                );
+                const tileClass = "flex flex-col items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl bg-white/70 backdrop-blur-sm border border-[#008080]/15 hover:bg-white/95 hover:border-[#008080]/30 text-gray-700 hover:text-gray-900 transition-all shadow-sm";
+                if (action === "scanner" && onOpenScanner) {
+                  return (
+                    <button key={key} type="button" onClick={onOpenScanner} className={tileClass}>
+                      {tileContent}
+                    </button>
+                  );
+                }
+                if (action === "meetings" && onOpenBoard) {
+                  return (
+                    <button key={key} type="button" onClick={onOpenBoard} className={tileClass}>
+                      {tileContent}
+                    </button>
+                  );
+                }
+                if (action === "converter") {
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => {
+                        addFormMessage("converter");
+                        setExpanded(true);
+                        setTimeout(() => topInputRef.current?.focus({ preventScroll: true }), 350);
+                      }}
+                      className={tileClass}
+                    >
+                      {tileContent}
+                    </button>
+                  );
+                }
+                return (
+                  <Link key={key} href={href ?? "/dashboard"} className={tileClass}>
+                    {tileContent}
+                  </Link>
+                );
+              })}
             </div>
           </div>
           <div className="flex-shrink-0 pt-2 border-t border-[#008080]/10">
