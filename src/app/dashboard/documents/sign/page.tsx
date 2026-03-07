@@ -103,6 +103,7 @@ export default function DocumentSignPage() {
     setPreviewUrl(url);
     setPreviewType(isPdf ? "pdf" : "image");
     setHotspots([]);
+    console.log("File uploaded:", f);
     e.target.value = "";
   }, [previewUrl]);
 
@@ -139,8 +140,8 @@ export default function DocumentSignPage() {
         </h1>
       </header>
 
-      <main className="flex-1 flex flex-col p-4 max-w-4xl mx-auto w-full">
-        {!previewUrl ? (
+      <main className="flex-1 flex flex-col p-4 max-w-4xl mx-auto w-full min-h-0">
+        {!file && !previewUrl ? (
           <label className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-teal-200 bg-teal-50/50 py-12 px-6 cursor-pointer hover:bg-teal-50 hover:border-teal-300 transition-colors">
             <input
               type="file"
@@ -159,8 +160,8 @@ export default function DocumentSignPage() {
           </label>
         ) : (
           <>
-            <div className="flex items-center justify-between gap-2 mb-4">
-              <p className="text-sm text-gray-600 truncate flex-1 min-w-0">{file?.name}</p>
+            <div className="flex items-center justify-between gap-2 mb-4 flex-shrink-0">
+              <p className="text-sm text-gray-600 truncate flex-1 min-w-0">{file?.name ?? "Document"}</p>
               <button
                 type="button"
                 onClick={clearPreview}
@@ -171,16 +172,16 @@ export default function DocumentSignPage() {
               </button>
             </div>
 
-            <div className="flex-1 min-h-0 rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm flex flex-col">
-              <div className="flex-1 overflow-auto p-4">
-                {previewType === "image" && (
+            <div className="flex-1 min-h-[300px] rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm flex flex-col">
+              <div className="flex-1 min-h-[280px] overflow-auto p-4">
+                {previewType === "image" && previewUrl && (
                   <div
                     ref={wrapperRef}
                     className="relative inline-block min-w-full max-w-full"
                   >
                     <img src={previewUrl} alt="Document" className="block max-w-full h-auto" />
                     <div
-                      className="absolute inset-0 cursor-crosshair"
+                      className="absolute inset-0 cursor-crosshair z-10"
                       onClick={handleOverlayClick}
                       role="button"
                       tabIndex={0}
@@ -198,7 +199,7 @@ export default function DocumentSignPage() {
                   </div>
                 )}
 
-                {previewType === "pdf" && (
+                {previewType === "pdf" && previewUrl && (
                   <div className="relative w-full" style={{ height: "900px" }}>
                     <iframe
                       src={previewUrl}
@@ -207,7 +208,7 @@ export default function DocumentSignPage() {
                     />
                     <div
                       ref={wrapperRef}
-                      className="absolute inset-0 cursor-crosshair rounded-lg"
+                      className="absolute inset-0 cursor-crosshair rounded-lg z-10"
                       onClick={handleOverlayClick}
                       role="button"
                       tabIndex={0}
@@ -225,10 +226,14 @@ export default function DocumentSignPage() {
                     </div>
                   </div>
                 )}
+
+                {previewUrl && !previewType && (
+                  <p className="text-sm text-gray-500 py-8 text-center">Loading preview…</p>
+                )}
               </div>
             </div>
 
-            <p className="text-xs text-gray-500 mt-3 text-center">
+            <p className="text-xs text-gray-500 mt-3 text-center flex-shrink-0">
               Click on the document to place a &quot;Sign Here&quot; box. Drag to reposition · Click <strong>X</strong> to remove.
             </p>
           </>
