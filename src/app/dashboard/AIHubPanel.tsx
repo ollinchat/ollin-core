@@ -27,6 +27,7 @@ import {
   ShoppingBag,
 } from "lucide-react";
 import { EventForm } from "@/components/board/EventForm";
+import { PollCreator } from "@/components/board/PollCreator";
 import { GPSClockModal } from "@/components/tools/GPSClockModal";
 import { AIScannerModal } from "@/components/tools/AIScannerModal";
 import { ShoppingAgentModal } from "@/components/tools/ShoppingAgentModal";
@@ -432,6 +433,7 @@ const AIHubPanelInner = forwardRef<AIHubPanelHandle, { locale: "en" | "he"; pane
   const [listening, setListening] = useState(false);
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
   const [sharePollMessageId, setSharePollMessageId] = useState<string | null>(null);
+  const [isPollModalOpen, setIsPollModalOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
 
@@ -480,7 +482,7 @@ const AIHubPanelInner = forwardRef<AIHubPanelHandle, { locale: "en" | "he"; pane
     if (action === "camera" || action === "voice") return; // Handled by switching to chat panel where camera/mic live
     if (action === "scanner") setScannerOpen(true);
     if (action === "shopping") setShoppingOpen(true);
-    if (action === "poll") addFormMessage("poll");
+    if (action === "poll") setIsPollModalOpen(true);
     if (action === "event") addFormMessage("event");
     if (action === "task") addFormMessage("task");
     if (action === "converter") addFormMessage("converter");
