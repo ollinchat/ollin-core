@@ -5,7 +5,8 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocale } from "@/contexts/LocaleContext";
 import { useNotes } from "@/contexts/NotesContext";
-import { useChat } from "@/contexts/ChatEngineContext";
+import { useChat, useInternalMessages } from "@/contexts/ChatEngineContext";
+import { useContacts } from "@/contexts/ContactsContext";
 import {
   CircleCheck,
   ScanLine,
@@ -26,6 +27,7 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { t } from "@/lib/translations";
+import { PollCreator } from "@/components/board/PollCreator";
 import { GPSClockModal } from "@/components/tools/GPSClockModal";
 
 const EASE_SMOOTH = [0.32, 0.72, 0, 1];
@@ -37,7 +39,7 @@ type FeatureItem = {
   labelHe: string;
   icon: typeof ScanLine;
   href?: string;
-  action?: "scanner" | "meetings" | "converter";
+  action?: "scanner" | "meetings" | "converter" | "poll";
 };
 
 const FEATURE_GRID: FeatureItem[] = [
@@ -45,7 +47,7 @@ const FEATURE_GRID: FeatureItem[] = [
   { key: "invoices", labelEn: "Invoices", labelHe: "חשבוניות", icon: FileText, href: "/dashboard/invoices" },
   { key: "files", labelEn: "Files", labelHe: "קבצים", icon: FileStack, href: "/dashboard" },
   { key: "sign", labelEn: "Sign Docs", labelHe: "חתימת מסמכים", icon: PenLine, href: "/dashboard/finances/documents" },
-  { key: "poll", labelEn: "Create Poll", labelHe: "סקרים", icon: BarChart2, href: "/dashboard" },
+  { key: "poll", labelEn: "Create Poll", labelHe: "סקרים", icon: BarChart2, action: "poll" },
   { key: "events", labelEn: "Events", labelHe: "אירועים", icon: CalendarDays, href: "/dashboard/events/new" },
   { key: "meetings", labelEn: "Meetings", labelHe: "פגישות", icon: Users, action: "meetings" },
   { key: "converter", labelEn: "File Converter", labelHe: "המרת קבצים", icon: FileOutput, action: "converter" },
@@ -70,12 +72,15 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
   const isHe = locale === "he";
   const { folders, getNotesInFolder } = useNotes();
   const { messages, sendMessage, addFormMessage, clearMessages } = useChat();
+  const { sendText, currentUserId } = useInternalMessages();
+  const { contacts } = useContacts();
   const defaultFolderId = folders[0]?.id ?? "default";
   const recentNotes = (defaultFolderId ? getNotesInFolder(defaultFolderId) : []).slice(0, 8);
 
   const [input, setInput] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
+  const [pollModalOpen, setPollModalOpen] = useState(false);
   const [gpsOpen, setGpsOpen] = useState(false);
   const [placeholderDots, setPlaceholderDots] = useState("");
   const [topicsSidebarOpen, setTopicsSidebarOpen] = useState(false);
@@ -130,9 +135,23 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
             {plusMenuOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setPlusMenuOpen(false)} aria-hidden />
-                <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }} className="absolute bottom-full left-0 mb-2 rounded-xl bg-white/95 backdrop-blur-md border border-[#008080]/15 py-2 z-50 min-w-[160px] shadow-lg">
+                <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }} className="absolute bottom-full left-0 mb-2 rounded-xl bg-white/95 backdrop-blur-md border border-[#008080]/15 py-2 z-[60] min-w-[160px] shadow-lg">
                   {PLUS_ACTIONS.map(({ action, labelEn, labelHe, icon: Icon }) => (
-                    <button key={action} type="button" onClick={() => { addFormMessage(action); setPlusMenuOpen(false); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-[#008080]/10 rounded-lg">
+                    <button
+                      key={action}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (action === "poll") {
+                          setPollModalOpen(true);
+                          setPlusMenuOpen(false);
+                        } else {
+                          addFormMessage(action);
+                          setPlusMenuOpen(false);
+                        }
+                      }}
+                      className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-[#008080]/10 rounded-lg"
+                    >
                       <Icon className="w-4 h-4 text-[#008080]" strokeWidth={2} />
                       {isHe ? labelHe : labelEn}
                     </button>
@@ -202,9 +221,23 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
                         {plusMenuOpen && (
                           <>
                             <div className="fixed inset-0 z-40" onClick={() => setPlusMenuOpen(false)} aria-hidden />
-                            <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }} className="absolute bottom-full left-0 mb-2 rounded-xl bg-white/95 backdrop-blur-md border border-[#008080]/15 py-2 z-50 min-w-[160px] shadow-lg">
+                            <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }} className="absolute bottom-full left-0 mb-2 rounded-xl bg-white/95 backdrop-blur-md border border-[#008080]/15 py-2 z-[60] min-w-[160px] shadow-lg">
                               {PLUS_ACTIONS.map(({ action, labelEn, labelHe, icon: Icon }) => (
-                                <button key={action} type="button" onClick={() => { addFormMessage(action); setPlusMenuOpen(false); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-[#008080]/10 rounded-lg">
+                                <button
+                                  key={action}
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (action === "poll") {
+                                      setPollModalOpen(true);
+                                      setPlusMenuOpen(false);
+                                    } else {
+                                      addFormMessage(action);
+                                      setPlusMenuOpen(false);
+                                    }
+                                  }}
+                                  className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-[#008080]/10 rounded-lg"
+                                >
                                   <Icon className="w-4 h-4 text-[#008080]" strokeWidth={2} />
                                   {isHe ? labelHe : labelEn}
                                 </button>
@@ -268,6 +301,18 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
                         setExpanded(true);
                         setTimeout(() => topInputRef.current?.focus({ preventScroll: true }), 350);
                       }}
+                      className={tileClass}
+                    >
+                      {tileContent}
+                    </button>
+                  );
+                }
+                if (action === "poll") {
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setPollModalOpen(true)}
                       className={tileClass}
                     >
                       {tileContent}
@@ -408,6 +453,37 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
         )}
       </AnimatePresence>
       {gpsOpen && <GPSClockModal onClose={() => setGpsOpen(false)} defaultScrollToSummary />}
+
+      {/* Create Poll modal — same as InternalChatPanel, above all other layers */}
+      {pollModalOpen && (
+        <>
+          <div className="fixed inset-0 z-[100] bg-black/40" onClick={() => setPollModalOpen(false)} aria-hidden />
+          <div className="fixed inset-0 z-[101] flex items-center justify-center p-4 pointer-events-none">
+            <div
+              className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-xl border border-[#008080]/20 pointer-events-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-4 border-b border-[#008080]/10 flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-gray-900">{isHe ? "צור סקר" : "Create a Poll"}</h2>
+                <button type="button" onClick={() => setPollModalOpen(false)} className="p-2 rounded-xl text-gray-500 hover:bg-gray-100" aria-label={isHe ? "סגור" : "Close"}>×</button>
+              </div>
+              <div className="p-4">
+                <PollCreator
+                  locale={locale}
+                  contacts={contacts}
+                  compact
+                  onSendToContacts={(data, contactIds) => {
+                    const text = `Poll: ${data.question}\n${data.options.map((o, i) => `${i + 1}. ${o}`).join("\n")}`;
+                    contactIds.forEach((id) => sendText(id, text, currentUserId));
+                    setPollModalOpen(false);
+                  }}
+                  onSubmit={() => setPollModalOpen(false)}
+                />
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
