@@ -16,18 +16,17 @@ import {
   CalendarPlus,
   BarChart3,
   MessageSquare,
-  MapPin,
   ScanLine,
   Mic,
   MicOff,
   PlusCircle,
-  Image as ImageIcon,
   Share2,
   ChevronDown,
   ChevronUp,
   Globe,
   ShoppingBag,
 } from "lucide-react";
+import { EventForm } from "@/components/board/EventForm";
 import { GPSClockModal } from "@/components/tools/GPSClockModal";
 import { AIScannerModal } from "@/components/tools/AIScannerModal";
 import { ShoppingAgentModal } from "@/components/tools/ShoppingAgentModal";
@@ -238,167 +237,6 @@ function InlineFormBubble({
         className="rounded-xl px-3 py-2 text-sm font-medium bg-gradient-to-r from-[#008080] to-[#006666] text-white"
       >
         Submit
-      </button>
-    </div>
-  );
-}
-
-function InlineEventForm({
-  locale,
-  contacts,
-  onSubmit,
-}: {
-  locale: "en" | "he";
-  contacts: { id: string; name: string; email: string }[];
-  onSubmit: (data: { title: string; description: string; date: string; location: string; guestIds: string[]; imageDataUrl?: string; isOnline: boolean }) => void;
-}) {
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 16));
-  const [eventMode, setEventMode] = useState<"location" | "online">("location");
-  const [location, setLocation] = useState("");
-  const [selectedGuestIds, setSelectedGuestIds] = useState<string[]>([]);
-  const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
-
-  const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (f && f.type.startsWith("image/")) {
-      const r = new FileReader();
-      r.onload = () => setImageDataUrl(r.result as string);
-      r.readAsDataURL(f);
-    }
-    e.target.value = "";
-  };
-
-  const toggleGuest = (id: string) => {
-    setSelectedGuestIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
-  };
-
-  return (
-    <div className="rounded-2xl bg-white border border-gray-200 shadow-sm p-5 w-full max-w-[85%] space-y-4">
-      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Event</p>
-      <div>
-        <label className="text-xs font-medium text-gray-500 block mb-1 flex items-center gap-1">
-          <ImageIcon className="w-3.5 h-3.5" />
-          {locale === "he" ? "תמונה" : "Image"}
-        </label>
-        <label className="flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 p-4 cursor-pointer hover:border-[#008080]/40">
-          <input type="file" accept="image/*" onChange={onFile} className="hidden" />
-          {imageDataUrl ? (
-            <img src={imageDataUrl} alt="" className="h-16 w-16 rounded-lg object-cover" />
-          ) : (
-            <Upload className="w-6 h-6 text-gray-400" />
-          )}
-          <span className="text-sm text-gray-600">
-            {imageDataUrl ? (locale === "he" ? "החלף" : "Replace") : (locale === "he" ? "העלה תמונה" : "Upload image")}
-          </span>
-        </label>
-      </div>
-      <div>
-        <label className="text-xs font-medium text-gray-500 block mb-1">Title</label>
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder={locale === "he" ? "שם האירוע" : "Event title"}
-          className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-900"
-        />
-      </div>
-      <div>
-        <label className="text-xs font-medium text-gray-500 block mb-1">Description</label>
-        <textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder={locale === "he" ? "תיאור" : "Description"}
-          rows={2}
-          className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 resize-none"
-        />
-      </div>
-      <div>
-        <label className="text-xs font-medium text-gray-500 block mb-1">Date & time</label>
-        <input
-          type="datetime-local"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-900"
-        />
-      </div>
-      <div>
-        <label className="text-xs font-medium text-gray-500 block mb-2">
-          {locale === "he" ? "סוג אירוע" : "Event type"}
-        </label>
-        <div className="flex rounded-xl border border-gray-200 bg-gray-50 p-1 gap-1">
-          <button
-            type="button"
-            onClick={() => setEventMode("location")}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-colors ${eventMode === "location" ? "bg-white shadow-sm text-[#006666] border border-gray-200" : "text-gray-600 hover:text-gray-900"}`}
-          >
-            <MapPin className="w-4 h-4" />
-            {locale === "he" ? "מיקום" : "Location"}
-          </button>
-          <button
-            type="button"
-            onClick={() => setEventMode("online")}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-colors ${eventMode === "online" ? "bg-white shadow-sm text-[#006666] border border-gray-200" : "text-gray-600 hover:text-gray-900"}`}
-          >
-            <Globe className="w-4 h-4" />
-            {locale === "he" ? "אונליין" : "Online"}
-          </button>
-        </div>
-      </div>
-      {eventMode === "location" && (
-        <div>
-          <label className="text-xs font-medium text-gray-500 block mb-1 flex items-center gap-1">
-            <MapPin className="w-3.5 h-3.5" />
-            {locale === "he" ? "מיקום (חפש כתובת או מפה)" : "Location (search address or map)"}
-          </label>
-          <input
-            type="text"
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            placeholder={locale === "he" ? "חפש כתובת…" : "Search address…"}
-            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-900"
-          />
-        </div>
-      )}
-      <div>
-        <label className="text-xs font-medium text-gray-500 block mb-1">Guests (from Contacts)</label>
-        <div className="max-h-32 overflow-y-auto rounded-xl border border-gray-200 bg-gray-50 p-2 space-y-1">
-          {contacts.length === 0 ? (
-            <p className="text-xs text-gray-500 py-1">{locale === "he" ? "אין אנשי קשר" : "No contacts"}</p>
-          ) : (
-            contacts.map((c) => (
-              <label key={c.id} className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-gray-100 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={selectedGuestIds.includes(c.id)}
-                  onChange={() => toggleGuest(c.id)}
-                  className="rounded border-gray-300 text-[#008080]"
-                />
-                <span className="text-sm text-gray-800">{c.name || c.email}</span>
-              </label>
-            ))
-          )}
-        </div>
-      </div>
-      <button
-        type="button"
-        onClick={() =>
-          onSubmit({
-            title,
-            description,
-            date,
-            location: eventMode === "online" ? "" : location,
-            guestIds: selectedGuestIds,
-            imageDataUrl: imageDataUrl ?? undefined,
-            isOnline: eventMode === "online",
-          })
-        }
-        className="w-full rounded-xl px-4 py-2.5 text-sm font-medium bg-gradient-to-r from-[#008080] to-[#006666] text-white"
-      >
-        {locale === "he" ? "צור אירוע" : "Create event"}
       </button>
     </div>
   );
@@ -786,7 +624,7 @@ const AIHubPanelInner = forwardRef<AIHubPanelHandle, { locale: "en" | "he"; pane
                     </div>
                   )
                 ) : "formType" in msg && msg.formType === "event" ? (
-                  <InlineEventForm
+                  <EventForm
                     locale={locale}
                     contacts={contacts}
                     onSubmit={({ title, description, date, location, guestIds, imageDataUrl, isOnline }) => {
@@ -805,6 +643,7 @@ const AIHubPanelInner = forwardRef<AIHubPanelHandle, { locale: "en" | "he"; pane
                         type: "event",
                         location: isOnline ? "Online" : location || undefined,
                         description: description.trim() || undefined,
+                        imageUrl: imageDataUrl,
                       });
                       addCard("event", title.trim(), {
                         title: title.trim(),
