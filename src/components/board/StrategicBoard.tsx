@@ -684,6 +684,7 @@ export function StrategicBoard({ locale, onBack }: StrategicBoardProps) {
       {meetingEventModal && (
         <MeetingEventFormModal
           type={meetingEventModal}
+          contacts={contacts}
           onClose={() => setMeetingEventModal(null)}
           onSubmit={(item) => {
             if (meetingEventModal === "meeting") addMeeting({ ...item, creatorId: currentUserId });

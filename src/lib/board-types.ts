@@ -84,6 +84,8 @@ export interface MeetingOrEvent {
   endAt?: number;
   location?: string;
   description?: string;
+  /** Optional cover/header image (data URL or URL) */
+  imageUrl?: string;
   /** Guest list with RSVP */
   guests: { email: string; name?: string; rsvp: RSVPStatus }[];
   /** Show full guest list (true) or just total count (false) */

@@ -42,7 +42,7 @@ export function MeetingEventCard({ item, selected, onToggleSelect, currentUserId
     setGuestRSVP(item.type, item.id, guestEmail, rsvp);
   };
 
-  const hasDetails = Boolean(item.description || (item.location && item.location !== "Online") || item.guests.length > 0);
+  const hasDetails = Boolean(item.description || item.imageUrl || (item.location && item.location !== "Online") || item.guests.length > 0);
 
   return (
     <div
@@ -119,6 +119,11 @@ export function MeetingEventCard({ item, selected, onToggleSelect, currentUserId
 
       {expanded && (
         <div className="px-3 pb-3 pt-0 border-t border-gray-100 space-y-3">
+          {item.imageUrl && (
+            <div>
+              <img src={item.imageUrl} alt="" className="w-full max-h-40 object-cover rounded-sm border border-gray-200" />
+            </div>
+          )}
           {item.description && (
             <div>
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
