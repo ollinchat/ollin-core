@@ -36,7 +36,7 @@ const TOOLS: { key: string; href: string; labelEn: string; labelHe: string; icon
   { key: "scanner", href: "/dashboard", labelEn: "Scanner", labelHe: "סורק", icon: ScanLine },
   { key: "invoices", href: "/dashboard/invoices", labelEn: "Invoices", labelHe: "חשבוניות", icon: FileText },
   { key: "files", href: "/dashboard", labelEn: "Files", labelHe: "קבצים", icon: FileStack },
-  { key: "sign", href: "/dashboard/finances/documents", labelEn: "Sign Docs", labelHe: "חתימת מסמכים", icon: PenLine },
+  { key: "sign", href: "/dashboard/documents/sign", labelEn: "Sign Docs", labelHe: "חתימת מסמכים", icon: PenLine },
   { key: "poll", href: "/dashboard", labelEn: "Create Poll", labelHe: "סקרים", icon: BarChart2 },
   { key: "events", href: "/dashboard/events/new", labelEn: "Events", labelHe: "אירועים", icon: CalendarDays },
   { key: "meetings", href: "/dashboard", labelEn: "Meetings", labelHe: "פגישות", icon: Users },

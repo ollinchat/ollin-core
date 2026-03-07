@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocale } from "@/contexts/LocaleContext";
@@ -46,7 +47,7 @@ const FEATURE_GRID: FeatureItem[] = [
   { key: "scanner", labelEn: "Scanner", labelHe: "סורק", icon: ScanLine, action: "scanner" },
   { key: "invoices", labelEn: "Invoices", labelHe: "חשבוניות", icon: FileText, href: "/dashboard/invoices" },
   { key: "files", labelEn: "Files", labelHe: "קבצים", icon: FileStack, href: "/dashboard" },
-  { key: "sign", labelEn: "Sign Docs", labelHe: "חתימת מסמכים", icon: PenLine, href: "/dashboard/finances/documents" },
+  { key: "sign", labelEn: "Sign Docs", labelHe: "חתימת מסמכים", icon: PenLine, href: "/dashboard/documents/sign" },
   { key: "poll", labelEn: "Create Poll", labelHe: "סקרים", icon: BarChart2, action: "poll" },
   { key: "events", labelEn: "Events", labelHe: "אירועים", icon: CalendarDays, href: "/dashboard/events/new" },
   { key: "meetings", labelEn: "Meetings", labelHe: "פגישות", icon: Users, action: "meetings" },
@@ -259,11 +260,12 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
             </div>
         </div>
 
-      {/* Bottom: only this section scrolls (icons/grid + notes). flex-1 overflow-y-auto. */}
+      {/* Bottom: only this section scrolls (icons/grid + notes). flex-1 overflow-y-auto. relative z-10 so grid is above top block. */}
       <motion.div
         animate={{ opacity: expanded ? 0 : 1 }}
         transition={{ duration: TRANSITION_MS / 1000, ease: EASE_SMOOTH }}
-        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-3 sm:px-4 pb-4 pt-1"
+        className="relative z-10 flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-3 sm:px-4 pb-4 pt-1"
+        style={{ pointerEvents: expanded ? "none" : "auto" }}
       >
           <div className="flex-shrink-0 pb-2 pt-1">
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
@@ -312,8 +314,13 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
                     <button
                       key={key}
                       type="button"
-                      onClick={() => setPollModalOpen(true)}
-                      className={tileClass}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setPollModalOpen(true);
+                      }}
+                      className={`${tileClass} cursor-pointer`}
+                      style={{ pointerEvents: "auto" }}
                     >
                       {tileContent}
                     </button>
@@ -454,36 +461,39 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
       </AnimatePresence>
       {gpsOpen && <GPSClockModal onClose={() => setGpsOpen(false)} defaultScrollToSummary />}
 
-      {/* Create Poll modal — same as InternalChatPanel, above all other layers */}
-      {pollModalOpen && (
-        <>
-          <div className="fixed inset-0 z-[100] bg-black/40" onClick={() => setPollModalOpen(false)} aria-hidden />
-          <div className="fixed inset-0 z-[101] flex items-center justify-center p-4 pointer-events-none">
-            <div
-              className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-xl border border-[#008080]/20 pointer-events-auto"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="p-4 border-b border-[#008080]/10 flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-900">{isHe ? "צור סקר" : "Create a Poll"}</h2>
-                <button type="button" onClick={() => setPollModalOpen(false)} className="p-2 rounded-xl text-gray-500 hover:bg-gray-100" aria-label={isHe ? "סגור" : "Close"}>×</button>
-              </div>
-              <div className="p-4">
-                <PollCreator
-                  locale={locale}
-                  contacts={contacts}
-                  compact
-                  onSendToContacts={(data, contactIds) => {
-                    const text = `Poll: ${data.question}\n${data.options.map((o, i) => `${i + 1}. ${o}`).join("\n")}`;
-                    contactIds.forEach((id) => sendText(id, text, currentUserId));
-                    setPollModalOpen(false);
-                  }}
-                  onSubmit={() => setPollModalOpen(false)}
-                />
+      {/* Create Poll modal — same as InternalChatPanel; render via portal so no parent can block it */}
+      {typeof document !== "undefined" &&
+        pollModalOpen &&
+        createPortal(
+          <>
+            <div className="fixed inset-0 z-[100] bg-black/40" onClick={() => setPollModalOpen(false)} aria-hidden />
+            <div className="fixed inset-0 z-[101] flex items-center justify-center p-4">
+              <div
+                className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-xl border border-[#008080]/20"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="p-4 border-b border-[#008080]/10 flex items-center justify-between">
+                  <h2 className="text-lg font-semibold text-gray-900">{isHe ? "צור סקר" : "Create a Poll"}</h2>
+                  <button type="button" onClick={() => setPollModalOpen(false)} className="p-2 rounded-xl text-gray-500 hover:bg-gray-100" aria-label={isHe ? "סגור" : "Close"}>×</button>
+                </div>
+                <div className="p-4">
+                  <PollCreator
+                    locale={locale}
+                    contacts={contacts}
+                    compact
+                    onSendToContacts={(data, contactIds) => {
+                      const text = `Poll: ${data.question}\n${data.options.map((o, i) => `${i + 1}. ${o}`).join("\n")}`;
+                      contactIds.forEach((id) => sendText(id, text, currentUserId));
+                      setPollModalOpen(false);
+                    }}
+                    onSubmit={() => setPollModalOpen(false)}
+                  />
+                </div>
               </div>
             </div>
-          </div>
-        </>
-      )}
+          </>,
+          document.body
+        )}
     </div>
   );
 }
