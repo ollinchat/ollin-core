@@ -1,23 +1,23 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useLocale } from "@/contexts/LocaleContext";
 import { useNotes } from "@/contexts/NotesContext";
 import { ProNoteEditor } from "@/components/notes/ProNoteEditor";
 import { OllinSlide } from "@/components/dashboard/OllinSlide";
-import { AIScannerModal } from "@/components/tools/AIScannerModal";
 
 type ToolFanPanelProps = {
   onOpenBoard?: () => void;
 };
 
 export function ToolFanPanel({ onOpenBoard }: ToolFanPanelProps) {
+  const router = useRouter();
   const { locale } = useLocale();
   const { folders, getNotesInFolder, addNote, updateNote, getNote } = useNotes();
   const defaultFolderId = folders[0]?.id ?? "default";
   const isHe = locale === "he";
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
-  const [scannerOpen, setScannerOpen] = useState(false);
   const editingNote = editingNoteId ? getNote(editingNoteId) : null;
 
   const handleOpenNote = (noteId: string) => setEditingNoteId(noteId);
@@ -46,10 +46,9 @@ export function ToolFanPanel({ onOpenBoard }: ToolFanPanelProps) {
           onOpenNote={handleOpenNote}
           onNewNote={handleNewNote}
           onOpenBoard={onOpenBoard}
-          onOpenScanner={() => setScannerOpen(true)}
+          onOpenScanner={() => router.push("/dashboard/scan")}
         />
       </div>
-      {scannerOpen && <AIScannerModal onClose={() => setScannerOpen(false)} />}
     </div>
   );
 }

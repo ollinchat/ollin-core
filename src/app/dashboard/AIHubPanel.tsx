@@ -29,8 +29,10 @@ import {
 import { EventForm } from "@/components/board/EventForm";
 import { PollCreator } from "@/components/board/PollCreator";
 import { GPSClockModal } from "@/components/tools/GPSClockModal";
-import { AIScannerModal } from "@/components/tools/AIScannerModal";
+import { DirectCameraView } from "@/components/tools/DirectCameraView";
 import { ShoppingAgentModal } from "@/components/tools/ShoppingAgentModal";
+import { useScans } from "@/contexts/ScansContext";
+import { parseReceiptText } from "@/lib/receipt-parser";
 import { useChat, useInternalMessages } from "@/contexts/ChatEngineContext";
 import type { AIMessage, EventCardPayload } from "@/lib/chat-engine";
 
@@ -417,9 +419,16 @@ const ACTION_GRID_ITEMS: { key: string; labelEn: string; labelHe: string; icon: 
   { key: "profile", labelEn: "Profile", labelHe: "פרופיל", icon: Globe },
 ];
 
+async function processImageFileForScan(file: File) {
+  const Tesseract = (await import("tesseract.js")).default;
+  const { data } = await Tesseract.recognize(file, "eng", { logger: () => {} });
+  return parseReceiptText(data.text);
+}
+
 const AIHubPanelInner = forwardRef<AIHubPanelHandle, { locale: "en" | "he"; panelIndex?: number }>(function AIHubPanelInner({ locale, panelIndex = 0 }, ref) {
   const { addReceivedTask, addEvent } = useBoard();
   const { contacts } = useContacts();
+  const { addDoc } = useScans();
   const { messages, sendMessage, addFormMessage, addCard } = useChat();
   const { sendText, currentUserId } = useInternalMessages();
   const [chatViewActive, setChatViewActive] = useState(false);
@@ -803,7 +812,27 @@ const AIHubPanelInner = forwardRef<AIHubPanelHandle, { locale: "en" | "he"; pane
       </div>
 
       {gpsOpen && <GPSClockModal onClose={() => setGpsOpen(false)} />}
-      {scannerOpen && <AIScannerModal onClose={() => setScannerOpen(false)} />}
+      {scannerOpen && (
+        <DirectCameraView
+          onCapture={async (file) => {
+            try {
+              const parsed = await processImageFileForScan(file);
+              addDoc({
+                fileName: file.name,
+                date: parsed.date,
+                amount: parsed.amount,
+                supplier: parsed.supplier,
+                vat: parsed.vat,
+                status: "Pending",
+                category: parsed.category,
+              });
+            } finally {
+              setScannerOpen(false);
+            }
+          }}
+          onCancel={() => setScannerOpen(false)}
+        />
+      )}
       {shoppingOpen && <ShoppingAgentModal onClose={() => setShoppingOpen(false)} />}
 
       {/* Create Poll modal */}

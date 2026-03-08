@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   ChevronLeft,
+  Scan,
+  Camera,
   User,
   CheckCircle,
   Clock,
@@ -119,9 +121,12 @@ function DocumentSignPageInner() {
   const [addSignerSearch, setAddSignerSearch] = useState("");
   const [sendCopied, setSendCopied] = useState(false);
   const [draftSaved, setDraftSaved] = useState(false);
+  const [addPageCameraOpen, setAddPageCameraOpen] = useState(false);
   const [documentType, setDocumentType] = useState<"color" | "bw">("color");
   const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
   const uploadInputRef = useRef<HTMLInputElement>(null);
+  const addPageVideoRef = useRef<HTMLVideoElement>(null);
+  const addPageStreamRef = useRef<MediaStream | null>(null);
 
   const hasDocument = documentPages.length > 0;
   const requiredSignatures = getDocumentSignersList(anchors);
@@ -152,6 +157,45 @@ function DocumentSignPageInner() {
     },
     [documentType]
   );
+
+  useEffect(() => {
+    if (!addPageCameraOpen) return;
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }).then((stream) => {
+      addPageStreamRef.current = stream;
+      if (addPageVideoRef.current) addPageVideoRef.current.srcObject = stream;
+    }).catch(() => {});
+    return () => {
+      addPageStreamRef.current?.getTracks().forEach((t) => t.stop());
+      addPageStreamRef.current = null;
+    };
+  }, [addPageCameraOpen]);
+
+  const captureAddPage = useCallback(() => {
+    if (!addPageVideoRef.current || !addPageStreamRef.current) return;
+    const video = addPageVideoRef.current;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0);
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = typeof reader.result === "string" ? reader.result : null;
+        if (dataUrl) {
+          setDocumentPages((prev) => {
+            const next = prev.length === 0 ? [dataUrl] : [...prev, dataUrl];
+            persist(next, anchors);
+            return next;
+          });
+          setAddPageCameraOpen(false);
+        }
+      };
+      reader.readAsDataURL(blob);
+    }, "image/jpeg", 0.9);
+  }, [anchors, persist]);
 
   const handleUploadDocument = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -371,6 +415,14 @@ function DocumentSignPageInner() {
           <>
             <button
               type="button"
+              onClick={() => setAddPageCameraOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium border-2 border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-300 text-sm transition-all shadow-sm"
+            >
+              <Scan className="w-4 h-4" style={{ color: TEAL }} />
+              Add Page via Scan
+            </button>
+            <button
+              type="button"
               onClick={handleSaveDraft}
               className="flex items-center gap-2 px-4 py-2 rounded-xl font-medium border border-gray-300 text-gray-700 hover:bg-gray-50"
             >
@@ -393,20 +445,32 @@ function DocumentSignPageInner() {
         <div className="flex-1 min-h-0 flex overflow-hidden">
           <main className="flex-1 min-h-0 overflow-auto px-6 py-8 flex flex-col items-center">
             {!hasDocument ? (
-              <div className="flex flex-col items-center justify-center flex-1 gap-12 w-full max-w-2xl">
-                <p className="text-gray-600 text-center text-base">Add a document to start signing.</p>
-                <label className="flex flex-col items-center justify-center gap-5 px-14 py-8 rounded-xl font-medium border-2 border-gray-200 text-gray-700 bg-white cursor-pointer text-lg shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] hover:border-gray-300 transition-all duration-200 min-h-[140px] w-full max-w-sm">
-                  <Upload className="w-10 h-10 flex-shrink-0 text-gray-500" />
-                  <span>Upload Document</span>
-                  <input
-                    ref={uploadInputRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,image/jpg"
-                    multiple
-                    onChange={handleUploadDocument}
-                    className="hidden"
-                  />
-                </label>
+              <div className="flex flex-col items-center justify-center flex-1 gap-10 w-full max-w-2xl">
+                <p className="text-gray-600 text-center text-base">Add a document, then click on it to place signature anchors.</p>
+                <div className="flex flex-col sm:flex-row gap-6 w-full justify-center items-stretch">
+                  <button
+                    type="button"
+                    onClick={() => setAddPageCameraOpen(true)}
+                    className="flex flex-col items-center justify-center gap-4 p-6 bg-white border-2 border-gray-200 rounded-xl font-medium text-gray-700 shadow-md hover:shadow-lg hover:border-gray-300 transition-all min-h-[120px] w-full max-w-[240px]"
+                  >
+                    <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ backgroundColor: "rgba(20,184,166,0.12)" }}>
+                      <Scan className="w-6 h-6" style={{ color: TEAL }} />
+                    </div>
+                    <span className="text-sm font-semibold">Add Page via Scan</span>
+                  </button>
+                  <label className="flex flex-col items-center justify-center gap-4 px-10 py-6 rounded-xl font-medium border-2 border-gray-200 text-gray-700 bg-white cursor-pointer text-base shadow-md hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] hover:border-gray-300 transition-all min-h-[120px]">
+                    <Upload className="w-8 h-8 flex-shrink-0" />
+                    <span>Upload Document</span>
+                    <input
+                      ref={uploadInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/jpg"
+                      multiple
+                      onChange={handleUploadDocument}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
               </div>
             ) : (
               <div className="flex flex-col gap-6 items-center cursor-crosshair w-full max-w-4xl rounded-xl overflow-hidden shadow-md bg-white p-4" onClick={handleContainerClick}>
@@ -579,6 +643,19 @@ function DocumentSignPageInner() {
           </div>
         </section>
       </div>
+
+      {addPageCameraOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-black" role="dialog" aria-modal="true">
+          <video ref={addPageVideoRef} autoPlay playsInline muted className="flex-1 w-full object-cover" />
+          <div className="flex-shrink-0 p-4 flex gap-3 bg-black/80">
+            <button type="button" onClick={() => setAddPageCameraOpen(false)} className="flex-1 py-3 rounded-2xl bg-gray-600 text-white font-medium">Cancel</button>
+            <button type="button" onClick={captureAddPage} className="flex-1 py-3 rounded-2xl text-white font-medium flex items-center justify-center gap-2" style={{ backgroundColor: TEAL }}>
+              <Camera className="w-5 h-5" />
+              Capture
+            </button>
+          </div>
+        </div>
+      )}
 
       {drawingPadAnchorId && (
         <DrawingPadModal

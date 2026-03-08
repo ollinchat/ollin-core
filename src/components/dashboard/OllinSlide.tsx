@@ -44,7 +44,7 @@ type FeatureItem = {
 };
 
 const FEATURE_GRID: FeatureItem[] = [
-  { key: "scanner", labelEn: "Scanner", labelHe: "סורק", icon: ScanLine, action: "scanner" },
+  { key: "scanner", labelEn: "Quick Scan", labelHe: "סריקה מהירה", icon: ScanLine, action: "scanner" },
   { key: "invoices", labelEn: "Invoices", labelHe: "חשבוניות", icon: FileText, href: "/dashboard/invoices" },
   { key: "files", labelEn: "Files", labelHe: "קבצים", icon: FileStack, href: "/dashboard" },
   { key: "sign", labelEn: "Sign Docs", labelHe: "חתימת מסמכים", icon: PenLine, href: "/dashboard/documents/sign" },
@@ -281,8 +281,16 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
                 const tileClass = "flex flex-col items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl bg-white/70 backdrop-blur-sm border border-[#008080]/15 hover:bg-white/95 hover:border-[#008080]/30 text-gray-700 hover:text-gray-900 transition-all shadow-sm";
                 if (action === "scanner" && onOpenScanner) {
                   return (
-                    <button key={key} type="button" onClick={onOpenScanner} className={tileClass}>
-                      {tileContent}
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={onOpenScanner}
+                      className="flex flex-col items-center justify-center gap-1.5 py-2.5 px-2 rounded-2xl bg-white border-2 border-purple-100 hover:border-purple-200 hover:bg-purple-50/50 transition-all shadow-sm group"
+                    >
+                      <div className="w-9 h-9 rounded-full bg-purple-50 flex items-center justify-center group-hover:bg-purple-100">
+                        <Icon className="w-4 h-4 text-purple-600" strokeWidth={2} />
+                      </div>
+                      <span className="text-[11px] font-semibold text-center leading-tight text-gray-700">{isHe ? labelHe : labelEn}</span>
                     </button>
                   );
                 }
