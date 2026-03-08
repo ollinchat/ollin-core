@@ -8,6 +8,7 @@ import { useLocale } from "@/contexts/LocaleContext";
 import { useNotes } from "@/contexts/NotesContext";
 import { useChat, useInternalMessages } from "@/contexts/ChatEngineContext";
 import { useContacts } from "@/contexts/ContactsContext";
+import { useBoard } from "@/contexts/BoardContext";
 import {
   CircleCheck,
   ScanLine,
@@ -29,6 +30,7 @@ import {
 } from "lucide-react";
 import { t } from "@/lib/translations";
 import { PollCreator } from "@/components/board/PollCreator";
+import { MeetingEventFormModal } from "@/components/board/MeetingEventFormModal";
 import { GPSClockModal } from "@/components/tools/GPSClockModal";
 
 const EASE_SMOOTH = [0.32, 0.72, 0, 1];
@@ -75,6 +77,8 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
   const { messages, sendMessage, addFormMessage, clearMessages } = useChat();
   const { sendText, currentUserId } = useInternalMessages();
   const { contacts } = useContacts();
+  const { addMeeting } = useBoard();
+  const [meetingModalOpen, setMeetingModalOpen] = useState(false);
   const defaultFolderId = folders[0]?.id ?? "default";
   const recentNotes = (defaultFolderId ? getNotesInFolder(defaultFolderId) : []).slice(0, 8);
 
@@ -294,27 +298,23 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
                     </button>
                   );
                 }
-                if (action === "meetings" && onOpenBoard) {
+                if (action === "meetings") {
                   return (
-                    <button key={key} type="button" onClick={onOpenBoard} className={tileClass}>
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setMeetingModalOpen(true)}
+                      className={tileClass}
+                    >
                       {tileContent}
                     </button>
                   );
                 }
                 if (action === "converter") {
                   return (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => {
-                        addFormMessage("converter");
-                        setExpanded(true);
-                        setTimeout(() => topInputRef.current?.focus({ preventScroll: true }), 350);
-                      }}
-                      className={tileClass}
-                    >
+                    <Link key={key} href="/dashboard/convert" className={tileClass}>
                       {tileContent}
-                    </button>
+                    </Link>
                   );
                 }
                 if (action === "poll") {
@@ -468,6 +468,18 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
         )}
       </AnimatePresence>
       {gpsOpen && <GPSClockModal onClose={() => setGpsOpen(false)} defaultScrollToSummary />}
+
+      {meetingModalOpen && (
+        <MeetingEventFormModal
+          type="meeting"
+          contacts={contacts}
+          onClose={() => setMeetingModalOpen(false)}
+          onSubmit={(item) => {
+            addMeeting({ ...item, creatorId: currentUserId });
+            setMeetingModalOpen(false);
+          }}
+        />
+      )}
 
       {/* Create Poll modal — same as InternalChatPanel; render via portal so no parent can block it */}
       {typeof document !== "undefined" &&

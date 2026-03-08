@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocale } from "@/contexts/LocaleContext";
 import { useBoard } from "@/contexts/BoardContext";
@@ -426,6 +427,7 @@ async function processImageFileForScan(file: File) {
 }
 
 const AIHubPanelInner = forwardRef<AIHubPanelHandle, { locale: "en" | "he"; panelIndex?: number }>(function AIHubPanelInner({ locale, panelIndex = 0 }, ref) {
+  const router = useRouter();
   const { addReceivedTask, addEvent } = useBoard();
   const { contacts } = useContacts();
   const { addDoc } = useScans();
@@ -494,7 +496,7 @@ const AIHubPanelInner = forwardRef<AIHubPanelHandle, { locale: "en" | "he"; pane
     if (action === "poll") setIsPollModalOpen(true);
     if (action === "event") addFormMessage("event");
     if (action === "task") addFormMessage("task");
-    if (action === "converter") addFormMessage("converter");
+    if (action === "converter") router.push("/dashboard/convert");
   };
 
   useImperativeHandle(ref, () => ({ openTool: handlePlusAction }), [handlePlusAction]);

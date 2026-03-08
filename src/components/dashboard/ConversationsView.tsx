@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocale } from "@/contexts/LocaleContext";
 import { useNotes } from "@/contexts/NotesContext";
@@ -40,7 +41,7 @@ const TOOLS: { key: string; href: string; labelEn: string; labelHe: string; icon
   { key: "poll", href: "/dashboard", labelEn: "Create Poll", labelHe: "סקרים", icon: BarChart2 },
   { key: "events", href: "/dashboard/events/new", labelEn: "Events", labelHe: "אירועים", icon: CalendarDays },
   { key: "meetings", href: "/dashboard", labelEn: "Meetings", labelHe: "פגישות", icon: Users },
-  { key: "converter", href: "/dashboard", labelEn: "Converter", labelHe: "המרת קבצים", icon: FileOutput },
+  { key: "converter", href: "/dashboard/convert", labelEn: "Converter", labelHe: "המרת קבצים", icon: FileOutput },
   { key: "compare", href: "/dashboard", labelEn: "Compare", labelHe: "השוואת מוצרים", icon: Scale },
 ];
 
@@ -52,6 +53,7 @@ const PLUS_ACTIONS: { action: "poll" | "event" | "task" | "converter"; labelEn: 
 ];
 
 export function ConversationsView({ locale, onSelectedContactChange }: ConversationsViewProps) {
+  const router = useRouter();
   const isHe = locale === "he";
   const { folders, getNotesInFolder } = useNotes();
   const { messages, sendMessage, addFormMessage } = useChat();
@@ -106,7 +108,16 @@ export function ConversationsView({ locale, onSelectedContactChange }: Conversat
                       <div className="fixed inset-0 z-40" onClick={() => setPlusMenuOpen(false)} aria-hidden />
                       <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }} className="absolute bottom-full left-0 mb-2 rounded-xl bg-white border border-gray-200 py-2 z-50 min-w-[160px] shadow-lg">
                         {PLUS_ACTIONS.map(({ action, labelEn, labelHe, icon: Icon }) => (
-                          <button key={action} type="button" onClick={() => { addFormMessage(action); setPlusMenuOpen(false); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-[#008080]/10 rounded-lg">
+                          <button
+                            key={action}
+                            type="button"
+                            onClick={() => {
+                              if (action === "converter") router.push("/dashboard/convert");
+                              else addFormMessage(action);
+                              setPlusMenuOpen(false);
+                            }}
+                            className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-[#008080]/10 rounded-lg"
+                          >
                             <Icon className="w-4 h-4 text-[#008080]" strokeWidth={2} />
                             {isHe ? labelHe : labelEn}
                           </button>

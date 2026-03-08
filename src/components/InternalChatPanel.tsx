@@ -9,6 +9,7 @@ import { useBoard } from "@/contexts/BoardContext";
 import { useBilling } from "@/contexts/BillingContext";
 import { MessageSquare, Send, Trash2, Search, Camera, Plus, MapPin, FileText, ImagePlus, Forward, ListTodo, Instagram, Bot, Linkedin, ScanLine, BarChart3, Mic, ChevronLeft, Phone, Video, ClipboardList, CalendarDays, Users, Brain, Ban, UserPlus, Shield, CheckCheck, Pencil } from "lucide-react";
 import { PollCreator } from "@/components/board/PollCreator";
+import { MeetingEventFormModal } from "@/components/board/MeetingEventFormModal";
 import { SOURCE_ICONS, type ChatSourceId } from "@/components/dashboard/SourceBadge";
 import type { InternalMessageRecord } from "@/lib/chat-engine";
 import { formatOllinIdForDisplay } from "@/lib/user-id";
@@ -50,7 +51,7 @@ type InternalChatPanelProps = {
 /** Pro Messaging Suite: filters, search, media bar, message context menu (Convert to Task), typing indicator. */
 export function InternalChatPanel({ locale, compact, onSelectedContactChange, preselectedContactId, threadOnly }: InternalChatPanelProps) {
   const { contacts, addContactWithId, updateContact } = useContacts();
-  const { addReceivedTask, given, received } = useBoard();
+  const { addReceivedTask, addMeeting, given, received } = useBoard();
   const { getConversation, getConversationsWithMeta, deleteConversation, sendText, sendVoice, sendFile, markConversationAsRead, currentUserId } = useInternalMessages();
   const { createDraft, getShareLink } = useBilling();
   const [selectedContactId, setSelectedContactId] = useState<string | null>(preselectedContactId ?? null);
@@ -74,7 +75,7 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
   const [brainMenuOpen, setBrainMenuOpen] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [eventPopupOpen, setEventPopupOpen] = useState(false);
-  const [meetingPopupOpen, setMeetingPopupOpen] = useState(false);
+  const [meetingFormModalOpen, setMeetingFormModalOpen] = useState(false);
   const [pollModalOpen, setPollModalOpen] = useState(false);
   const [eventMeetingTitle, setEventMeetingTitle] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -198,14 +199,6 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
     sendText(selectedContactId, `📅 Event: ${title}`, currentUserId);
     setEventMeetingTitle("");
     setEventPopupOpen(false);
-  }, [eventMeetingTitle, selectedContactId, currentUserId, sendText]);
-
-  const handleCreateMeetingSubmit = useCallback(() => {
-    const title = eventMeetingTitle.trim();
-    if (!title || !selectedContactId) return;
-    sendText(selectedContactId, `📅 Meeting: ${title}`, currentUserId);
-    setEventMeetingTitle("");
-    setMeetingPopupOpen(false);
   }, [eventMeetingTitle, selectedContactId, currentUserId, sendText]);
 
   const selectedContact = selectedContactId ? contacts.find((c) => c.id === selectedContactId) : null;
@@ -574,7 +567,7 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
                               <CalendarDays className="w-4 h-4 shrink-0 text-[#008080]" strokeWidth={2} />
                               {isHe ? "צור אירוע" : "Create Event"}
                             </button>
-                            <button type="button" onClick={() => { setMeetingPopupOpen(true); setAttachMenuOpen(false); }} className="flex items-center gap-2 py-2.5 px-3 text-left text-xs font-medium text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl">
+                            <button type="button" onClick={() => { setMeetingFormModalOpen(true); setAttachMenuOpen(false); }} className="flex items-center gap-2 py-2.5 px-3 text-left text-xs font-medium text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl">
                               <Users className="w-4 h-4 shrink-0 text-[#008080]" strokeWidth={2} />
                               {isHe ? "צור פגישה" : "Create Meeting"}
                             </button>
@@ -605,20 +598,16 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
                         </div>
                       </>
                     )}
-                    {meetingPopupOpen && (
-                      <>
-                        <div className="fixed inset-0 z-40 bg-black/40" onClick={() => setMeetingPopupOpen(false)} aria-hidden />
-                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                          <div className="w-full max-w-sm rounded-xl bg-white shadow-xl border border-gray-200 p-4" onClick={(e) => e.stopPropagation()}>
-                            <p className="text-sm font-semibold text-gray-900 mb-3">{isHe ? "צור פגישה" : "Create Meeting"}</p>
-                            <input type="text" value={eventMeetingTitle} onChange={(e) => setEventMeetingTitle(e.target.value)} placeholder={isHe ? "שם הפגישה" : "Meeting title"} className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm mb-3 outline-none focus:ring-2 focus:ring-[#008080]/30" />
-                            <div className="flex gap-2">
-                              <button type="button" onClick={() => { setMeetingPopupOpen(false); setEventMeetingTitle(""); }} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50">{isHe ? "ביטול" : "Cancel"}</button>
-                              <button type="button" onClick={handleCreateMeetingSubmit} className="flex-1 py-2.5 rounded-xl text-white text-sm font-medium" style={{ backgroundColor: TEAL }}>{isHe ? "צור" : "Create"}</button>
-                            </div>
-                          </div>
-                        </div>
-                      </>
+                    {meetingFormModalOpen && (
+                      <MeetingEventFormModal
+                        type="meeting"
+                        contacts={contacts}
+                        onClose={() => setMeetingFormModalOpen(false)}
+                        onSubmit={(item) => {
+                          addMeeting({ ...item, creatorId: currentUserId });
+                          setMeetingFormModalOpen(false);
+                        }}
+                      />
                     )}
                     {pollModalOpen && (
                       <>
@@ -903,7 +892,7 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
                     <button type="button" onClick={() => openFileInput("application/pdf,.doc,.docx,image/*,*/*")} className="flex items-center gap-2 py-2.5 px-3 text-left text-xs font-medium text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl"><FileText className="w-4 h-4 shrink-0 text-[#008080]" strokeWidth={2} />{isHe ? "מסמך" : "Document"}</button>
                     <button type="button" onClick={handleSendLocation} className="flex items-center gap-2 py-2.5 px-3 text-left text-xs font-medium text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl"><MapPin className="w-4 h-4 shrink-0 text-[#008080]" strokeWidth={2} />{isHe ? "מיקום" : "Location"}</button>
                     <button type="button" onClick={() => { setEventPopupOpen(true); setAttachMenuOpen(false); }} className="flex items-center gap-2 py-2.5 px-3 text-left text-xs font-medium text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl"><CalendarDays className="w-4 h-4 shrink-0 text-[#008080]" strokeWidth={2} />{isHe ? "צור אירוע" : "Create Event"}</button>
-                    <button type="button" onClick={() => { setMeetingPopupOpen(true); setAttachMenuOpen(false); }} className="flex items-center gap-2 py-2.5 px-3 text-left text-xs font-medium text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl"><Users className="w-4 h-4 shrink-0 text-[#008080]" strokeWidth={2} />{isHe ? "צור פגישה" : "Create Meeting"}</button>
+                    <button type="button" onClick={() => { setMeetingFormModalOpen(true); setAttachMenuOpen(false); }} className="flex items-center gap-2 py-2.5 px-3 text-left text-xs font-medium text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl"><Users className="w-4 h-4 shrink-0 text-[#008080]" strokeWidth={2} />{isHe ? "צור פגישה" : "Create Meeting"}</button>
                     <button type="button" onClick={() => { setPollModalOpen(true); setAttachMenuOpen(false); }} className="flex items-center gap-2 py-2.5 px-3 text-left text-xs font-medium text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl"><BarChart3 className="w-4 h-4 shrink-0 text-[#008080]" strokeWidth={2} />{isHe ? "צור סקר" : "Create Poll"}</button>
                     <button type="button" onClick={() => setAttachMenuOpen(false)} className="flex items-center gap-2 py-2.5 px-3 text-left text-xs font-medium text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] rounded-xl"><ScanLine className="w-4 h-4 shrink-0 text-[#008080]" strokeWidth={2} />{isHe ? "סריקה (AI)" : "Scan (AI)"}</button>
                   </div>
@@ -925,20 +914,16 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
                 </div>
               </>
             )}
-            {meetingPopupOpen && (
-              <>
-                <div className="fixed inset-0 z-40 bg-black/40" onClick={() => setMeetingPopupOpen(false)} aria-hidden />
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                  <div className="w-full max-w-sm rounded-xl bg-white shadow-xl border border-gray-200 p-4" onClick={(e) => e.stopPropagation()}>
-                    <p className="text-sm font-semibold text-gray-900 mb-3">{isHe ? "צור פגישה" : "Create Meeting"}</p>
-                    <input type="text" value={eventMeetingTitle} onChange={(e) => setEventMeetingTitle(e.target.value)} placeholder={isHe ? "שם הפגישה" : "Meeting title"} className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm mb-3 outline-none focus:ring-2 focus:ring-[#008080]/30" />
-                    <div className="flex gap-2">
-                      <button type="button" onClick={() => { setMeetingPopupOpen(false); setEventMeetingTitle(""); }} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50">{isHe ? "ביטול" : "Cancel"}</button>
-                      <button type="button" onClick={handleCreateMeetingSubmit} className="flex-1 py-2.5 rounded-xl text-white text-sm font-medium" style={{ backgroundColor: TEAL }}>{isHe ? "צור" : "Create"}</button>
-                    </div>
-                  </div>
-                </div>
-              </>
+            {meetingFormModalOpen && (
+              <MeetingEventFormModal
+                type="meeting"
+                contacts={contacts}
+                onClose={() => setMeetingFormModalOpen(false)}
+                onSubmit={(item) => {
+                  addMeeting({ ...item, creatorId: currentUserId });
+                  setMeetingFormModalOpen(false);
+                }}
+              />
             )}
             {pollModalOpen && (
               <>
