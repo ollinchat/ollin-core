@@ -5,7 +5,7 @@ import { slugFromUsername } from "@/lib/profile-types";
 import { BusinessCardView } from "./BusinessCardView";
 
 export function CardClient({ username }: { username: string }) {
-  const { getProfileByUsername, hasHydrated } = useProfile();
+  const { getProfileByUsername, hasHydrated, updateProfile } = useProfile();
   const slug = slugFromUsername(username);
 
   if (!hasHydrated) {
@@ -21,7 +21,7 @@ export function CardClient({ username }: { username: string }) {
     return <CardNotFound />;
   }
 
-  return <BusinessCardView profile={profile} />;
+  return <BusinessCardView profile={profile} updateProfile={updateProfile} />;
 }
 
 function CardNotFound() {

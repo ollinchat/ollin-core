@@ -130,6 +130,40 @@ export interface Profile {
   linkedin: string;
   instagram: string;
   behance: string;
+  /** Optional: company name for card/edit */
+  company?: string;
+  /** Optional: Telegram username */
+  telegram?: string;
+  /** Optional: Viber username or number */
+  viber?: string;
+  /** Optional: TikTok handle or URL */
+  tiktok?: string;
+  /** Optional: Messenger username or profile URL */
+  messenger?: string;
+  /** Optional: Facebook profile URL */
+  facebook?: string;
+  /** Optional: X (Twitter) username */
+  x?: string;
+  /** Optional: YouTube channel URL or handle */
+  youtube?: string;
+  /** Optional: Signal phone number */
+  signal?: string;
+  /** Optional: Discord username */
+  discord?: string;
+  /** Optional: Skype Live ID */
+  skype?: string;
+  /** Optional: WeChat ID */
+  wechat?: string;
+  /** Optional: Slack member ID */
+  slack?: string;
+  /** Optional: Line ID */
+  line?: string;
+  /** Optional: Threads username */
+  threads?: string;
+  /** Optional: Pinterest username */
+  pinterest?: string;
+  /** Optional: GitHub username */
+  github?: string;
   portfolio: PortfolioItem[];
   projects?: ProjectPosition[];
   pressMedia?: PressMediaLink[];

@@ -48,7 +48,7 @@ type FeatureItem = {
 const FEATURE_GRID: FeatureItem[] = [
   { key: "scanner", labelEn: "Quick Scan", labelHe: "סריקה מהירה", icon: ScanLine, action: "scanner" },
   { key: "invoices", labelEn: "Invoices", labelHe: "חשבוניות", icon: FileText, href: "/dashboard/invoices" },
-  { key: "files", labelEn: "Files", labelHe: "קבצים", icon: FileStack, href: "/dashboard" },
+  { key: "files", labelEn: "Files", labelHe: "קבצים", icon: FileStack, href: "/dashboard?open=board&tab=folders" },
   { key: "sign", labelEn: "Sign Docs", labelHe: "חתימת מסמכים", icon: PenLine, href: "/dashboard/documents/sign" },
   { key: "poll", labelEn: "Create Poll", labelHe: "סקרים", icon: BarChart2, action: "poll" },
   { key: "events", labelEn: "Events", labelHe: "אירועים", icon: CalendarDays, href: "/dashboard/events/new" },
@@ -274,6 +274,17 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
           <div className="flex-shrink-0 pb-2 pt-1">
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
               {FEATURE_GRID.map(({ key, href, action, labelEn, labelHe, icon: Icon }) => {
+                const tileClass = "flex flex-col items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl bg-white/70 backdrop-blur-sm border border-[#008080]/15 hover:bg-white/95 hover:border-[#008080]/30 text-gray-700 hover:text-gray-900 transition-all shadow-sm";
+                if (key === "files") {
+                  return (
+                    <Link key={key} href="/dashboard?open=board&tab=folders" className={tileClass}>
+                      <div className="w-9 h-9 rounded-xl bg-[#008080]/10 flex items-center justify-center">
+                        <Icon className="w-4 h-4 text-[#008080]" strokeWidth={2} />
+                      </div>
+                      <span className="text-[11px] font-medium text-center leading-tight text-gray-700">{isHe ? labelHe : labelEn}</span>
+                    </Link>
+                  );
+                }
                 const tileContent = (
                   <>
                     <div className="w-9 h-9 rounded-xl bg-[#008080]/10 flex items-center justify-center">
@@ -282,7 +293,6 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
                     <span className="text-[11px] font-medium text-center leading-tight text-gray-700">{isHe ? labelHe : labelEn}</span>
                   </>
                 );
-                const tileClass = "flex flex-col items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl bg-white/70 backdrop-blur-sm border border-[#008080]/15 hover:bg-white/95 hover:border-[#008080]/30 text-gray-700 hover:text-gray-900 transition-all shadow-sm";
                 if (action === "scanner" && onOpenScanner) {
                   return (
                     <button

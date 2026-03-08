@@ -50,9 +50,15 @@ const SYSTEM_FOLDERS: { id: SystemFolderId; labelEn: string; labelHe: string; ic
   { id: "archive", labelEn: "Archive", labelHe: "ארכיון", icon: Archive },
 ];
 
+const MAIN_CATEGORY_IDS: MainCategory[] = ["tasks", "calendar", "meetings", "checklists", "events", "finances", "folders"];
+function isValidMainCategory(t: string | null | undefined): t is MainCategory {
+  return t != null && MAIN_CATEGORY_IDS.includes(t as MainCategory);
+}
+
 type StrategicBoardProps = {
   locale: "en" | "he";
   onBack?: () => void;
+  initialMainTab?: string | null;
 };
 
 /** Notes, Calls, Archive moved into Folders as system folders (pinned at top of sidebar). */
@@ -66,8 +72,11 @@ const MAIN_CATEGORIES: { id: MainCategory; labelKey: TranslationKey; icon: typeo
   { id: "folders", labelKey: "board.folders", icon: FolderOpen },
 ];
 
-export function StrategicBoard({ locale, onBack }: StrategicBoardProps) {
-  const [mainTab, setMainTab] = useState<MainCategory>("tasks");
+export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoardProps) {
+  const [mainTab, setMainTab] = useState<MainCategory>(() => (isValidMainCategory(initialMainTab) ? initialMainTab : "tasks"));
+  useEffect(() => {
+    if (isValidMainCategory(initialMainTab)) setMainTab(initialMainTab);
+  }, [initialMainTab]);
   const [folderSearchQuery, setFolderSearchQuery] = useState("");
   const [insideFolderId, setInsideFolderId] = useState<SystemFolderId | string | null>(null);
   const [taskSubTab, setTaskSubTab] = useState<TaskSubTab>("given");

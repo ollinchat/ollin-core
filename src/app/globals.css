@@ -121,3 +121,12 @@ nav a,
 .explore-scan-radar {
   animation: radar-pulse 2.5s ease-in-out infinite;
 }
+
+/* Share to Nearby: pulsing concentric rings */
+@keyframes radar-ring {
+  0% { transform: scale(0.4); opacity: 0.7; }
+  100% { transform: scale(1.4); opacity: 0; }
+}
+.nearby-radar-ring {
+  animation: radar-ring 1.5s ease-out infinite;
+}

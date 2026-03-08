@@ -7,8 +7,11 @@ import type { Profile, ProfileBlock } from "@/lib/profile-types";
 import { slugFromUsername } from "@/lib/profile-types";
 import { useLocale } from "@/contexts/LocaleContext";
 import { t } from "@/lib/translations";
-import { Star, Briefcase, GraduationCap, MessageCircle, Link2, Image as ImageIcon, FileText, ShoppingBag, Newspaper } from "lucide-react";
-import { ActionCenter } from "@/components/profile/ActionCenter";
+import { Star, Briefcase, GraduationCap, MessageCircle, Link2, Image as ImageIcon, FileText, ShoppingBag, Newspaper, Mail, Phone, Linkedin, Contact } from "lucide-react";
+/** WhatsApp brand green */
+const WHATSAPP_GREEN = "#25D366";
+/** Dark teal for hero (screenshot reference) */
+const HERO_TEAL = "#0d5c5c";
 import { TestimonialsBlock } from "@/components/profile/blocks/TestimonialsBlock";
 import { FAQBlock } from "@/components/profile/blocks/FAQBlock";
 import { LeadFormBlock } from "@/components/profile/blocks/LeadFormBlock";
@@ -339,29 +342,113 @@ export function PublicProfileClient({ username }: { username: string }) {
   const fullName = profile.name ?? "";
   const title = profile.professionalTitle ?? "";
   const bio = profile.bio ?? "";
-  const coverImage = profile.coverImage ?? "";
   const profileImage = profile.profileImage ?? "";
+  const whatsappNum = profile.whatsapp?.replace(/\D/g, "") ?? "";
+  const whatsappUrl = whatsappNum ? `https://wa.me/${whatsappNum}?text=${encodeURIComponent("Hi, I found you through Ollin")}` : null;
+  const linkedinUrl = profile.linkedin?.trim() ? (profile.linkedin.startsWith("http") ? profile.linkedin : `https://linkedin.com/in/${profile.linkedin.replace(/^@/, "")}`) : null;
+  const emailUrl = profile.email?.trim() ? `mailto:${profile.email}` : null;
+  const phoneUrl = profile.phone?.trim() ? `tel:${profile.phone.replace(/\s/g, "")}` : null;
+
+  function handleSaveToContacts() {
+    const parts = ["BEGIN:VCARD", "VERSION:3.0", `FN:${fullName || "Contact"}`];
+    const nameParts = (fullName || "Contact").split(/\s+/);
+    parts.push(`N:${nameParts.length > 1 ? nameParts.slice(1).join(" ") : ""};${nameParts[0] || ""};;;`);
+    if (title) parts.push(`TITLE:${title.replace(/\n/g, " ")}`);
+    if (profile.phone?.trim()) parts.push(`TEL;TYPE=CELL:${profile.phone.replace(/\s/g, "")}`);
+    if (profile.email?.trim()) parts.push(`EMAIL:${profile.email}`);
+    if (profile.website?.trim()) {
+      const url = profile.website.startsWith("http") ? profile.website : `https://${profile.website}`;
+      parts.push(`URL:${url}`);
+    }
+    parts.push("END:VCARD");
+    const blob = new Blob([parts.join("\r\n")], { type: "text/vcard;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${(fullName || "contact").replace(/\s+/g, "-")}.vcf`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50" dir="auto">
+    <div className="min-h-screen bg-white" dir="auto">
+      {/* Hero: dark teal top section (~40% height), no cover image for clean look */}
       <header className="relative w-full">
-        <div className="relative w-full h-48 sm:h-56 bg-gradient-to-br from-teal-700 to-teal-900 overflow-hidden">
-          {coverImage ? <img src={coverImage} alt="" className="w-full h-full object-cover" /> : null}
-        </div>
-        <div className="px-4 -mt-16 relative z-10 flex flex-col items-center text-center pb-4">
-          <div className="w-28 h-28 rounded-full overflow-hidden bg-gray-100 border-4 border-white shadow-lg flex items-center justify-center">
-            {profileImage ? <img src={profileImage} alt="" className="w-full h-full object-cover" /> : <span className="text-4xl font-bold text-gray-400">{fullName.slice(0, 1).toUpperCase() || "?"}</span>}
+        <div
+          className="relative w-full overflow-hidden"
+          style={{ height: "clamp(180px, 42vh, 320px)", backgroundColor: HERO_TEAL }}
+        />
+        {/* White content area: avatar overlaps hero + content */}
+        <div className="relative bg-white px-4 pt-0 pb-6 -mt-16 z-10 flex flex-col items-center text-center">
+          <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full overflow-hidden bg-gray-100 border-4 border-white shadow-lg flex items-center justify-center flex-shrink-0">
+            {profileImage ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img src={profileImage} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-4xl sm:text-5xl font-bold text-gray-400">{fullName.slice(0, 1).toUpperCase() || "?"}</span>
+            )}
           </div>
-          {fullName ? <h1 className="mt-4 text-xl font-bold text-gray-900">{fullName}</h1> : null}
-          {title ? <p className="text-teal-600 font-medium text-sm mt-0.5">{title}</p> : null}
-          {bio ? <p className="text-gray-600 text-sm mt-2 max-w-md">{bio}</p> : null}
-          <div className="mt-4 w-full flex flex-col items-center">
-            <ActionCenter header={header} />
+          {fullName ? <h1 className="mt-5 text-xl sm:text-2xl font-bold text-gray-900">{fullName}</h1> : null}
+          {title ? <p className="text-teal-600 font-medium text-sm sm:text-base mt-0.5">{title}</p> : null}
+          {bio ? <p className="text-gray-500 text-sm mt-2 max-w-md leading-relaxed">{bio}</p> : null}
+
+          {/* Primary CTA: WhatsApp button (full-width, prominent) */}
+          {whatsappUrl && (
+            <a
+              href={whatsappUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-6 w-full max-w-md mx-auto flex items-center justify-center gap-2 py-3.5 px-6 rounded-xl text-white font-medium text-sm hover:opacity-95 transition-opacity"
+              style={{ backgroundColor: WHATSAPP_GREEN }}
+            >
+              <MessageCircle className="w-5 h-5 shrink-0" />
+              WhatsApp
+            </a>
+          )}
+
+          {/* Social & contact row: LinkedIn, Email, Save to Contacts, Phone (monochrome) */}
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-4">
+            {linkedinUrl && (
+              <a
+                href={linkedinUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors"
+                aria-label="LinkedIn"
+              >
+                <Linkedin className="w-5 h-5" />
+              </a>
+            )}
+            {emailUrl && (
+              <a
+                href={emailUrl}
+                className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors"
+                aria-label="Email"
+              >
+                <Mail className="w-5 h-5" />
+              </a>
+            )}
+            <button
+              type="button"
+              onClick={handleSaveToContacts}
+              className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors"
+              aria-label="Save to Contacts"
+            >
+              <Contact className="w-5 h-5" />
+            </button>
+            {phoneUrl && (
+              <a
+                href={phoneUrl}
+                className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors"
+                aria-label="Phone"
+              >
+                <Phone className="w-5 h-5" />
+              </a>
+            )}
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-2xl px-4 py-8">
+      <main className="mx-auto max-w-2xl px-4 py-8 bg-gray-50/50">
         {blocks.map((block) => (
           <div key={block.id} className="mb-6">
             <PublicBlockCard

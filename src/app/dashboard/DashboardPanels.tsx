@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { useLocale } from "@/contexts/LocaleContext";
 import { useArchitect } from "@/contexts/ArchitectContext";
 import {
@@ -24,10 +25,13 @@ export const BOARD_PANEL_INDEX = 3;
 export type DashboardPanelsProps = {
   panelIndex?: number;
   setPanelIndex?: (value: number | ((prev: number) => number)) => void;
+  boardTab?: string | null;
 };
 
 export function DashboardPanels(props: DashboardPanelsProps = {}) {
-  const { panelIndex: controlledIndex, setPanelIndex: controlledSetIndex } = props;
+  const { panelIndex: controlledIndex, setPanelIndex: controlledSetIndex, boardTab: boardTabProp } = props;
+  const searchParams = useSearchParams();
+  const boardTab = boardTabProp ?? searchParams.get("tab") ?? undefined;
   const { locale } = useLocale();
   const { state: architectState } = useArchitect();
   const [internalIndex, setInternalIndex] = useState(DEFAULT_PANEL_INDEX);
@@ -67,7 +71,7 @@ export function DashboardPanels(props: DashboardPanelsProps = {}) {
         {safePanelIndex === 0 && <div className="flex-1 min-h-0 flex flex-col"><PaymentsPanel onOpenBoard={() => setPanelIndexSafe(3)} /></div>}
         {safePanelIndex === 1 && <div className="flex-1 min-h-0 flex flex-col"><ExplorePanel /></div>}
         {safePanelIndex === 2 && <div className="flex-1 min-h-0 flex flex-col"><ToolFanPanel onOpenBoard={() => setPanelIndexSafe(3)} /></div>}
-        {safePanelIndex === 3 && <div className="flex-1 min-h-0 flex flex-col"><StrategicBoard locale={locale} onBack={() => setPanelIndexSafe(2)} /></div>}
+        {safePanelIndex === 3 && <div className="flex-1 min-h-0 flex flex-col"><StrategicBoard locale={locale} onBack={() => setPanelIndexSafe(2)} initialMainTab={boardTab} /></div>}
         {safePanelIndex === 4 && (
           <div className="flex-1 min-h-0 flex flex-col">
           <LibraryPanel
