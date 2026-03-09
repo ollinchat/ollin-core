@@ -63,6 +63,8 @@ export interface BoardTask {
   creatorId?: string;
   /** Optional due date (ms) for calendar display */
   dueDate?: number;
+  /** Priority for accent bar (green / yellow / red) */
+  priority?: "low" | "medium" | "high";
   /** Task-level attachments (proof of completion, updates) */
   attachments?: TaskAttachment[];
   /** Comments thread (creator + assignees can post text/media) */

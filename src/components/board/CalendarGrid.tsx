@@ -129,9 +129,9 @@ export function CalendarGrid({ given, received, meetings, events, locale }: Cale
 
     return (
       <div
-        className={`min-h-[72px] p-1 border border-gray-200 rounded-sm flex flex-col ${
-          isCurrentMonth === false ? "bg-gray-50 text-gray-400" : "bg-white"
-        } ${isToday ? "ring-1 ring-[#008080] bg-[#008080]/[0.12]" : ""}`}
+        className={`min-h-[72px] p-1 border border-gray-100 rounded-sm flex flex-col ${
+          isCurrentMonth === false ? "bg-gray-50/50 text-gray-400" : "bg-white"
+        } ${isToday ? "ring-1 ring-[#008080]/40 bg-[#008080]/[0.06]" : ""}`}
       >
         <span className="text-xs font-medium text-gray-600">{d.getDate()}</span>
         <div className="flex-1 overflow-hidden mt-0.5 space-y-0.5">
@@ -161,7 +161,7 @@ export function CalendarGrid({ given, received, meetings, events, locale }: Cale
   return (
     <div className="space-y-3">
       {/* Sub-header: Year | Month | Week */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 pb-2">
+      <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 pb-2">
         {(["year", "month", "week"] as const).map((mode) => (
           <button
             key={mode}
@@ -170,7 +170,7 @@ export function CalendarGrid({ given, received, meetings, events, locale }: Cale
             className={`px-3 py-1.5 rounded-sm text-sm font-medium border capitalize ${
               viewMode === mode
                 ? "bg-[#008080] text-white border-[#006666]"
-                : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+                : "bg-white text-slate-600 border-gray-100 hover:bg-gray-50"
             }`}
           >
             {mode === "year" && (locale === "he" ? "שנה" : "Year")}
@@ -188,7 +188,7 @@ export function CalendarGrid({ given, received, meetings, events, locale }: Cale
               else d.setFullYear(d.getFullYear() - 1);
               setCursor(d);
             }}
-            className="p-1.5 rounded-sm border border-gray-200 hover:bg-gray-100 text-gray-600"
+            className="p-1.5 rounded-sm border border-gray-100 hover:bg-gray-50 text-slate-500"
             aria-label="Previous"
           >
             ←
@@ -208,7 +208,7 @@ export function CalendarGrid({ given, received, meetings, events, locale }: Cale
               else d.setFullYear(d.getFullYear() + 1);
               setCursor(d);
             }}
-            className="p-1.5 rounded-sm border border-gray-200 hover:bg-gray-100 text-gray-600"
+            className="p-1.5 rounded-sm border border-gray-100 hover:bg-gray-50 text-slate-500"
             aria-label="Next"
           >
             →
@@ -217,12 +217,12 @@ export function CalendarGrid({ given, received, meetings, events, locale }: Cale
       </div>
 
       {viewMode === "month" && (
-        <div className="border border-gray-200 rounded-sm overflow-hidden">
-          <div className="grid grid-cols-7 bg-gray-100 border-b border-gray-200">
+        <div className="border border-gray-100 rounded-sm overflow-hidden">
+          <div className="grid grid-cols-7 bg-gray-50/80 border-b border-gray-100">
             {weekDays.map((label) => (
               <div
                 key={label}
-                className="p-2 text-xs font-semibold text-gray-600 uppercase tracking-wide text-center border-r border-gray-200 last:border-r-0"
+                className="p-2 text-xs font-semibold text-slate-600 uppercase tracking-wide text-center border-r border-gray-100 last:border-r-0"
               >
                 {label}
               </div>
@@ -241,12 +241,12 @@ export function CalendarGrid({ given, received, meetings, events, locale }: Cale
       )}
 
       {viewMode === "week" && (
-        <div className="border border-gray-200 rounded-sm overflow-hidden">
-          <div className="grid grid-cols-7 bg-gray-100 border-b border-gray-200">
+        <div className="border border-gray-100 rounded-sm overflow-hidden">
+          <div className="grid grid-cols-7 bg-gray-50/80 border-b border-gray-100">
             {weekDays.map((label, i) => (
               <div
                 key={label}
-                className="p-2 text-xs font-semibold text-gray-600 uppercase text-center border-r border-gray-200 last:border-r-0"
+                className="p-2 text-xs font-semibold text-slate-600 uppercase text-center border-r border-gray-100 last:border-r-0"
               >
                 <div>{label}</div>
                 <div className="text-gray-500 font-normal">{weekGrid.cells[i].getDate()}</div>
@@ -274,8 +274,8 @@ export function CalendarGrid({ given, received, meetings, events, locale }: Cale
               d = addDays(d, 1);
             }
             return (
-              <div key={i} className="border border-gray-200 rounded-sm overflow-hidden bg-white">
-                <div className="p-1.5 text-xs font-semibold text-gray-700 bg-gray-50 border-b border-gray-200 text-center">
+              <div key={i} className="border border-gray-100 rounded-sm overflow-hidden bg-white">
+                <div className="p-1.5 text-xs font-semibold text-gray-700 bg-gray-50/80 border-b border-gray-100 text-center">
                   {monthLabels[i]} {year}
                 </div>
                 <div className="grid grid-cols-7">

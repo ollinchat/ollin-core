@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { t } from "@/lib/translations";
+import { generateUUID } from "@/lib/uuid";
 import { PanelWrapper } from "@/components/dashboard/PanelWrapper";
 import { useBoard } from "@/contexts/BoardContext";
 import { useFolders } from "@/contexts/FoldersContext";
@@ -16,6 +17,8 @@ import { MeetingEventFormModal } from "./MeetingEventFormModal";
 import { CalendarGrid } from "./CalendarGrid";
 import { NotebookPanel } from "./NotebookPanel";
 import { SkeletonBoard } from "@/components/ui/Skeleton";
+import { UserAvatar } from "@/components/ui/UserAvatar";
+import type { Contact } from "@/contexts/ContactsContext";
 import {
   ListTodo,
   Calendar,
@@ -39,9 +42,15 @@ import {
   Mic,
   ImagePlus,
   Send,
+  Paperclip,
+  Camera,
+  X,
+  Clock,
+  User,
 } from "lucide-react";
 import { calculateTotalBalance, type OllinFinanceEntry } from "@/lib/finance-types";
 import type { TranslationKey } from "@/lib/translations";
+import type { TaskAttachment } from "@/lib/board-types";
 
 type MainCategory = "tasks" | "calendar" | "meetings" | "checklists" | "events" | "finances" | "folders";
 type TaskSubTab = "given" | "received";
@@ -86,14 +95,27 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
   const [taskSubTab, setTaskSubTab] = useState<TaskSubTab>("given");
   const [quickAddText, setQuickAddText] = useState("");
   const [quickAddDueDate, setQuickAddDueDate] = useState<string | null>(null);
-  const [quickAddPriority, setQuickAddPriority] = useState<"low" | "medium" | "high" | null>(null);
+  const [quickAddPriority, setQuickAddPriority] = useState<"low" | "medium" | "high">("low");
   const [quickAddNoComments, setQuickAddNoComments] = useState(false);
+  const [quickAddAttachments, setQuickAddAttachments] = useState<TaskAttachment[]>([]);
+  const quickAddFileRef = useRef<HTMLInputElement>(null);
+  const quickAddImageRef = useRef<HTMLInputElement>(null);
+  const quickAddCameraRef = useRef<HTMLInputElement>(null);
   const [createFolderModalOpen, setCreateFolderModalOpen] = useState(false);
   const [modalFolderName, setModalFolderName] = useState("");
   const [modalSharedWithIds, setModalSharedWithIds] = useState<string[]>([]);
+  const [checklistSubTab, setChecklistSubTab] = useState<"given" | "received">("given");
+  const [newChecklistModalOpen, setNewChecklistModalOpen] = useState(false);
   const [newChecklistTitle, setNewChecklistTitle] = useState("");
   const [newChecklistFrequency, setNewChecklistFrequency] = useState<"daily" | "weekly" | "monthly" | "quarterly" | "yearly">("daily");
+  const [newChecklistWeeklyDay, setNewChecklistWeeklyDay] = useState(1); // 0=Sun, 1=Mon...
+  const [newChecklistMonthlyDay, setNewChecklistMonthlyDay] = useState(1);
   const [newChecklistAssignedTo, setNewChecklistAssignedTo] = useState("");
+  const [newChecklistDisableComments, setNewChecklistDisableComments] = useState(false);
+  const [newChecklistInitialItems, setNewChecklistInitialItems] = useState<string[]>([""]);
+  const [newChecklistDailyTime, setNewChecklistDailyTime] = useState("09:00");
+  const [newChecklistAssignPickerOpen, setNewChecklistAssignPickerOpen] = useState(false);
+  const [newChecklistAssignSearch, setNewChecklistAssignSearch] = useState("");
   const [meetingEventModal, setMeetingEventModal] = useState<"meeting" | "event" | null>(null);
   const [folderViewMode, setFolderViewMode] = useState<"grid" | "list">("list");
 
@@ -142,6 +164,18 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
   }, []);
   const totalBurn = calculateTotalBalance(liveEntries);
 
+  const addQuickAddAttachment = (file: File, type: TaskAttachment["type"]) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const url = reader.result as string;
+      setQuickAddAttachments((prev) => [
+        ...prev,
+        { id: generateUUID(), type, url, name: file.name, createdAt: Date.now() },
+      ]);
+    };
+    reader.readAsDataURL(file);
+  };
+
   /** First line or full text is the task title */
   const handleQuickAdd = (kind: "given" | "received") => {
     const raw = quickAddText.trim();
@@ -154,15 +188,18 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
       checklist: [],
       done: false,
       creatorId: currentUserId,
+      priority: quickAddPriority,
       ...(dueDateMs && { dueDate: dueDateMs }),
       ...(quickAddNoComments && { comments: [] }),
+      ...(quickAddAttachments.length > 0 && { attachments: quickAddAttachments }),
     };
     if (kind === "given") addGivenTask(payload);
     else addReceivedTask(payload);
     setQuickAddText("");
     setQuickAddDueDate(null);
-    setQuickAddPriority(null);
+    setQuickAddPriority("low");
     setQuickAddNoComments(false);
+    setQuickAddAttachments([]);
   };
 
   const [quickAddDatePickerOpen, setQuickAddDatePickerOpen] = useState(false);
@@ -193,19 +230,31 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
     );
   };
 
+  const givenChecklists = viewChecklists.filter((c) => c.createdBy === currentUserId);
+  const receivedChecklists = viewChecklists.filter((c) => c.assignedTo === currentUserId);
+  const viewChecklistsFiltered = checklistSubTab === "given" ? givenChecklists : receivedChecklists;
+
   const handleCreateChecklist = () => {
     const title = newChecklistTitle.trim();
     if (!title || !currentUserId) return;
     const assignedTo = isFounder && newChecklistAssignedTo.trim() ? newChecklistAssignedTo.trim() : currentUserId;
+    const items = newChecklistInitialItems
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .map((text) => ({ id: generateUUID(), text, isDone: false, weight: 1 }));
     addChecklist({
       title,
       frequency: newChecklistFrequency,
-      items: [],
+      items,
       assignedTo,
       createdBy: currentUserId,
+      disableComments: newChecklistDisableComments,
     });
     setNewChecklistTitle("");
     setNewChecklistAssignedTo("");
+    setNewChecklistDisableComments(false);
+    setNewChecklistInitialItems([""]);
+    setNewChecklistModalOpen(false);
   };
 
   const combinedMeetingsEvents = [
@@ -217,26 +266,26 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
 
   const boardHeader = (
     <>
-      <div className="px-3 py-2 border-b border-gray-200/80 bg-[#f8f9fa]">
-        <div className="flex items-center gap-2 max-w-md mx-auto bg-white border border-gray-200 rounded-xl pl-3 pr-3 py-2 min-h-[40px]">
-          <Search className="w-4 h-4 text-gray-400 shrink-0" strokeWidth={2} />
+      <div className="px-3 py-2 border-b border-gray-100 bg-white">
+        <div className="flex items-center gap-2 max-w-md mx-auto bg-white border border-gray-100 rounded-sm pl-3 pr-3 py-2 min-h-[40px]">
+          <Search className="w-4 h-4 text-slate-400 shrink-0" strokeWidth={2} />
           <input
             type="text"
             value={folderSearchQuery}
             onChange={(e) => setFolderSearchQuery(e.target.value)}
             placeholder={locale === "he" ? "חיפוש בלוח..." : "Search board..."}
-            className="flex-1 min-w-0 bg-transparent text-sm text-gray-900 placeholder-gray-400 outline-none"
+            className="flex-1 min-w-0 bg-transparent text-sm font-medium text-gray-900 placeholder-slate-400 outline-none"
           />
         </div>
       </div>
-      <div className="flex gap-1 p-1.5 border-b border-gray-200/80 bg-[#f8f9fa] overflow-x-auto scrollbar-hide">
-        {MAIN_CATEGORIES.map(({ id, labelKey, icon: Icon }) => (
+      <div className="flex gap-0 p-1 border-b border-gray-100 bg-white overflow-x-auto scrollbar-hide">
+        {MAIN_CATEGORIES.filter((c) => c.id !== "checklists").map(({ id, labelKey, icon: Icon }) => (
           <button
             key={id}
             type="button"
             onClick={() => setMainTab(id)}
-            className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-all ${
-              mainTab === id ? "bg-[#374151] text-white shadow-sm" : "text-gray-600 bg-gray-100/80 hover:bg-gray-200/90 border border-gray-200/50"
+            className={`flex items-center gap-1.5 px-3 py-2.5 rounded-sm text-xs font-semibold whitespace-nowrap transition-all duration-150 ${
+              mainTab === id ? "bg-[#008080] text-white" : "text-slate-600 bg-transparent hover:bg-gray-50 border border-transparent"
             }`}
           >
             <Icon className="w-3.5 h-3.5 shrink-0" />
@@ -248,36 +297,48 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
   );
 
   return (
-    <PanelWrapper header={boardHeader} className="w-full bg-white border border-gray-200 rounded-xl">
-      <div className="p-3">
+    <PanelWrapper header={boardHeader} className="w-full bg-white border border-gray-100 rounded-sm">
+      <div className="p-3 bg-white min-h-full">
         {mainTab === "tasks" && (
           <>
-            {/* Task sub-tabs: GIVEN | RECEIVED */}
-            <div className="flex gap-1 p-1 rounded-xl bg-gray-100 w-fit mb-4 border border-gray-200">
+            {/* Task sub-tabs: GIVEN | RECEIVED | Checklist button */}
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <div className="flex gap-0 p-0.5 rounded-sm border border-gray-100 bg-white">
+                <button
+                  type="button"
+                  onClick={() => setTaskSubTab("given")}
+                  className={`px-4 py-2.5 rounded-sm text-sm font-semibold uppercase tracking-wide transition-all duration-150 ${
+                    taskSubTab === "given" ? "bg-[#008080] text-white" : "text-slate-600 hover:text-gray-900 bg-transparent hover:bg-gray-50"
+                  }`}
+                >
+                  {t(locale, "board.tasksGiven")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTaskSubTab("received")}
+                  className={`px-4 py-2.5 rounded-sm text-sm font-semibold uppercase tracking-wide transition-all duration-150 ${
+                    taskSubTab === "received" ? "bg-[#008080] text-white" : "text-slate-600 hover:text-gray-900 bg-transparent hover:bg-gray-50"
+                  }`}
+                >
+                  {t(locale, "board.tasksReceived")}
+                </button>
+              </div>
               <button
                 type="button"
-                onClick={() => setTaskSubTab("given")}
-                className={`px-4 py-2 rounded-xl text-sm font-semibold uppercase tracking-wide transition-colors border ${
-                  taskSubTab === "given" ? "bg-white text-gray-900 border-gray-300 shadow-sm" : "text-gray-600 hover:text-gray-900 border-transparent"
-                }`}
+                onClick={() => setMainTab("checklists")}
+                className="flex items-center gap-1.5 px-3 py-2.5 rounded-sm border border-gray-100 bg-white text-slate-600 hover:border-gray-200 hover:text-[#008080] text-sm font-semibold transition-all duration-150"
+                aria-label={locale === "he" ? "רשימות" : "Checklists"}
               >
-                {t(locale, "board.tasksGiven")}
-              </button>
-              <button
-                type="button"
-                onClick={() => setTaskSubTab("received")}
-                className={`px-4 py-2 rounded-xl text-sm font-semibold uppercase tracking-wide transition-colors border ${
-                  taskSubTab === "received" ? "bg-white text-gray-900 border-gray-300 shadow-sm" : "text-gray-600 hover:text-gray-900 border-transparent"
-                }`}
-              >
-                {t(locale, "board.tasksReceived")}
+                <ListTodo className="w-4 h-4" />
+                <Plus className="w-3 h-3" />
+                {locale === "he" ? "רשימות" : "Checklists"}
               </button>
             </div>
 
-            {/* Minimalist task creation: messaging-style input + action row */}
+            {/* Minimalist task creation: clean white input + action row */}
             <div
-              className={`mb-4 rounded-2xl border-2 bg-white/60 backdrop-blur-md transition-colors ${
-                isQuickAddDueNextWeek ? "border-amber-300/70 shadow-sm shadow-amber-100/50" : "border-[#008080]/15 focus-within:border-[#008080]/30"
+              className={`mb-4 rounded-sm border bg-white transition-all duration-150 ${
+                isQuickAddDueNextWeek ? "border-amber-300" : "border-gray-100 focus-within:border-[#008080] focus-within:ring-1 focus-within:ring-[#008080]/15"
               }`}
             >
               <textarea
@@ -291,24 +352,24 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                 }}
                 placeholder={locale === "he" ? "משימה חדשה..." : "New task..."}
                 rows={2}
-                className="w-full min-h-[52px] max-h-24 px-4 py-3 rounded-t-2xl bg-transparent text-gray-900 placeholder-gray-500 text-sm resize-none border-0 focus:ring-0 focus:outline-none"
+                className="w-full min-h-[52px] max-h-24 px-4 py-3 rounded-t-sm bg-white text-gray-900 placeholder-slate-400 text-sm font-medium resize-none border-0 focus:ring-0 focus:outline-none"
               />
-              <div className="flex items-center justify-between gap-1 px-2 py-1.5 border-t border-[#008080]/10 rounded-b-2xl">
+              <div className="flex items-center justify-between gap-1 px-2 py-2 border-t border-gray-100 rounded-b-sm bg-white">
                 <div className="flex items-center gap-0.5">
-                  {/* Priority dots */}
+                  {/* Priority dots: high=red, medium=amber, low=Ollin green (default) */}
                   {(["high", "medium", "low"] as const).map((p) => (
                     <button
                       key={p}
                       type="button"
-                      onClick={() => setQuickAddPriority(quickAddPriority === p ? null : p)}
-                      className={`w-6 h-6 rounded-full flex items-center justify-center transition-opacity ${
+                      onClick={() => setQuickAddPriority(quickAddPriority === p ? "low" : p)}
+                      className={`w-6 h-6 rounded-sm flex items-center justify-center transition-all duration-150 ${
                         quickAddPriority === p
                           ? p === "high"
-                            ? "bg-red-400"
+                            ? "bg-red-500"
                             : p === "medium"
-                              ? "bg-amber-400"
-                              : "bg-emerald-400"
-                          : "bg-gray-200/80 hover:bg-gray-300/80"
+                              ? "bg-amber-500"
+                              : "bg-[#008080]"
+                          : "bg-gray-100 hover:bg-gray-200 border border-transparent"
                       }`}
                       title={p === "high" ? "High" : p === "medium" ? "Medium" : "Low"}
                       aria-label={p === "high" ? "High priority" : p === "medium" ? "Medium priority" : "Low priority"}
@@ -316,12 +377,12 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                       <span className="sr-only">{p}</span>
                     </button>
                   ))}
-                  <span className="w-px h-4 bg-gray-200 mx-1" aria-hidden />
+                  <span className="w-px h-4 bg-gray-100 mx-1" aria-hidden />
                   <div className="relative">
                     <button
                       type="button"
                       onClick={() => setQuickAddDatePickerOpen((o) => !o)}
-                      className={`p-1.5 rounded-lg transition-colors ${quickAddDueDate ? "bg-[#008080]/15 text-[#008080]" : "text-gray-500 hover:bg-[#008080]/10 hover:text-[#008080]"}`}
+                      className={`p-1.5 rounded-sm transition-all duration-150 ${quickAddDueDate ? "text-[#008080]" : "text-slate-400 hover:text-[#008080]"}`}
                       title={locale === "he" ? "תאריך" : "Date"}
                       aria-label="Pick date"
                     >
@@ -330,7 +391,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                     {quickAddDatePickerOpen && (
                       <>
                         <div className="fixed inset-0 z-10" onClick={() => setQuickAddDatePickerOpen(false)} aria-hidden />
-                        <div className="absolute left-0 bottom-full mb-1 z-20 p-2 rounded-xl bg-white/95 backdrop-blur border border-gray-200 shadow-lg">
+                        <div className="absolute left-0 bottom-full mb-1 z-20 p-2 rounded-sm bg-white border border-gray-100 shadow-lg">
                           <input
                             type="date"
                             value={quickAddDueDate ?? ""}
@@ -338,7 +399,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                               setQuickAddDueDate(e.target.value || null);
                               setQuickAddDatePickerOpen(false);
                             }}
-                            className="text-sm border border-gray-200 rounded-lg px-2 py-1.5"
+                            className="text-sm font-medium border border-gray-100 rounded-sm px-2 py-1.5 text-gray-900"
                           />
                         </div>
                       </>
@@ -346,8 +407,71 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                   </div>
                   <button
                     type="button"
+                    onClick={() => quickAddFileRef.current?.click()}
+                    className={`p-1.5 rounded-sm transition-all duration-150 ${quickAddAttachments.some((a) => a.type === "file") ? "text-[#008080]" : "text-slate-400 hover:text-[#008080]"}`}
+                    title={locale === "he" ? "מסמכים" : "Documents"}
+                    aria-label="Attach document"
+                  >
+                    <Paperclip className="w-4 h-4" />
+                  </button>
+                  <input
+                    ref={quickAddFileRef}
+                    type="file"
+                    accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    className="hidden"
+                    multiple
+                    onChange={(e) => {
+                      const files = e.target.files;
+                      if (files) for (let i = 0; i < files.length; i++) addQuickAddAttachment(files[i], "file");
+                      e.target.value = "";
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => quickAddImageRef.current?.click()}
+                    className={`p-1.5 rounded-sm transition-all duration-150 ${quickAddAttachments.some((a) => a.type === "image") ? "text-[#008080]" : "text-slate-400 hover:text-[#008080]"}`}
+                    title={locale === "he" ? "תמונה" : "Image"}
+                    aria-label="Attach image"
+                  >
+                    <ImagePlus className="w-4 h-4" />
+                  </button>
+                  <input
+                    ref={quickAddImageRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    multiple
+                    onChange={(e) => {
+                      const files = e.target.files;
+                      if (files) for (let i = 0; i < files.length; i++) addQuickAddAttachment(files[i], "image");
+                      e.target.value = "";
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => quickAddCameraRef.current?.click()}
+                    className={`p-1.5 rounded-sm transition-all duration-150 ${quickAddAttachments.some((a) => a.type === "camera") ? "text-[#008080]" : "text-slate-400 hover:text-[#008080]"}`}
+                    title={locale === "he" ? "מצלמה" : "Camera"}
+                    aria-label="Take photo"
+                  >
+                    <Camera className="w-4 h-4" />
+                  </button>
+                  <input
+                    ref={quickAddCameraRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) addQuickAddAttachment(file, "camera");
+                      e.target.value = "";
+                    }}
+                  />
+                  <button
+                    type="button"
                     onClick={() => {}}
-                    className="p-1.5 rounded-lg text-gray-500 hover:bg-[#008080]/10 hover:text-[#008080] transition-colors"
+                    className="p-1.5 rounded-sm text-slate-400 hover:text-[#008080] transition-all duration-150"
                     title={locale === "he" ? "קול" : "Voice"}
                     aria-label="Voice"
                   >
@@ -355,17 +479,8 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                   </button>
                   <button
                     type="button"
-                    onClick={() => {}}
-                    className="p-1.5 rounded-lg text-gray-500 hover:bg-[#008080]/10 hover:text-[#008080] transition-colors"
-                    title={locale === "he" ? "תמונה" : "Image"}
-                    aria-label="Image"
-                  >
-                    <ImagePlus className="w-4 h-4" />
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => setQuickAddNoComments((c) => !c)}
-                    className={`p-1.5 rounded-lg transition-colors ${quickAddNoComments ? "bg-[#008080]/15 text-[#008080]" : "text-gray-500 hover:bg-[#008080]/10 hover:text-[#008080]"}`}
+                    className={`p-1.5 rounded-sm transition-all duration-150 ${quickAddNoComments ? "text-[#008080]" : "text-slate-400 hover:text-[#008080]"}`}
                     title={locale === "he" ? "ללא תגובות" : "No comments"}
                     aria-label="No comments"
                     aria-pressed={quickAddNoComments}
@@ -376,7 +491,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                 <button
                   type="button"
                   onClick={() => handleQuickAdd(taskSubTab)}
-                  className="p-2 rounded-full bg-[#008080]/90 text-white hover:bg-[#006666] transition-colors flex items-center justify-center"
+                  className="p-2 rounded-sm bg-[#008080] text-white hover:bg-[#006666] transition-all duration-150 flex items-center justify-center border-0"
                   aria-label={locale === "he" ? "שלח משימה" : "Add task"}
                 >
                   <Send className="w-4 h-4" strokeWidth={2.5} />
@@ -414,7 +529,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
             <div className="mt-4">
               <Link
                 href="/dashboard/summary"
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#008080]/15 text-[#008080] text-sm font-medium border border-[#008080]/30"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-sm bg-white text-[#008080] text-sm font-semibold border border-gray-100 hover:border-[#008080]/30"
               >
                 <FileText className="w-4 h-4" />
                 {locale === "he" ? "סיכום" : "Summarize"}
@@ -439,7 +554,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
               <button
                 type="button"
                 onClick={() => setMeetingEventModal("meeting")}
-                className="px-4 py-2 rounded-xl border border-[#006666] bg-[#008080] text-white text-sm font-medium flex items-center gap-1"
+                className="px-4 py-2.5 rounded-sm border border-gray-100 bg-[#008080] text-white text-sm font-semibold flex items-center gap-1"
               >
                 <Plus className="w-4 h-4" />
                 {locale === "he" ? "פגישה חדשה" : "New Meeting"}
@@ -455,51 +570,279 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
 
         {mainTab === "checklists" && (
           <div className="space-y-4">
+            <button
+              type="button"
+              onClick={() => setMainTab("tasks")}
+              className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-[#008080] font-medium mb-2"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              {locale === "he" ? "חזרה למשימות" : "Back to Tasks"}
+            </button>
+            {/* GIVEN / RECEIVED toggle - same style as Tasks view */}
             <div className="flex flex-wrap items-center gap-2">
-              <input
-                type="text"
-                value={newChecklistTitle}
-                onChange={(e) => setNewChecklistTitle(e.target.value)}
-                placeholder={locale === "he" ? "שם רשימה..." : "Checklist name..."}
-                className="flex-1 min-w-[140px] px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-900 placeholder-gray-400 text-sm"
-              />
-              <select
-                value={newChecklistFrequency}
-                onChange={(e) =>
-                  setNewChecklistFrequency(
-                    e.target.value as "daily" | "weekly" | "monthly" | "quarterly" | "yearly"
-                  )
-                }
-                className="px-3 py-2 rounded border border-gray-200 bg-white text-sm"
-              >
-                <option value="daily">{locale === "he" ? "יומי" : "Daily"}</option>
-                <option value="weekly">{locale === "he" ? "שבועי" : "Weekly"}</option>
-                <option value="monthly">{locale === "he" ? "חודשי" : "Monthly"}</option>
-                <option value="quarterly">{locale === "he" ? "רבעוני" : "Quarterly"}</option>
-                <option value="yearly">{locale === "he" ? "שנתי" : "Yearly"}</option>
-              </select>
-              {isFounder && (
-                <input
-                  type="text"
-                  value={newChecklistAssignedTo}
-                  onChange={(e) => setNewChecklistAssignedTo(e.target.value)}
-                  placeholder={locale === "he" ? "הוקצה ל (מזהה 7 ספרות)" : "Assigned to (7-digit ID)"}
-                  className="w-24 px-2 py-2 rounded-xl border border-gray-200 bg-white text-sm placeholder-gray-400"
-                />
-              )}
+              <div className="flex gap-0 p-0.5 rounded-sm border border-gray-100 bg-white">
+                <button
+                  type="button"
+                  onClick={() => setChecklistSubTab("given")}
+                  className={`px-4 py-2.5 rounded-sm text-sm font-semibold uppercase tracking-wide transition-all duration-150 ${
+                    checklistSubTab === "given" ? "bg-[#008080] text-white" : "text-slate-600 hover:text-gray-900 bg-transparent hover:bg-gray-50"
+                  }`}
+                >
+                  {t(locale, "board.tasksGiven")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChecklistSubTab("received")}
+                  className={`px-4 py-2.5 rounded-sm text-sm font-semibold uppercase tracking-wide transition-all duration-150 ${
+                    checklistSubTab === "received" ? "bg-[#008080] text-white" : "text-slate-600 hover:text-gray-900 bg-transparent hover:bg-gray-50"
+                  }`}
+                >
+                  {t(locale, "board.tasksReceived")}
+                </button>
+              </div>
               <button
                 type="button"
-                onClick={handleCreateChecklist}
-                className="px-4 py-2 rounded-xl bg-[#008080] text-white text-sm font-medium flex items-center gap-1"
+                onClick={() => setNewChecklistModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-2.5 rounded-sm border border-gray-100 bg-[#008080] text-white text-sm font-semibold hover:bg-[#006666] transition-all duration-150"
+                aria-label={locale === "he" ? "רשימה חדשה" : "New checklist"}
               >
-                <Plus className="w-4 h-4" />
-                {locale === "he" ? "צור רשימה" : "Create checklist"}
+                <ListTodo className="w-4 h-4" />
+                <Plus className="w-3 h-3" />
+                {locale === "he" ? "רשימה חדשה" : "New Checklist"}
               </button>
             </div>
+            {/* New Checklist modal - premium, reordered flow */}
+            {newChecklistModalOpen && (() => {
+              const assignableContacts: { id: string; name: string; email: string; userId: string; avatar?: string }[] = [
+                ...(currentUserId && profile?.name ? [{ id: "me", name: profile.name, email: profile?.email ?? "", userId: currentUserId }] : []),
+                ...contacts.filter((c): c is Contact & { userId: string } => !!c.userId).map((c) => ({ id: c.id, name: c.name, email: c.email, userId: c.userId!, avatar: c.avatar })),
+              ];
+              const filteredAssignable = newChecklistAssignSearch.trim()
+                ? assignableContacts.filter((c) => c.name.toLowerCase().includes(newChecklistAssignSearch.toLowerCase()))
+                : assignableContacts;
+              const selectedContact = assignableContacts.find((c) => c.userId === newChecklistAssignedTo);
+              return (
+                <>
+                  <div className="fixed inset-0 z-40 bg-black/35 backdrop-blur-sm" onClick={() => { setNewChecklistModalOpen(false); setNewChecklistAssignPickerOpen(false); }} aria-hidden />
+                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div
+                      className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-sm bg-white border border-gray-100 shadow-sm"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
+                        <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight">{locale === "he" ? "רשימה חדשה" : "New Checklist"}</h2>
+                        <button type="button" onClick={() => setNewChecklistModalOpen(false)} className="p-2 rounded-sm text-slate-400 hover:text-gray-900 transition-colors" aria-label="Close">
+                          <X className="w-5 h-5" strokeWidth={2} />
+                        </button>
+                      </div>
+
+                      {/* 1. Top: Checklist name */}
+                      <div className="px-6 pt-6">
+                        <input
+                          type="text"
+                          value={newChecklistTitle}
+                          onChange={(e) => setNewChecklistTitle(e.target.value)}
+                          placeholder={locale === "he" ? "שם הרשימה" : "Checklist name"}
+                          className="w-full px-4 py-3.5 rounded-sm border border-gray-100 bg-white text-gray-900 placeholder-slate-400 text-base font-semibold focus:ring-1 focus:ring-[#008080]/20 focus:border-[#008080]/40 transition-all"
+                        />
+                      </div>
+
+                      {/* 2. Middle: Item list with dividers + add input + Add another task button */}
+                      <div className="px-6 pt-8">
+                        <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-3">{locale === "he" ? "פריטים" : "Items"}</p>
+                        {newChecklistInitialItems.filter(Boolean).length > 0 ? (
+                          <ul className="border border-gray-100 rounded-sm divide-y divide-gray-100 overflow-hidden">
+                            {newChecklistInitialItems.map((item, idx) =>
+                              !item.trim() ? null : (
+                                <li key={idx} className="flex items-center justify-between gap-2 px-4 py-3 bg-white">
+                                  <span className="text-sm font-medium text-gray-900 truncate">{item}</span>
+                                  <button type="button" onClick={() => setNewChecklistInitialItems((prev) => prev.filter((_, i) => i !== idx))} className="p-1 rounded-sm hover:bg-gray-50 text-slate-400 hover:text-gray-700 transition-colors shrink-0" aria-label="Remove">
+                                    <X className="w-4 h-4" strokeWidth={2} />
+                                  </button>
+                                </li>
+                              )
+                            )}
+                          </ul>
+                        ) : null}
+                        <input
+                          type="text"
+                          placeholder={locale === "he" ? "הוסף פריט..." : "Add item..."}
+                          className="w-full mt-2 px-4 py-3 rounded-sm border border-gray-100 bg-white text-sm text-gray-900 placeholder-slate-400 focus:ring-1 focus:ring-[#008080]/20 focus:border-[#008080]/40 transition-all"
+                          onKeyDown={(e) => {
+                            const v = (e.target as HTMLInputElement).value.trim();
+                            if (e.key === "Enter" && v) { setNewChecklistInitialItems((prev) => [...prev.filter(Boolean), v]); (e.target as HTMLInputElement).value = ""; }
+                            }}
+                          onBlur={(e) => {
+                            const v = (e.target as HTMLInputElement).value.trim();
+                            if (v) { setNewChecklistInitialItems((prev) => [...prev.filter(Boolean), v]); (e.target as HTMLInputElement).value = ""; }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => (document.querySelector('[placeholder*="Add item"], [placeholder*="הוסף פריט"]') as HTMLInputElement)?.focus()}
+                          className="w-full mt-3 flex items-center justify-center gap-2 px-4 py-3.5 rounded-sm border border-gray-100 bg-white text-slate-600 text-sm font-semibold hover:border-gray-200 hover:text-gray-900 transition-colors"
+                        >
+                          <Plus className="w-4 h-4" strokeWidth={2.5} />
+                          {locale === "he" ? "הוסף משימה נוספת" : "Add another task"}
+                        </button>
+                      </div>
+
+                      {/* 3. Bottom: Settings (Recurrence, Assignment, Comments) */}
+                      <div className="px-6 pt-8 space-y-6">
+                        <div>
+                          <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-gray-600 mb-3">
+                            <Clock className="w-4 h-4 text-blue-600" strokeWidth={2} />
+                            {locale === "he" ? "חזרה" : "Recurrence"}
+                          </p>
+                          <div className="flex gap-0 p-0.5 rounded-sm border border-gray-100 bg-white" role="group">
+                            {(["daily", "weekly", "monthly"] as const).map((freq) => (
+                              <button
+                                key={freq}
+                                type="button"
+                                onClick={() => setNewChecklistFrequency(freq)}
+                                className={`flex-1 py-3 rounded-sm text-sm font-bold transition-all ${
+                                  newChecklistFrequency === freq ? "bg-[#008080] text-white" : "text-slate-600 hover:bg-gray-50 hover:text-gray-900"
+                                }`}
+                              >
+                                {freq === "daily" ? (locale === "he" ? "יומי" : "Daily") : freq === "weekly" ? (locale === "he" ? "שבועי" : "Weekly") : locale === "he" ? "חודשי" : "Monthly"}
+                              </button>
+                            ))}
+                          </div>
+                          {newChecklistFrequency === "daily" && (
+                            <div className="mt-3 flex items-center gap-3">
+                              <Clock className="w-4 h-4 text-blue-600 shrink-0" strokeWidth={2} />
+                              <input
+                                type="time"
+                                value={newChecklistDailyTime}
+                                onChange={(e) => setNewChecklistDailyTime(e.target.value)}
+                                className="flex-1 px-4 py-3 rounded-sm border border-gray-100 bg-white text-base font-semibold text-gray-900 focus:ring-1 focus:ring-[#008080]/20 focus:border-[#008080]/40"
+                              />
+                            </div>
+                          )}
+                          {newChecklistFrequency === "weekly" && (
+                            <div className="mt-3 grid grid-cols-7 gap-1">
+                              {[0, 1, 2, 3, 4, 5, 6].map((d) => (
+                                <button
+                                  key={d}
+                                  type="button"
+                                  onClick={() => setNewChecklistWeeklyDay(d)}
+                                  className={`py-2.5 rounded-sm text-xs font-bold transition-all ${
+                                    newChecklistWeeklyDay === d ? "bg-[#008080] text-white" : "bg-white text-slate-600 hover:bg-gray-50 border border-gray-100"
+                                  }`}
+                                >
+                                  {new Date(2025, 0, 5 + d).toLocaleDateString(locale === "he" ? "he" : "en", { weekday: "narrow" })}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          {newChecklistFrequency === "monthly" && (
+                            <div className="mt-3 grid grid-cols-7 gap-1">
+                              {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
+                                <button
+                                  key={day}
+                                  type="button"
+                                  onClick={() => setNewChecklistMonthlyDay(day)}
+                                  className={`py-2 rounded-sm text-xs font-bold transition-all ${
+                                    newChecklistMonthlyDay === day ? "bg-[#008080] text-white" : "bg-white text-slate-600 hover:bg-gray-50 border border-gray-100"
+                                  }`}
+                                >
+                                  {day}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {isFounder && (
+                          <div>
+                            <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">
+                              <User className="w-4 h-4 text-[#008080]" strokeWidth={2} />
+                              {locale === "he" ? "הוקצה ל" : "Assign to"}
+                            </p>
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={() => setNewChecklistAssignPickerOpen((o) => !o)}
+                                className="w-full flex items-center gap-3 px-4 py-3 rounded-sm bg-white border border-gray-100 text-left focus:ring-1 focus:ring-[#008080]/20 focus:border-[#008080]/40 transition-all"
+                              >
+                                {selectedContact ? (
+                                  <>
+                                    <UserAvatar name={selectedContact.name} email={selectedContact.email} imageUrl={selectedContact.avatar} size="md" className="flex-shrink-0 ring-2 ring-[#008080]/20 rounded-sm" />
+                                    <span className="text-sm font-bold text-gray-900 truncate">{selectedContact.name}</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <User className="w-5 h-5 text-gray-400" strokeWidth={2} />
+                                    <span className="text-sm font-medium text-gray-500">{locale === "he" ? "בחר משתמש" : "Select user"}</span>
+                                  </>
+                                )}
+                              </button>
+                              {newChecklistAssignPickerOpen && (
+                                <div className="absolute left-0 right-0 top-full mt-1 py-2 rounded-sm bg-white border border-gray-100 shadow-lg max-h-64 overflow-y-auto z-10">
+                                  <div className="px-3 pb-2 border-b border-gray-100">
+                                    <div className="flex items-center gap-2 px-3 py-2 rounded-sm bg-white border border-gray-100">
+                                      <Search className="w-4 h-4 text-gray-500" strokeWidth={2} />
+                                      <input
+                                        type="text"
+                                        value={newChecklistAssignSearch}
+                                        onChange={(e) => setNewChecklistAssignSearch(e.target.value)}
+                                        placeholder={locale === "he" ? "חיפוש..." : "Search..."}
+                                        className="flex-1 min-w-0 bg-transparent text-sm font-medium text-gray-900 placeholder-gray-400 outline-none"
+                                      />
+                                    </div>
+                                  </div>
+                                  <ul className="py-1">
+                                    {filteredAssignable.map((c) => (
+                                      <li key={c.userId}>
+                                        <button
+                                          type="button"
+                                          onClick={() => { setNewChecklistAssignedTo(c.userId); setNewChecklistAssignPickerOpen(false); setNewChecklistAssignSearch(""); }}
+                                          className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50/80 border-b border-gray-100 last:border-0 transition-colors"
+                                        >
+                                          <UserAvatar name={c.name} email={c.email} imageUrl={c.avatar} size="md" className="flex-shrink-0 ring-2 ring-gray-200 rounded-sm" />
+                                          <span className="text-sm font-bold text-gray-900 truncate">{c.name}</span>
+                                        </button>
+                                      </li>
+                                    ))}
+                                    {filteredAssignable.length === 0 && <li className="px-4 py-3 text-sm font-medium text-gray-400">{locale === "he" ? "אין תוצאות" : "No results"}</li>}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        <label className="flex items-center gap-3 cursor-pointer py-2">
+                          <MessageCircleOff className="w-4 h-4 text-slate-400" strokeWidth={2} />
+                          <input
+                            type="checkbox"
+                            checked={newChecklistDisableComments}
+                            onChange={(e) => setNewChecklistDisableComments(e.target.checked)}
+                            className="rounded-sm border-gray-300 text-[#008080] focus:ring-[#008080] w-4 h-4"
+                          />
+                          <span className="text-sm font-semibold text-gray-700">{locale === "he" ? "השבת תגובות" : "Disable comments"}</span>
+                        </label>
+                      </div>
+
+                      <div className="px-6 py-5 flex justify-end gap-3 border-t border-gray-100 mt-6">
+                        <button type="button" onClick={() => setNewChecklistModalOpen(false)} className="px-5 py-3 rounded-sm text-sm font-semibold text-slate-600 hover:text-gray-900 border border-gray-100 hover:bg-gray-50 transition-colors">
+                          {locale === "he" ? "ביטול" : "Cancel"}
+                        </button>
+                        <button type="button" onClick={handleCreateChecklist} className="px-5 py-3 rounded-sm bg-[#008080] text-white text-sm font-semibold hover:bg-[#006666] transition-colors">
+                          {locale === "he" ? "צור רשימה" : "Create"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
             <div className="space-y-4">
-              {viewChecklists.length === 0 ? (
+              {viewChecklistsFiltered.length === 0 ? (
                 <p className="text-sm text-gray-500 py-4">
-                  {locale === "he" ? "אין רשימות. צור רשימה למעלה." : "No checklists. Create one above."}
+                  {checklistSubTab === "given"
+                    ? (locale === "he" ? "אין רשימות שיצרת." : "No checklists you created.")
+                    : (locale === "he" ? "אין רשימות שהוקצו אליך." : "No checklists assigned to you.")}
                 </p>
               ) : (
                 <>
@@ -510,7 +853,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                     { id: "quarterly", label: locale === "he" ? "רבעוני" : "Quarterly" },
                     { id: "yearly", label: locale === "he" ? "שנתי" : "Yearly" },
                   ].map(({ id, label }) => {
-                    const group = viewChecklists.filter((cl) => cl.frequency === id);
+                    const group = viewChecklistsFiltered.filter((cl) => cl.frequency === id);
                     if (group.length === 0) return null;
                     const avg =
                       group.reduce((s, cl) => s + (cl.currentScore ?? 0), 0) / group.length || 0;
@@ -523,7 +866,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                           </h3>
                           <div className="flex items-center gap-2 text-xs text-gray-500">
                             <span className="tabular-nums">{score}%</span>
-                            <div className="w-32 h-1.5 bg-gray-100">
+                            <div className="w-32 h-1.5 bg-gray-100 rounded-sm">
                               <div
                                 className="h-full bg-[#008080]"
                                 style={{ width: `${score}%` }}
@@ -563,7 +906,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
               <button
                 type="button"
                 onClick={() => setMeetingEventModal("event")}
-                className="px-4 py-2 rounded-xl border border-[#006666] bg-[#008080] text-white text-sm font-medium flex items-center gap-1"
+                className="px-4 py-2.5 rounded-sm border border-gray-100 bg-[#008080] text-white text-sm font-semibold flex items-center gap-1"
               >
                 <Plus className="w-4 h-4" />
                 {locale === "he" ? "אירוע חדש" : "New Event"}
@@ -581,21 +924,21 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
           <div className="space-y-3">
             <Link
               href="/dashboard/finances/documents"
-              className="flex items-center gap-3 w-full px-4 py-3 rounded bg-white border border-gray-200 shadow-soft text-left hover:bg-gray-50"
+              className="flex items-center gap-3 w-full px-4 py-3 rounded-sm bg-white border border-gray-100 text-left hover:bg-gray-50/80"
             >
               <Wallet className="w-5 h-5 text-[#008080] shrink-0" />
               <span className="font-medium text-gray-900">{locale === "he" ? "חשבוניות" : "Invoices"}</span>
             </Link>
             <Link
               href="/dashboard/finances/clients"
-              className="flex items-center gap-3 w-full px-4 py-3 rounded bg-white border border-gray-200 shadow-soft text-left hover:bg-gray-50"
+              className="flex items-center gap-3 w-full px-4 py-3 rounded-sm bg-white border border-gray-100 text-left hover:bg-gray-50/80"
             >
               <Users className="w-5 h-5 text-[#008080] shrink-0" />
               <span className="font-medium text-gray-900">{locale === "he" ? "לקוחות / ח.פ" : "Clients / H.P"}</span>
             </Link>
             <Link
               href="/dashboard/finances/company-profile"
-              className="flex items-center gap-3 w-full px-4 py-3 rounded bg-white border border-gray-200 shadow-soft text-left hover:bg-gray-50"
+              className="flex items-center gap-3 w-full px-4 py-3 rounded-sm bg-white border border-gray-100 text-left hover:bg-gray-50/80"
             >
               <Building2 className="w-5 h-5 text-[#008080] shrink-0" />
               <span className="font-medium text-gray-900">{locale === "he" ? "פרופיל חברה" : "Company Profile"}</span>
@@ -608,8 +951,8 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
             {insideFolderId === null ? (
               /* Folders: search bar + New Folder button; system first (pinned, locked). List view with slate icons. */
               <>
-                <div className="flex items-center gap-2 p-3 border-b border-gray-100 bg-[#f8f9fa]">
-                  <div className="flex-1 min-w-0 flex items-center gap-2 bg-white border border-gray-200 rounded-xl pl-3 pr-3 py-2.5 min-h-[40px]">
+                <div className="flex items-center gap-2 p-3 border-b border-gray-100 bg-white">
+                  <div className="flex-1 min-w-0 flex items-center gap-2 bg-white border border-gray-100 rounded-sm pl-3 pr-3 py-2.5 min-h-[40px]">
                     <Search className="w-4 h-4 text-gray-400 shrink-0" strokeWidth={2} />
                     <input
                       type="text"
@@ -622,17 +965,17 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                   <button
                     type="button"
                     onClick={() => setCreateFolderModalOpen(true)}
-                    className="flex items-center justify-center w-10 h-10 rounded-xl bg-[#008080] text-white hover:bg-[#006666] transition-colors shrink-0"
+                    className="flex items-center justify-center w-10 h-10 rounded-sm bg-[#008080] text-white hover:bg-[#006666] transition-all duration-150 shrink-0"
                     title={locale === "he" ? "תיקייה חדשה" : "New Folder"}
                     aria-label={locale === "he" ? "תיקייה חדשה" : "New Folder"}
                   >
                     <Plus className="w-5 h-5" strokeWidth={2.5} />
                   </button>
-                  <div className="flex items-center rounded-xl border border-gray-200 bg-white p-0.5 shrink-0" role="group" aria-label={locale === "he" ? "מצב תצוגה" : "View mode"}>
+                  <div className="flex items-center rounded-sm border border-gray-100 bg-white p-0.5 shrink-0" role="group" aria-label={locale === "he" ? "מצב תצוגה" : "View mode"}>
                     <button
                       type="button"
                       onClick={() => setFolderViewMode("grid")}
-                      className={`p-2 rounded-lg transition-colors ${folderViewMode === "grid" ? "bg-slate-600 text-white" : "text-gray-500 hover:bg-gray-100"}`}
+                      className={`p-2 rounded-sm transition-all duration-150 ${folderViewMode === "grid" ? "bg-slate-600 text-white" : "text-gray-500 hover:bg-gray-100"}`}
                       title={locale === "he" ? "תצוגת רשת" : "Grid view"}
                       aria-pressed={folderViewMode === "grid"}
                     >
@@ -641,7 +984,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                     <button
                       type="button"
                       onClick={() => setFolderViewMode("list")}
-                      className={`p-2 rounded-lg transition-colors ${folderViewMode === "list" ? "bg-slate-600 text-white" : "text-gray-500 hover:bg-gray-100"}`}
+                      className={`p-2 rounded-sm transition-all duration-150 ${folderViewMode === "list" ? "bg-slate-600 text-white" : "text-gray-500 hover:bg-gray-100"}`}
                       title={locale === "he" ? "תצוגת רשימה" : "List view"}
                       aria-pressed={folderViewMode === "list"}
                     >
@@ -656,10 +999,10 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                         key={id}
                         type="button"
                         onClick={() => setInsideFolderId(id)}
-                        className="flex flex-col items-center justify-center p-4 rounded-2xl bg-slate-50 hover:bg-slate-100 transition-colors border border-slate-200/80"
+                        className="flex flex-col items-center justify-center p-4 rounded-sm bg-white hover:bg-gray-50 transition-all duration-150 border border-gray-100"
                         title={locale === "he" ? "תיקיית מערכת (נעולה)" : "System folder (locked)"}
                       >
-                        <div className="w-12 h-12 rounded-xl bg-slate-600 flex items-center justify-center mb-2">
+                        <div className="w-12 h-12 rounded-sm bg-slate-600 flex items-center justify-center mb-2">
                           <Icon className="w-6 h-6 text-white" strokeWidth={2} />
                         </div>
                         <span className="text-xs font-medium text-gray-800 truncate w-full text-center">{locale === "he" ? labelHe : labelEn}</span>
@@ -670,9 +1013,9 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                         key={f.id}
                         type="button"
                         onClick={() => setInsideFolderId(f.id)}
-                        className="flex flex-col items-center justify-center p-4 rounded-2xl bg-slate-50 hover:bg-slate-100 transition-colors border border-slate-200/80"
+                        className="flex flex-col items-center justify-center p-4 rounded-sm bg-white hover:bg-gray-50 transition-all duration-150 border border-gray-100"
                       >
-                        <div className="w-12 h-12 rounded-xl bg-slate-600 flex items-center justify-center mb-2">
+                        <div className="w-12 h-12 rounded-sm bg-slate-600 flex items-center justify-center mb-2">
                           <FolderOpen className="w-6 h-6 text-white" strokeWidth={2} />
                         </div>
                         <span className="text-xs font-medium text-gray-800 truncate w-full text-center">{f.name}</span>
@@ -689,7 +1032,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                           className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left"
                           title={locale === "he" ? "תיקיית מערכת (נעולה)" : "System folder (locked)"}
                         >
-                          <div className="w-9 h-9 rounded-lg bg-slate-600 flex items-center justify-center shrink-0">
+                          <div className="w-9 h-9 rounded-sm bg-slate-600 flex items-center justify-center shrink-0">
                             <Icon className="w-4 h-4 text-white" strokeWidth={2} />
                           </div>
                           <span className="flex-1 min-w-0 text-sm font-medium text-gray-900 truncate">{locale === "he" ? labelHe : labelEn}</span>
@@ -704,7 +1047,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                           onClick={() => setInsideFolderId(f.id)}
                           className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left"
                         >
-                          <div className="w-9 h-9 rounded-lg bg-slate-600 flex items-center justify-center shrink-0">
+                          <div className="w-9 h-9 rounded-sm bg-slate-600 flex items-center justify-center shrink-0">
                             <FolderOpen className="w-4 h-4 text-white" strokeWidth={2} />
                           </div>
                           <span className="flex-1 min-w-0 text-sm font-medium text-gray-900 truncate">{f.name}</span>
@@ -724,7 +1067,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                   <button
                     type="button"
                     onClick={() => setInsideFolderId(null)}
-                    className="p-2 rounded-xl text-gray-600 hover:bg-gray-100 flex items-center gap-1"
+                    className="p-2 rounded-sm text-slate-500 hover:text-gray-900 hover:bg-gray-50 flex items-center gap-1 transition-all duration-150"
                     aria-label={locale === "he" ? "חזרה" : "Back"}
                   >
                     <ChevronLeft className="w-5 h-5" />
@@ -740,7 +1083,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                   {insideFolderId === "calls" && (
                     <div className="space-y-3">
                       <p className="text-xs text-gray-600">{locale === "he" ? "שיחות והודעות — מרכז תקשורת." : "Calls and messages — communication hub."}</p>
-                      <Link href="/dashboard/messages" className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-[#008080] text-white text-xs font-medium">
+                      <Link href="/dashboard/messages" className="inline-flex items-center gap-2 px-3 py-2 rounded-sm bg-[#008080] text-white text-xs font-bold">
                         <MessageSquare className="w-3.5 h-3.5" />
                         {locale === "he" ? "הודעות" : "Messages"}
                       </Link>
@@ -754,9 +1097,9 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                           <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">{t(locale, "board.tasksGiven")}</h3>
                           <ul className="space-y-2">
                             {archivedGiven.map((task) => (
-                              <li key={task.id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-white border border-gray-200">
-                                <span className="text-sm font-medium text-gray-700 truncate">{task.title || "—"}</span>
-                                <button type="button" onClick={() => unarchiveGivenTask(task.id)} className="px-2 py-1 rounded-xl text-xs font-medium bg-[#008080] text-white hover:bg-[#006666]">{locale === "he" ? "החזר" : "Restore"}</button>
+                              <li key={task.id} className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-sm bg-white border border-gray-100">
+                                <span className="text-sm font-semibold text-gray-900 truncate">{task.title || "—"}</span>
+                                <button type="button" onClick={() => unarchiveGivenTask(task.id)} className="px-2.5 py-1.5 rounded-sm text-xs font-semibold bg-[#008080] text-white hover:bg-[#006666]">{locale === "he" ? "החזר" : "Restore"}</button>
                               </li>
                             ))}
                           </ul>
@@ -767,9 +1110,9 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                           <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">{t(locale, "board.tasksReceived")}</h3>
                           <ul className="space-y-2">
                             {archivedReceived.map((task) => (
-                              <li key={task.id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-white border border-gray-200">
-                                <span className="text-sm font-medium text-gray-700 truncate">{task.title || "—"}</span>
-                                <button type="button" onClick={() => unarchiveReceivedTask(task.id)} className="px-2 py-1 rounded-xl text-xs font-medium bg-[#008080] text-white hover:bg-[#006666]">{locale === "he" ? "החזר" : "Restore"}</button>
+                              <li key={task.id} className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-sm bg-white border border-gray-100">
+                                <span className="text-sm font-semibold text-gray-900 truncate">{task.title || "—"}</span>
+                                <button type="button" onClick={() => unarchiveReceivedTask(task.id)} className="px-2.5 py-1.5 rounded-sm text-xs font-semibold bg-[#008080] text-white hover:bg-[#006666]">{locale === "he" ? "החזר" : "Restore"}</button>
                               </li>
                             ))}
                           </ul>
@@ -780,9 +1123,9 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                           <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">{t(locale, "board.meetings")}</h3>
                           <ul className="space-y-2">
                             {archivedMeetings.map((m) => (
-                              <li key={m.id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-white border border-gray-200">
-                                <span className="text-sm font-medium text-gray-700 truncate">{m.title}</span>
-                                <button type="button" onClick={() => unarchiveMeeting(m.id)} className="px-2 py-1 rounded-xl text-xs font-medium bg-[#008080] text-white hover:bg-[#006666]">{locale === "he" ? "החזר" : "Restore"}</button>
+                              <li key={m.id} className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-sm bg-white border border-gray-100">
+                                <span className="text-sm font-semibold text-gray-900 truncate">{m.title}</span>
+                                <button type="button" onClick={() => unarchiveMeeting(m.id)} className="px-2.5 py-1.5 rounded-sm text-xs font-semibold bg-[#008080] text-white hover:bg-[#006666]">{locale === "he" ? "החזר" : "Restore"}</button>
                               </li>
                             ))}
                           </ul>
@@ -793,9 +1136,9 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                           <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">{t(locale, "board.events")}</h3>
                           <ul className="space-y-2">
                             {archivedEvents.map((e) => (
-                              <li key={e.id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-white border border-gray-200">
-                                <span className="text-sm font-medium text-gray-700 truncate">{e.title}</span>
-                                <button type="button" onClick={() => unarchiveEvent(e.id)} className="px-2 py-1 rounded-xl text-xs font-medium bg-[#008080] text-white hover:bg-[#006666]">{locale === "he" ? "החזר" : "Restore"}</button>
+                              <li key={e.id} className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-sm bg-white border border-gray-100">
+                                <span className="text-sm font-semibold text-gray-900 truncate">{e.title}</span>
+                                <button type="button" onClick={() => unarchiveEvent(e.id)} className="px-2.5 py-1.5 rounded-sm text-xs font-semibold bg-[#008080] text-white hover:bg-[#006666]">{locale === "he" ? "החזר" : "Restore"}</button>
                               </li>
                             ))}
                           </ul>
@@ -834,53 +1177,53 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
           <div className="fixed inset-0 z-40 bg-black/40" aria-hidden onClick={() => setCreateFolderModalOpen(false)} />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div
-              className="w-full max-w-md rounded-2xl bg-white shadow-xl border border-gray-200 overflow-hidden"
+              className="w-full max-w-md rounded-sm bg-white border border-gray-100 shadow-sm overflow-hidden"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="px-5 py-4 border-b border-gray-200">
-                <h2 className="text-lg font-semibold text-gray-900">{locale === "he" ? "תיקייה חדשה" : "New Folder"}</h2>
+              <div className="px-5 py-4 border-b border-gray-100">
+                <h2 className="text-lg font-bold text-gray-900">{locale === "he" ? "תיקייה חדשה" : "New Folder"}</h2>
               </div>
               <div className="p-5 space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">{locale === "he" ? "שם תיקייה" : "Folder name"}</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">{locale === "he" ? "שם תיקייה" : "Folder name"}</label>
                   <input
                     type="text"
                     value={modalFolderName}
                     onChange={(e) => setModalFolderName(e.target.value)}
                     placeholder={locale === "he" ? "הזן שם תיקייה" : "Enter folder name"}
-                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-900 placeholder-gray-400 text-sm focus:ring-2 focus:ring-[#008080]/30 focus:border-[#008080] outline-none"
+                    className="w-full px-4 py-2.5 rounded-sm border border-gray-100 bg-white text-gray-900 placeholder-slate-400 text-sm font-medium focus:ring-1 focus:ring-[#008080]/20 focus:border-[#008080]/40 outline-none"
                     autoFocus
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">{locale === "he" ? "שתף עם..." : "Share with..."}</label>
-                  <div className="max-h-32 overflow-y-auto rounded-xl border border-gray-200 bg-gray-50/50 p-2 space-y-1">
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">{locale === "he" ? "שתף עם..." : "Share with..."}</label>
+                  <div className="max-h-32 overflow-y-auto rounded-sm border border-gray-100 bg-white p-2 space-y-1">
                     {contacts.length === 0 ? (
                       <p className="text-xs text-gray-500 py-2 px-2">{locale === "he" ? "אין אנשי קשר. הוסף אנשי קשר להזמנה." : "No contacts. Add contacts to invite."}</p>
                     ) : (
                       contacts.map((c) => (
                         <label
                           key={c.id}
-                          className="flex items-center gap-2 py-2 px-2 rounded-lg hover:bg-gray-100 cursor-pointer"
+                          className="flex items-center gap-2 py-2 px-2 rounded-sm hover:bg-gray-100 cursor-pointer"
                         >
                           <input
                             type="checkbox"
                             checked={modalSharedWithIds.includes(c.id)}
                             onChange={() => toggleModalShareContact(c.id)}
-                            className="rounded border-gray-300 text-[#008080] focus:ring-[#008080]"
+                            className="rounded-sm border-gray-300 text-[#008080] focus:ring-[#008080]"
                           />
-                          <span className="text-sm text-gray-800 truncate">{c.name || c.email || c.id}</span>
+                          <span className="text-sm font-medium text-gray-800 truncate">{c.name || c.email || c.id}</span>
                         </label>
                       ))
                     )}
                   </div>
                 </div>
               </div>
-              <div className="px-5 py-4 border-t border-gray-200 flex justify-end gap-2">
+              <div className="px-5 py-4 border-t border-gray-100 flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setCreateFolderModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50"
+                  className="px-4 py-2.5 rounded-sm border border-gray-100 text-slate-600 text-sm font-semibold hover:bg-gray-50"
                 >
                   {locale === "he" ? "ביטול" : "Cancel"}
                 </button>
@@ -888,7 +1231,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                   type="button"
                   onClick={handleCreateFolderFromModal}
                   disabled={!modalFolderName.trim()}
-                  className="px-4 py-2 rounded-xl bg-[#008080] text-white text-sm font-medium hover:bg-[#006666] disabled:opacity-50 disabled:pointer-events-none"
+                  className="px-4 py-2.5 rounded-sm bg-[#008080] text-white text-sm font-semibold hover:bg-[#006666] disabled:opacity-50 disabled:pointer-events-none"
                 >
                   {locale === "he" ? "צור" : "Create"}
                 </button>

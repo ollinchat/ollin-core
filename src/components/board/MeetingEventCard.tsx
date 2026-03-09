@@ -64,7 +64,7 @@ export function MeetingEventCard({ item, selected, onToggleSelect, currentUserId
             <button
               type="button"
               onClick={onToggleSelect}
-              className="w-5 h-5 rounded-lg border-2 border-gray-300 flex items-center justify-center hover:border-accent transition-colors"
+              className="w-5 h-5 rounded-sm border-2 border-gray-300 flex items-center justify-center hover:border-[#008080] transition-colors"
               aria-label={selected ? "Deselect" : "Select for summary"}
             >
               {selected && <Check className="w-3 h-3 text-accent" />}

@@ -139,15 +139,21 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
     setCommentAttachments([]);
   };
 
+  const priority = task.priority ?? "low";
+  const priorityBarColor =
+    priority === "high" ? "bg-red-500" : priority === "medium" ? "bg-amber-500" : "bg-[#008080]";
+
   return (
     <motion.div
       layout
       initial={false}
-      transition={{ type: "spring", stiffness: 300, damping: 30 }}
-      className={`rounded-sm bg-white overflow-hidden border border-gray-200 ${
-        selected ? "ring-2 ring-accent/30 shadow-glow-subtle" : "shadow-soft"
-      } ${task.done ? "shadow-glow-subtle" : ""}`}
+      transition={{ type: "spring", stiffness: 400, damping: 35 }}
+      className={`rounded-sm bg-white overflow-hidden border border-gray-100 flex ${
+        selected ? "ring-1 ring-[#008080]/30" : ""
+      } ${task.done ? "opacity-90" : ""}`}
     >
+      <div className={`w-1 flex-shrink-0 ${priorityBarColor}`} aria-hidden />
+      <div className="flex-1 min-w-0 flex flex-col">
       <div
         role="button"
         tabIndex={0}
@@ -155,7 +161,7 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") setExpanded((x) => !x);
         }}
-        className="w-full p-3 flex items-start gap-3 text-left hover:bg-gray-50/50 transition-colors cursor-pointer"
+        className="w-full px-4 py-4 flex items-start gap-3 text-left hover:bg-gray-50/50 transition-all duration-150 cursor-pointer"
         aria-expanded={expanded}
       >
         {onToggleSelect != null && (
@@ -165,10 +171,10 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
               e.stopPropagation();
               onToggleSelect();
             }}
-            className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-lg border-2 border-gray-300 flex items-center justify-center hover:border-accent transition-colors"
+            className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-sm border border-gray-200 flex items-center justify-center hover:border-[#008080] transition-colors"
             aria-label={selected ? "Deselect" : "Select for summary"}
           >
-            {selected && <Check className="w-3 h-3 text-accent" />}
+            {selected && <Check className="w-3 h-3 text-[#008080]" />}
           </button>
         )}
         <motion.span
@@ -183,11 +189,11 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
             onChange={(e) => canCheck && handleDoneChange(e.target.checked)}
             disabled={!canCheck}
             title={!canCheck ? (locale === "he" ? "רק המבצע יכול לסמן כהושלם" : "Only assignees can mark done") : undefined}
-            className="w-5 h-5 rounded-sm border-2 border-gray-300 text-accent focus:ring-accent accent-accent disabled:opacity-60 disabled:cursor-not-allowed"
+            className="w-5 h-5 rounded-sm border border-gray-200 text-[#008080] focus:ring-[#008080]/20 accent-[#008080] disabled:opacity-60 disabled:cursor-not-allowed"
           />
         </motion.span>
         <div className="min-w-0 flex-1 flex flex-col gap-1">
-          <span className={`font-medium ${task.done ? "text-gray-500 line-through" : "text-gray-900"}`}>
+          <span className={`font-medium ${task.done ? "text-gray-400 line-through" : "text-gray-900"}`}>
             {task.title || "Untitled task"}
           </span>
           {canEditAssign ? (
@@ -282,10 +288,10 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
       </div>
 
       {checklistTotal > 0 && (
-        <div className="px-3 pb-2">
-          <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+        <div className="px-4 pb-3 pl-6">
+          <div className="h-1.5 rounded-sm bg-gray-100 overflow-hidden">
             <motion.div
-              className="h-full rounded-full bg-gradient-to-r from-accent-emerald to-accent"
+              className="h-full rounded-sm bg-[#008080]"
               initial={false}
               animate={{ width: `${progress}%` }}
               transition={{ type: "spring", stiffness: 300, damping: 30 }}
@@ -298,7 +304,7 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
       )}
 
       {expanded && task.checklist.length > 0 && (
-        <div className="border-t border-gray-100 px-3 py-2 space-y-1.5 bg-gray-50/50">
+        <div className="border-t border-gray-100 px-4 py-3 pl-6 space-y-1.5 bg-white">
           {task.checklist.map((item) => (
             <div key={item.id} className="flex items-center gap-2">
               <input
@@ -358,7 +364,7 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
       )}
 
       {expanded && task.checklist.length === 0 && canEditAssign && (
-        <div className="border-t border-gray-100 px-3 py-2">
+        <div className="border-t border-gray-100 px-4 py-3 pl-6">
           <button
             type="button"
             onClick={addChecklistItem}
@@ -370,7 +376,7 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
       )}
 
       {expanded && (
-        <div className="border-t border-gray-100 px-3 py-2 bg-gray-50/50 space-y-2">
+        <div className="border-t border-gray-100 px-4 py-3 pl-6 bg-white space-y-2">
           <p className="text-xs font-medium text-gray-600 flex items-center gap-1">
             <MessageSquare className="w-3.5 h-3.5" />
             {locale === "he" ? "תגובות" : "Comments"}
@@ -395,7 +401,7 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
                 onChange={(e) => setCommentText(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && submitComment()}
                 placeholder={locale === "he" ? "כתוב עדכון..." : "Write an update..."}
-                className="flex-1 min-w-0 text-sm rounded-sm border border-gray-200 px-2 py-1.5 bg-white"
+                className="flex-1 min-w-0 text-sm rounded-sm border border-gray-100 px-2 py-1.5 bg-white"
               />
               <MediaToolbox
                 onAddAttachment={addCommentAttachment}
@@ -415,6 +421,7 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
           )}
         </div>
       )}
+      </div>
     </motion.div>
   );
 }

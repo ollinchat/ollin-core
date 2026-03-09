@@ -10,6 +10,14 @@ export interface RecurringChecklistItemAttachment {
   name?: string;
 }
 
+/** Feedback from assignee to creator on a checklist item (comment, media, voice) */
+export interface RecurringChecklistItemFeedback {
+  text?: string;
+  attachments?: RecurringChecklistItemAttachment[];
+  voiceUrl?: string;
+  updatedAt: number;
+}
+
 export interface RecurringChecklistItem {
   id: string;
   text: string;
@@ -17,6 +25,8 @@ export interface RecurringChecklistItem {
   weight: number; // points per item (default 1)
   /** Media/attachments: photo, PDF, or document */
   attachments?: RecurringChecklistItemAttachment[];
+  /** Assignee feedback (comment/media/voice) for creator */
+  feedback?: RecurringChecklistItemFeedback;
 }
 
 export type RecurringFrequency = "daily" | "weekly" | "monthly" | "quarterly" | "yearly";
@@ -30,6 +40,8 @@ export interface RecurringChecklist {
   assignedTo: string;
   /** User ID of the creator (for Founder view: Emil 0476402 can see checklists he created for others) */
   createdBy: string;
+  /** When true, assignees cannot add comments/feedback on items */
+  disableComments?: boolean;
   /** 0-100, computed from items */
   currentScore: number;
   /** YYYY-MM-DD of last midnight reset */

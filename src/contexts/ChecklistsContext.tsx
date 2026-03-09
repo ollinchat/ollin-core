@@ -167,7 +167,7 @@ type ChecklistsContextType = {
   /** Checklists visible to current user (own + as founder: ones they created for others) */
   getChecklistsForView: (userId: string) => RecurringChecklist[];
   addChecklist: (payload: Omit<RecurringChecklist, "id" | "currentScore" | "lastResetDate" | "createdAt">) => void;
-  updateChecklist: (id: string, updates: Partial<Pick<RecurringChecklist, "title" | "frequency" | "items" | "assignedTo">>) => void;
+  updateChecklist: (id: string, updates: Partial<Pick<RecurringChecklist, "title" | "frequency" | "items" | "assignedTo" | "disableComments">>) => void;
   removeChecklist: (id: string) => void;
   toggleItem: (checklistId: string, itemId: string) => void;
   addItem: (checklistId: string, text: string, weight?: number) => void;
@@ -284,7 +284,7 @@ export function ChecklistsProvider({ children }: { children: React.ReactNode }) 
   );
 
   const updateChecklist = useCallback(
-    (id: string, updates: Partial<Pick<RecurringChecklist, "title" | "frequency" | "items" | "assignedTo">>) => {
+    (id: string, updates: Partial<Pick<RecurringChecklist, "title" | "frequency" | "items" | "assignedTo" | "disableComments">>) => {
       setChecklists((prev) => {
         const next = prev.map((c) =>
           c.id === id ? applyScore({ ...c, ...updates }) : c
