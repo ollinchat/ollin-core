@@ -141,18 +141,19 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
 
   const priority = task.priority ?? "low";
   const priorityBarColor =
-    priority === "high" ? "bg-red-500" : priority === "medium" ? "bg-amber-500" : "bg-[#008080]";
+    priority === "high" ? "bg-red-500" : priority === "medium" ? "bg-amber-500" : "bg-[var(--clean-accent)]";
 
   return (
     <motion.div
       layout
       initial={false}
       transition={{ type: "spring", stiffness: 400, damping: 35 }}
-      className={`rounded-sm bg-white overflow-hidden border border-gray-100 flex ${
-        selected ? "ring-1 ring-[#008080]/30" : ""
-      } ${task.done ? "opacity-90" : ""}`}
+      className={`clean-card overflow-hidden flex ${selected ? "border-[var(--clean-accent)]" : ""} ${task.done ? "opacity-90" : ""}`}
     >
-      <div className={`w-1 flex-shrink-0 ${priorityBarColor}`} aria-hidden />
+      {/* Short vertical pill (24px h, 4px w) centered on left, with padding; sharp corners */}
+      <div className="flex-shrink-0 pl-3 pr-2 py-3 flex items-center" aria-hidden>
+        <div className={`w-[4px] h-6 ${priorityBarColor}`} />
+      </div>
       <div className="flex-1 min-w-0 flex flex-col">
       <div
         role="button"
@@ -161,7 +162,7 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") setExpanded((x) => !x);
         }}
-        className="w-full px-4 py-4 flex items-start gap-3 text-left hover:bg-gray-50/50 transition-all duration-150 cursor-pointer"
+        className="w-full px-4 py-3 flex items-start gap-3 text-left hover:bg-[var(--clean-border)]/50 transition-all duration-150 cursor-pointer"
         aria-expanded={expanded}
       >
         {onToggleSelect != null && (
@@ -171,10 +172,10 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
               e.stopPropagation();
               onToggleSelect();
             }}
-            className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-sm border border-gray-200 flex items-center justify-center hover:border-[#008080] transition-colors"
+            className="mt-0.5 flex-shrink-0 w-5 h-5 border border-[var(--clean-border)] flex items-center justify-center hover:border-[var(--clean-accent)] hover:text-[var(--clean-accent)] transition-colors text-[var(--clean-text-secondary)]"
             aria-label={selected ? "Deselect" : "Select for summary"}
           >
-            {selected && <Check className="w-3 h-3 text-[#008080]" />}
+            {selected && <Check className="w-3 h-3 text-[var(--clean-accent)]" strokeWidth={2} />}
           </button>
         )}
         <motion.span
@@ -189,11 +190,11 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
             onChange={(e) => canCheck && handleDoneChange(e.target.checked)}
             disabled={!canCheck}
             title={!canCheck ? (locale === "he" ? "רק המבצע יכול לסמן כהושלם" : "Only assignees can mark done") : undefined}
-            className="w-5 h-5 rounded-sm border border-gray-200 text-[#008080] focus:ring-[#008080]/20 accent-[#008080] disabled:opacity-60 disabled:cursor-not-allowed"
+            className="w-5 h-5 border border-[var(--clean-border)] text-[var(--clean-accent)] focus:ring-0 accent-[var(--clean-accent)] disabled:opacity-60 disabled:cursor-not-allowed"
           />
         </motion.span>
         <div className="min-w-0 flex-1 flex flex-col gap-1">
-          <span className={`font-medium ${task.done ? "text-gray-400 line-through" : "text-gray-900"}`}>
+          <span className={`font-medium text-[13px] tracking-wide ${task.done ? "text-[var(--clean-text-secondary)] line-through" : "text-[var(--clean-text)]"}`}>
             {task.title || "Untitled task"}
           </span>
           {canEditAssign ? (
@@ -222,7 +223,7 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
               ) : (
                 <UserAvatar email={task.otherParty} size="sm" />
               )}
-              <p className="text-xs text-gray-500 truncate">
+              <p className="text-xs text-[var(--clean-text-secondary)] truncate">
                 {kind === "given" ? (locale === "he" ? "מבצעים:" : "Assignees:") : (locale === "he" ? "מאת:" : "From:")}{" "}
                 {assignees.length > 0 ? assignees.map((u) => u!.name).join(", ") : task.otherParty}
               </p>
@@ -230,7 +231,7 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
           )}
         </div>
         {task.done && task.doneNotifiedAt != null && (
-          <span className="text-xs text-accent flex items-center gap-0.5 flex-shrink-0" title="Sender notified">
+          <span className="text-xs text-[var(--clean-accent)] flex items-center gap-0.5 flex-shrink-0" title="Sender notified">
             {t(locale, "board.notified")}
           </span>
         )}
@@ -248,11 +249,11 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
             e.stopPropagation();
             pingAssignees(kind, task.id, task.title);
           }}
-          className="p-1.5 rounded-sm text-[#008080] hover:bg-[#008080]/10 flex-shrink-0"
+          className="p-1.5 text-[var(--clean-text-secondary)] hover:text-[var(--clean-accent)] hover:bg-[var(--clean-accent)]/5 flex-shrink-0 transition-colors"
           title={locale === "he" ? "תזכורת למבצעים" : "Ping assignees"}
           aria-label="Ping"
         >
-          <Bell className="w-4 h-4" />
+          <Bell className="w-4 h-4" strokeWidth={1.75} />
         </button>
         {canDeleteArchive && (
           <>
@@ -262,11 +263,11 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
                 e.stopPropagation();
                 archiveTask(task.id);
               }}
-              className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-sm flex-shrink-0"
+              className="p-1.5 text-[var(--clean-text-secondary)] hover:text-amber-600 hover:bg-amber-50 flex-shrink-0 transition-colors"
               title={locale === "he" ? "ארכב" : "Archive"}
               aria-label="Archive"
             >
-              <Archive className="w-4 h-4" />
+              <Archive className="w-4 h-4" strokeWidth={1.75} />
             </button>
             <button
               type="button"
@@ -274,37 +275,37 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
                 e.stopPropagation();
                 removeTask(task.id);
               }}
-              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-sm flex-shrink-0"
+              className="p-1.5 text-[var(--clean-text-secondary)] hover:text-red-600 hover:bg-red-50 flex-shrink-0 transition-colors"
               title={locale === "he" ? "מחק" : "Delete"}
               aria-label="Delete"
             >
-              <Trash2 className="w-4 h-4" />
+              <Trash2 className="w-4 h-4" strokeWidth={1.75} />
             </button>
           </>
         )}
-        <span className="p-1 text-gray-500 rounded-sm flex-shrink-0">
-          {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        <span className="p-1 text-[var(--clean-text-secondary)] flex-shrink-0">
+          {expanded ? <ChevronUp className="w-4 h-4" strokeWidth={1.75} /> : <ChevronDown className="w-4 h-4" strokeWidth={1.75} />}
         </span>
       </div>
 
       {checklistTotal > 0 && (
         <div className="px-4 pb-3 pl-6">
-          <div className="h-1.5 rounded-sm bg-gray-100 overflow-hidden">
+          <div className="h-1 bg-[var(--clean-border)] overflow-hidden">
             <motion.div
-              className="h-full rounded-sm bg-[#008080]"
+              className="h-full bg-[var(--clean-accent)]"
               initial={false}
               animate={{ width: `${progress}%` }}
               transition={{ type: "spring", stiffness: 300, damping: 30 }}
             />
           </div>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-[var(--clean-text-secondary)] mt-1">
             {checklistDone}/{checklistTotal} sub-tasks
           </p>
         </div>
       )}
 
       {expanded && task.checklist.length > 0 && (
-        <div className="border-t border-gray-100 px-4 py-3 pl-6 space-y-1.5 bg-white">
+        <div className="border-t border-[var(--clean-border)] px-4 py-3 pl-6 space-y-1.5 bg-white">
           {task.checklist.map((item) => (
             <div key={item.id} className="flex items-center gap-2">
               <input
@@ -312,7 +313,7 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
                 checked={item.done}
                 onChange={(e) => canCheck && toggleChecklistItem(item.id, e.target.checked)}
                 disabled={!canCheck}
-                className="w-4 h-4 rounded-sm border-gray-300 text-accent accent-accent"
+                className="w-4 h-4 border-[var(--clean-border)] text-[var(--clean-accent)] accent-[var(--clean-accent)]"
               />
               {canEditAssign ? (
                 <>
@@ -326,7 +327,7 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
                       updateTask(task.id, { checklist: next });
                     }}
                     placeholder="Sub-task"
-                    className="flex-1 min-w-0 text-sm rounded-sm border border-gray-200 px-2 py-1"
+                    className="flex-1 min-w-0 text-[13px] border border-[var(--clean-border)] px-2 py-1 focus:border-[var(--clean-accent)] outline-none"
                   />
                   <UserSelector
                     users={internalUsers}
@@ -341,7 +342,7 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
                   />
                 </>
               ) : (
-                <span className="flex-1 min-w-0 text-sm text-gray-700">{item.label || "—"}</span>
+                <span className="flex-1 min-w-0 text-[13px] text-[var(--clean-text)]">{item.label || "—"}</span>
               )}
               <MediaToolbox
                 onAddAttachment={(att) => addChecklistItemAttachment(item.id, att)}
@@ -364,7 +365,7 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
       )}
 
       {expanded && task.checklist.length === 0 && canEditAssign && (
-        <div className="border-t border-gray-100 px-4 py-3 pl-6">
+        <div className="border-t border-[var(--clean-border)] px-4 py-3 pl-6">
           <button
             type="button"
             onClick={addChecklistItem}
@@ -376,21 +377,21 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
       )}
 
       {expanded && (
-        <div className="border-t border-gray-100 px-4 py-3 pl-6 bg-white space-y-2">
-          <p className="text-xs font-medium text-gray-600 flex items-center gap-1">
-            <MessageSquare className="w-3.5 h-3.5" />
+        <div className="border-t border-[var(--clean-border)] px-4 py-3 pl-6 bg-white space-y-2">
+          <p className="text-xs font-medium text-[var(--clean-text-secondary)] flex items-center gap-1">
+            <MessageSquare className="w-3.5 h-3.5" strokeWidth={1.75} />
             {locale === "he" ? "תגובות" : "Comments"}
           </p>
           {comments.length > 0 ? (
             <ul className="space-y-1.5">
               {comments.map((c) => (
-                <li key={c.id} className="text-xs text-gray-700 pl-2 border-l-2 border-[#008080]/30">
+                <li key={c.id} className="text-xs text-[var(--clean-text)] pl-2 border-l-2 border-[var(--clean-accent)]">
                   {c.text}
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-xs text-gray-400">{locale === "he" ? "אין תגובות עדיין." : "No comments yet."}</p>
+            <p className="text-xs text-[var(--clean-text-secondary)]">{locale === "he" ? "אין תגובות עדיין." : "No comments yet."}</p>
           )}
 
           {canComment && (
@@ -401,7 +402,7 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
                 onChange={(e) => setCommentText(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && submitComment()}
                 placeholder={locale === "he" ? "כתוב עדכון..." : "Write an update..."}
-                className="flex-1 min-w-0 text-sm rounded-sm border border-gray-100 px-2 py-1.5 bg-white"
+                className="flex-1 min-w-0 text-[13px] border border-[var(--clean-border)] px-2 py-1.5 bg-white focus:border-[var(--clean-accent)] outline-none"
               />
               <MediaToolbox
                 onAddAttachment={addCommentAttachment}
@@ -413,7 +414,7 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
                 type="button"
                 onClick={submitComment}
                 disabled={!commentText.trim()}
-                className="px-2.5 py-1.5 rounded-sm bg-[#008080] text-white text-sm font-medium disabled:opacity-50"
+                className="px-2.5 py-1.5 bg-[var(--clean-accent)] text-white text-[13px] font-medium disabled:opacity-50 transition-colors"
               >
                 {locale === "he" ? "שלח" : "Send"}
               </button>

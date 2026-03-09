@@ -266,29 +266,31 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
 
   const boardHeader = (
     <>
-      <div className="px-3 py-2 border-b border-gray-100 bg-white">
-        <div className="flex items-center gap-2 max-w-md mx-auto bg-white border border-gray-100 rounded-sm pl-3 pr-3 py-2 min-h-[40px]">
-          <Search className="w-4 h-4 text-slate-400 shrink-0" strokeWidth={2} />
+      <div className="px-3 py-2 border-b border-[var(--clean-border)] bg-white">
+        <div className="flex items-center gap-2 max-w-md mx-auto pl-3 pr-3 py-2.5 min-h-[40px] bg-white border border-[var(--clean-border)]">
+          <Search className="w-4 h-4 shrink-0 text-[var(--clean-text-secondary)]" strokeWidth={1.75} />
           <input
             type="text"
             value={folderSearchQuery}
             onChange={(e) => setFolderSearchQuery(e.target.value)}
             placeholder={locale === "he" ? "חיפוש בלוח..." : "Search board..."}
-            className="flex-1 min-w-0 bg-transparent text-sm font-medium text-gray-900 placeholder-slate-400 outline-none"
+            className="flex-1 min-w-0 bg-transparent text-[13px] font-medium text-[var(--clean-text)] placeholder-[var(--clean-text-secondary)] outline-none tracking-wide"
           />
         </div>
       </div>
-      <div className="flex gap-0 p-1 border-b border-gray-100 bg-white overflow-x-auto scrollbar-hide">
+      <div className="flex gap-0 border-b border-[var(--clean-border)] bg-white overflow-x-auto scrollbar-hide">
         {MAIN_CATEGORIES.filter((c) => c.id !== "checklists").map(({ id, labelKey, icon: Icon }) => (
           <button
             key={id}
             type="button"
             onClick={() => setMainTab(id)}
-            className={`flex items-center gap-1.5 px-3 py-2.5 rounded-sm text-xs font-semibold whitespace-nowrap transition-all duration-150 ${
-              mainTab === id ? "bg-[#008080] text-white" : "text-slate-600 bg-transparent hover:bg-gray-50 border border-transparent"
+            className={`flex items-center gap-1.5 px-3 py-2.5 text-[13px] font-medium whitespace-nowrap transition-all duration-150 border-b-2 -mb-px ${
+              mainTab === id
+                ? "border-[var(--clean-accent)] text-[var(--clean-accent)]"
+                : "border-transparent text-[var(--clean-text-secondary)] hover:text-[var(--clean-text)]"
             }`}
           >
-            <Icon className="w-3.5 h-3.5 shrink-0" />
+            <Icon className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />
             {t(locale, labelKey)}
           </button>
         ))}
@@ -297,18 +299,20 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
   );
 
   return (
-    <PanelWrapper header={boardHeader} className="w-full bg-white border border-gray-100 rounded-sm">
-      <div className="p-3 bg-white min-h-full">
+    <PanelWrapper header={boardHeader} className="clean-app w-full bg-white min-h-full">
+      <div className="p-3 min-h-full bg-white">
         {mainTab === "tasks" && (
           <>
-            {/* Task sub-tabs: GIVEN | RECEIVED | Checklist button */}
-            <div className="flex flex-wrap items-center gap-2 mb-4">
-              <div className="flex gap-0 p-0.5 rounded-sm border border-gray-100 bg-white">
+            {/* Task sub-tabs: GIVEN | RECEIVED as text buttons with green underline */}
+            <div className="flex flex-wrap items-center gap-4 mb-4">
+              <div className="flex items-center gap-6">
                 <button
                   type="button"
                   onClick={() => setTaskSubTab("given")}
-                  className={`px-4 py-2.5 rounded-sm text-sm font-semibold uppercase tracking-wide transition-all duration-150 ${
-                    taskSubTab === "given" ? "bg-[#008080] text-white" : "text-slate-600 hover:text-gray-900 bg-transparent hover:bg-gray-50"
+                  className={`px-0 py-2 text-[13px] font-medium tracking-wide border-b-2 -mb-px transition-all duration-150 ${
+                    taskSubTab === "given"
+                      ? "border-[var(--clean-accent)] text-[var(--clean-text)] font-semibold"
+                      : "border-transparent text-[var(--clean-text-secondary)] hover:text-[var(--clean-text)]"
                   }`}
                 >
                   {t(locale, "board.tasksGiven")}
@@ -316,8 +320,10 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                 <button
                   type="button"
                   onClick={() => setTaskSubTab("received")}
-                  className={`px-4 py-2.5 rounded-sm text-sm font-semibold uppercase tracking-wide transition-all duration-150 ${
-                    taskSubTab === "received" ? "bg-[#008080] text-white" : "text-slate-600 hover:text-gray-900 bg-transparent hover:bg-gray-50"
+                  className={`px-0 py-2 text-[13px] font-medium tracking-wide border-b-2 -mb-px transition-all duration-150 ${
+                    taskSubTab === "received"
+                      ? "border-[var(--clean-accent)] text-[var(--clean-text)] font-semibold"
+                      : "border-transparent text-[var(--clean-text-secondary)] hover:text-[var(--clean-text)]"
                   }`}
                 >
                   {t(locale, "board.tasksReceived")}
@@ -326,19 +332,19 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
               <button
                 type="button"
                 onClick={() => setMainTab("checklists")}
-                className="flex items-center gap-1.5 px-3 py-2.5 rounded-sm border border-gray-100 bg-white text-slate-600 hover:border-gray-200 hover:text-[#008080] text-sm font-semibold transition-all duration-150"
+                className="flex items-center gap-1.5 px-3 py-2 border border-[var(--clean-border)] bg-white text-[var(--clean-text)] hover:border-[#E2E8F0] text-[13px] font-medium transition-all duration-150"
                 aria-label={locale === "he" ? "רשימות" : "Checklists"}
               >
-                <ListTodo className="w-4 h-4" />
-                <Plus className="w-3 h-3" />
+                <ListTodo className="w-3.5 h-3.5" strokeWidth={1.75} />
+                <Plus className="w-3 h-3" strokeWidth={1.75} />
                 {locale === "he" ? "רשימות" : "Checklists"}
               </button>
             </div>
 
-            {/* Minimalist task creation: clean white input + action row */}
+            {/* Clean task creation: white, 1px border, only Send green */}
             <div
-              className={`mb-4 rounded-sm border bg-white transition-all duration-150 ${
-                isQuickAddDueNextWeek ? "border-amber-300" : "border-gray-100 focus-within:border-[#008080] focus-within:ring-1 focus-within:ring-[#008080]/15"
+              className={`clean-card mb-4 overflow-hidden transition-all duration-150 ${
+                isQuickAddDueNextWeek ? "border-amber-300" : ""
               }`}
             >
               <textarea
@@ -352,9 +358,9 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                 }}
                 placeholder={locale === "he" ? "משימה חדשה..." : "New task..."}
                 rows={2}
-                className="w-full min-h-[52px] max-h-24 px-4 py-3 rounded-t-sm bg-white text-gray-900 placeholder-slate-400 text-sm font-medium resize-none border-0 focus:ring-0 focus:outline-none"
+                className="w-full min-h-[48px] max-h-24 px-4 py-3 bg-white text-[var(--clean-text)] placeholder-[var(--clean-text-secondary)] text-[13px] font-medium resize-none border-0 focus:ring-0 focus:outline-none tracking-wide"
               />
-              <div className="flex items-center justify-between gap-1 px-2 py-2 border-t border-gray-100 rounded-b-sm bg-white">
+              <div className="flex items-center justify-between gap-1 px-2 py-2 border-t border-[var(--clean-border)] bg-white">
                 <div className="flex items-center gap-0.5">
                   {/* Priority dots: high=red, medium=amber, low=Ollin green (default) */}
                   {(["high", "medium", "low"] as const).map((p) => (
@@ -362,14 +368,14 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                       key={p}
                       type="button"
                       onClick={() => setQuickAddPriority(quickAddPriority === p ? "low" : p)}
-                      className={`w-6 h-6 rounded-sm flex items-center justify-center transition-all duration-150 ${
+                      className={`w-5 h-5 flex items-center justify-center transition-all duration-150 border border-[var(--clean-border)] ${
                         quickAddPriority === p
                           ? p === "high"
-                            ? "bg-red-500"
+                            ? "bg-red-500 border-red-500"
                             : p === "medium"
-                              ? "bg-amber-500"
-                              : "bg-[#008080]"
-                          : "bg-gray-100 hover:bg-gray-200 border border-transparent"
+                              ? "bg-amber-500 border-amber-500"
+                              : "bg-[var(--clean-accent)] border-[var(--clean-accent)]"
+                          : "bg-white hover:border-[#E2E8F0]"
                       }`}
                       title={p === "high" ? "High" : p === "medium" ? "Medium" : "Low"}
                       aria-label={p === "high" ? "High priority" : p === "medium" ? "Medium priority" : "Low priority"}
@@ -377,12 +383,12 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                       <span className="sr-only">{p}</span>
                     </button>
                   ))}
-                  <span className="w-px h-4 bg-gray-100 mx-1" aria-hidden />
+                  <span className="w-px h-4 bg-[var(--clean-border)] mx-1" aria-hidden />
                   <div className="relative">
                     <button
                       type="button"
                       onClick={() => setQuickAddDatePickerOpen((o) => !o)}
-                      className={`p-1.5 rounded-sm transition-all duration-150 ${quickAddDueDate ? "text-[#008080]" : "text-slate-400 hover:text-[#008080]"}`}
+                      className={`p-1.5 transition-all duration-150 ${quickAddDueDate ? "text-[var(--clean-accent)]" : "text-[var(--clean-text-secondary)] hover:text-[var(--clean-accent)]"}`}
                       title={locale === "he" ? "תאריך" : "Date"}
                       aria-label="Pick date"
                     >
@@ -391,7 +397,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                     {quickAddDatePickerOpen && (
                       <>
                         <div className="fixed inset-0 z-10" onClick={() => setQuickAddDatePickerOpen(false)} aria-hidden />
-                        <div className="absolute left-0 bottom-full mb-1 z-20 p-2 rounded-sm bg-white border border-gray-100 shadow-lg">
+                        <div className="absolute left-0 bottom-full mb-1 z-20 p-2 bg-white border border-[var(--clean-border)]">
                           <input
                             type="date"
                             value={quickAddDueDate ?? ""}
@@ -399,7 +405,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                               setQuickAddDueDate(e.target.value || null);
                               setQuickAddDatePickerOpen(false);
                             }}
-                            className="text-sm font-medium border border-gray-100 rounded-sm px-2 py-1.5 text-gray-900"
+                            className="text-[13px] font-medium border border-[var(--clean-border)] px-2 py-1.5 text-[var(--clean-text)]"
                           />
                         </div>
                       </>
@@ -408,7 +414,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                   <button
                     type="button"
                     onClick={() => quickAddFileRef.current?.click()}
-                    className={`p-1.5 rounded-sm transition-all duration-150 ${quickAddAttachments.some((a) => a.type === "file") ? "text-[#008080]" : "text-slate-400 hover:text-[#008080]"}`}
+                    className={`p-1.5 transition-all duration-150 ${quickAddAttachments.some((a) => a.type === "file") ? "text-[var(--clean-accent)]" : "text-[var(--clean-text-secondary)] hover:text-[var(--clean-accent)]"}`}
                     title={locale === "he" ? "מסמכים" : "Documents"}
                     aria-label="Attach document"
                   >
@@ -429,7 +435,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                   <button
                     type="button"
                     onClick={() => quickAddImageRef.current?.click()}
-                    className={`p-1.5 rounded-sm transition-all duration-150 ${quickAddAttachments.some((a) => a.type === "image") ? "text-[#008080]" : "text-slate-400 hover:text-[#008080]"}`}
+                    className={`p-1.5 transition-all duration-150 ${quickAddAttachments.some((a) => a.type === "image") ? "text-[var(--clean-accent)]" : "text-[var(--clean-text-secondary)] hover:text-[var(--clean-accent)]"}`}
                     title={locale === "he" ? "תמונה" : "Image"}
                     aria-label="Attach image"
                   >
@@ -450,7 +456,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                   <button
                     type="button"
                     onClick={() => quickAddCameraRef.current?.click()}
-                    className={`p-1.5 rounded-sm transition-all duration-150 ${quickAddAttachments.some((a) => a.type === "camera") ? "text-[#008080]" : "text-slate-400 hover:text-[#008080]"}`}
+                    className={`p-1.5 transition-all duration-150 ${quickAddAttachments.some((a) => a.type === "camera") ? "text-[var(--clean-accent)]" : "text-[var(--clean-text-secondary)] hover:text-[var(--clean-accent)]"}`}
                     title={locale === "he" ? "מצלמה" : "Camera"}
                     aria-label="Take photo"
                   >
@@ -471,7 +477,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                   <button
                     type="button"
                     onClick={() => {}}
-                    className="p-1.5 rounded-sm text-slate-400 hover:text-[#008080] transition-all duration-150"
+                    className="p-1.5 text-[var(--clean-text-secondary)] hover:text-[var(--clean-accent)] transition-all duration-150"
                     title={locale === "he" ? "קול" : "Voice"}
                     aria-label="Voice"
                   >
@@ -480,7 +486,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                   <button
                     type="button"
                     onClick={() => setQuickAddNoComments((c) => !c)}
-                    className={`p-1.5 rounded-sm transition-all duration-150 ${quickAddNoComments ? "text-[#008080]" : "text-slate-400 hover:text-[#008080]"}`}
+                    className={`p-1.5 transition-all duration-150 ${quickAddNoComments ? "text-[var(--clean-accent)]" : "text-[var(--clean-text-secondary)] hover:text-[var(--clean-accent)]"}`}
                     title={locale === "he" ? "ללא תגובות" : "No comments"}
                     aria-label="No comments"
                     aria-pressed={quickAddNoComments}
@@ -491,7 +497,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                 <button
                   type="button"
                   onClick={() => handleQuickAdd(taskSubTab)}
-                  className="p-2 rounded-sm bg-[#008080] text-white hover:bg-[#006666] transition-all duration-150 flex items-center justify-center border-0"
+                  className="p-2 bg-[var(--clean-accent)] text-white hover:bg-[var(--clean-accent-hover)] transition-all duration-150 flex items-center justify-center border-0"
                   aria-label={locale === "he" ? "שלח משימה" : "Add task"}
                 >
                   <Send className="w-4 h-4" strokeWidth={2.5} />
@@ -519,17 +525,17 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                   />
                 ))}
               {taskSubTab === "given" && activeGiven.length === 0 && (
-                <p className="text-sm text-gray-500 py-4">{locale === "he" ? "אין משימות שנתתי." : "No tasks given."}</p>
+                <p className="text-[13px] text-[var(--clean-text-secondary)] py-4">{locale === "he" ? "אין משימות שנתתי." : "No tasks given."}</p>
               )}
               {taskSubTab === "received" && activeReceived.length === 0 && (
-                <p className="text-sm text-gray-500 py-4">{locale === "he" ? "אין משימות שקיבלתי." : "No tasks received."}</p>
+                <p className="text-[13px] text-[var(--clean-text-secondary)] py-4">{locale === "he" ? "אין משימות שקיבלתי." : "No tasks received."}</p>
               )}
             </div>
 
             <div className="mt-4">
               <Link
                 href="/dashboard/summary"
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-sm bg-white text-[#008080] text-sm font-semibold border border-gray-100 hover:border-[#008080]/30"
+                className="inline-flex items-center gap-2 px-4 py-2 border border-[var(--clean-border)] bg-white text-[var(--clean-text)] text-[13px] font-medium hover:border-[#E2E8F0]"
               >
                 <FileText className="w-4 h-4" />
                 {locale === "he" ? "סיכום" : "Summarize"}
@@ -578,14 +584,16 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
               <ChevronLeft className="w-4 h-4" />
               {locale === "he" ? "חזרה למשימות" : "Back to Tasks"}
             </button>
-            {/* GIVEN / RECEIVED toggle - same style as Tasks view */}
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex gap-0 p-0.5 rounded-sm border border-gray-100 bg-white">
+            {/* GIVEN / RECEIVED: text buttons with green underline */}
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-6">
                 <button
                   type="button"
                   onClick={() => setChecklistSubTab("given")}
-                  className={`px-4 py-2.5 rounded-sm text-sm font-semibold uppercase tracking-wide transition-all duration-150 ${
-                    checklistSubTab === "given" ? "bg-[#008080] text-white" : "text-slate-600 hover:text-gray-900 bg-transparent hover:bg-gray-50"
+                  className={`px-0 py-2 text-[13px] font-medium tracking-wide border-b-2 -mb-px transition-all duration-150 ${
+                    checklistSubTab === "given"
+                      ? "border-[var(--clean-accent)] text-[var(--clean-text)] font-semibold"
+                      : "border-transparent text-[var(--clean-text-secondary)] hover:text-[var(--clean-text)]"
                   }`}
                 >
                   {t(locale, "board.tasksGiven")}
@@ -593,8 +601,10 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                 <button
                   type="button"
                   onClick={() => setChecklistSubTab("received")}
-                  className={`px-4 py-2.5 rounded-sm text-sm font-semibold uppercase tracking-wide transition-all duration-150 ${
-                    checklistSubTab === "received" ? "bg-[#008080] text-white" : "text-slate-600 hover:text-gray-900 bg-transparent hover:bg-gray-50"
+                  className={`px-0 py-2 text-[13px] font-medium tracking-wide border-b-2 -mb-px transition-all duration-150 ${
+                    checklistSubTab === "received"
+                      ? "border-[var(--clean-accent)] text-[var(--clean-text)] font-semibold"
+                      : "border-transparent text-[var(--clean-text-secondary)] hover:text-[var(--clean-text)]"
                   }`}
                 >
                   {t(locale, "board.tasksReceived")}
@@ -603,15 +613,15 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
               <button
                 type="button"
                 onClick={() => setNewChecklistModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-2.5 rounded-sm border border-gray-100 bg-[#008080] text-white text-sm font-semibold hover:bg-[#006666] transition-all duration-150"
+                className="flex items-center gap-1.5 px-3 py-2 border border-[var(--clean-border)] bg-white text-[var(--clean-text)] hover:border-[#E2E8F0] text-[13px] font-medium transition-all duration-150"
                 aria-label={locale === "he" ? "רשימה חדשה" : "New checklist"}
               >
-                <ListTodo className="w-4 h-4" />
-                <Plus className="w-3 h-3" />
+                <ListTodo className="w-3.5 h-3.5" strokeWidth={1.75} />
+                <Plus className="w-3 h-3" strokeWidth={1.75} />
                 {locale === "he" ? "רשימה חדשה" : "New Checklist"}
               </button>
             </div>
-            {/* New Checklist modal - premium, reordered flow */}
+            {/* New Checklist modal - clean, 1px border */}
             {newChecklistModalOpen && (() => {
               const assignableContacts: { id: string; name: string; email: string; userId: string; avatar?: string }[] = [
                 ...(currentUserId && profile?.name ? [{ id: "me", name: profile.name, email: profile?.email ?? "", userId: currentUserId }] : []),
@@ -623,15 +633,15 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
               const selectedContact = assignableContacts.find((c) => c.userId === newChecklistAssignedTo);
               return (
                 <>
-                  <div className="fixed inset-0 z-40 bg-black/35 backdrop-blur-sm" onClick={() => { setNewChecklistModalOpen(false); setNewChecklistAssignPickerOpen(false); }} aria-hidden />
+                  <div className="fixed inset-0 z-40 bg-black/20" onClick={() => { setNewChecklistModalOpen(false); setNewChecklistAssignPickerOpen(false); }} aria-hidden />
                   <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
                     <div
-                      className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-sm bg-white border border-gray-100 shadow-sm"
+                      className="clean-modal w-full max-w-md max-h-[90vh] overflow-y-auto bg-white"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
-                        <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight">{locale === "he" ? "רשימה חדשה" : "New Checklist"}</h2>
-                        <button type="button" onClick={() => setNewChecklistModalOpen(false)} className="p-2 rounded-sm text-slate-400 hover:text-gray-900 transition-colors" aria-label="Close">
+                      <div className="flex items-center justify-between px-6 py-5 border-b border-[var(--clean-border)]">
+                        <h2 className="text-xl font-semibold text-[var(--clean-text)] tracking-wide">{locale === "he" ? "רשימה חדשה" : "New Checklist"}</h2>
+                        <button type="button" onClick={() => setNewChecklistModalOpen(false)} className="p-2 text-[var(--clean-text-secondary)] hover:text-[var(--clean-text)] transition-colors" aria-label="Close">
                           <X className="w-5 h-5" strokeWidth={2} />
                         </button>
                       </div>
@@ -643,20 +653,20 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                           value={newChecklistTitle}
                           onChange={(e) => setNewChecklistTitle(e.target.value)}
                           placeholder={locale === "he" ? "שם הרשימה" : "Checklist name"}
-                          className="w-full px-4 py-3.5 rounded-sm border border-gray-100 bg-white text-gray-900 placeholder-slate-400 text-base font-semibold focus:ring-1 focus:ring-[#008080]/20 focus:border-[#008080]/40 transition-all"
+                          className="w-full px-4 py-3 border border-[var(--clean-border)] bg-white text-[var(--clean-text)] placeholder-[var(--clean-text-secondary)] text-[13px] font-medium focus:border-[var(--clean-accent)] outline-none transition-colors"
                         />
                       </div>
 
                       {/* 2. Middle: Item list with dividers + add input + Add another task button */}
                       <div className="px-6 pt-8">
-                        <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-3">{locale === "he" ? "פריטים" : "Items"}</p>
+                        <p className="text-xs font-medium uppercase tracking-wider text-[var(--clean-text-secondary)] mb-3">{locale === "he" ? "פריטים" : "Items"}</p>
                         {newChecklistInitialItems.filter(Boolean).length > 0 ? (
-                          <ul className="border border-gray-100 rounded-sm divide-y divide-gray-100 overflow-hidden">
+                          <ul className="border border-[var(--clean-border)] divide-y divide-[var(--clean-border)] overflow-hidden">
                             {newChecklistInitialItems.map((item, idx) =>
                               !item.trim() ? null : (
                                 <li key={idx} className="flex items-center justify-between gap-2 px-4 py-3 bg-white">
                                   <span className="text-sm font-medium text-gray-900 truncate">{item}</span>
-                                  <button type="button" onClick={() => setNewChecklistInitialItems((prev) => prev.filter((_, i) => i !== idx))} className="p-1 rounded-sm hover:bg-gray-50 text-slate-400 hover:text-gray-700 transition-colors shrink-0" aria-label="Remove">
+                                  <button type="button" onClick={() => setNewChecklistInitialItems((prev) => prev.filter((_, i) => i !== idx))} className="p-1 hover:bg-[var(--clean-border)] text-[var(--clean-text-secondary)] hover:text-[var(--clean-text)] transition-colors shrink-0" aria-label="Remove">
                                     <X className="w-4 h-4" strokeWidth={2} />
                                   </button>
                                 </li>
@@ -667,7 +677,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                         <input
                           type="text"
                           placeholder={locale === "he" ? "הוסף פריט..." : "Add item..."}
-                          className="w-full mt-2 px-4 py-3 rounded-sm border border-gray-100 bg-white text-sm text-gray-900 placeholder-slate-400 focus:ring-1 focus:ring-[#008080]/20 focus:border-[#008080]/40 transition-all"
+                          className="w-full mt-2 px-4 py-3 border border-[var(--clean-border)] bg-white text-[13px] text-[var(--clean-text)] placeholder-[var(--clean-text-secondary)] focus:border-[var(--clean-accent)] outline-none transition-colors"
                           onKeyDown={(e) => {
                             const v = (e.target as HTMLInputElement).value.trim();
                             if (e.key === "Enter" && v) { setNewChecklistInitialItems((prev) => [...prev.filter(Boolean), v]); (e.target as HTMLInputElement).value = ""; }
@@ -680,7 +690,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                         <button
                           type="button"
                           onClick={() => (document.querySelector('[placeholder*="Add item"], [placeholder*="הוסף פריט"]') as HTMLInputElement)?.focus()}
-                          className="w-full mt-3 flex items-center justify-center gap-2 px-4 py-3.5 rounded-sm border border-gray-100 bg-white text-slate-600 text-sm font-semibold hover:border-gray-200 hover:text-gray-900 transition-colors"
+                          className="w-full mt-3 flex items-center justify-center gap-2 px-4 py-3 border border-[var(--clean-border)] bg-white text-[var(--clean-text-secondary)] text-[13px] font-medium hover:border-[#E2E8F0] hover:text-[var(--clean-text)] transition-colors"
                         >
                           <Plus className="w-4 h-4" strokeWidth={2.5} />
                           {locale === "he" ? "הוסף משימה נוספת" : "Add another task"}
@@ -694,14 +704,14 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                             <Clock className="w-4 h-4 text-blue-600" strokeWidth={2} />
                             {locale === "he" ? "חזרה" : "Recurrence"}
                           </p>
-                          <div className="flex gap-0 p-0.5 rounded-sm border border-gray-100 bg-white" role="group">
+                          <div className="flex gap-0 border border-[var(--clean-border)] bg-white" role="group">
                             {(["daily", "weekly", "monthly"] as const).map((freq) => (
                               <button
                                 key={freq}
                                 type="button"
                                 onClick={() => setNewChecklistFrequency(freq)}
-                                className={`flex-1 py-3 rounded-sm text-sm font-bold transition-all ${
-                                  newChecklistFrequency === freq ? "bg-[#008080] text-white" : "text-slate-600 hover:bg-gray-50 hover:text-gray-900"
+                                className={`flex-1 py-3 text-[13px] font-medium transition-all border-b-2 -mb-px ${
+                                  newChecklistFrequency === freq ? "border-[var(--clean-accent)] text-[var(--clean-accent)]" : "border-transparent text-[var(--clean-text-secondary)] hover:text-[var(--clean-text)]"
                                 }`}
                               >
                                 {freq === "daily" ? (locale === "he" ? "יומי" : "Daily") : freq === "weekly" ? (locale === "he" ? "שבועי" : "Weekly") : locale === "he" ? "חודשי" : "Monthly"}
@@ -715,7 +725,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                                 type="time"
                                 value={newChecklistDailyTime}
                                 onChange={(e) => setNewChecklistDailyTime(e.target.value)}
-                                className="flex-1 px-4 py-3 rounded-sm border border-gray-100 bg-white text-base font-semibold text-gray-900 focus:ring-1 focus:ring-[#008080]/20 focus:border-[#008080]/40"
+                                className="flex-1 px-4 py-3 border border-[var(--clean-border)] bg-white text-[13px] font-medium text-[var(--clean-text)] focus:border-[var(--clean-accent)] outline-none"
                               />
                             </div>
                           )}
@@ -726,8 +736,8 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                                   key={d}
                                   type="button"
                                   onClick={() => setNewChecklistWeeklyDay(d)}
-                                  className={`py-2.5 rounded-sm text-xs font-bold transition-all ${
-                                    newChecklistWeeklyDay === d ? "bg-[#008080] text-white" : "bg-white text-slate-600 hover:bg-gray-50 border border-gray-100"
+                                  className={`py-2.5 text-xs font-medium transition-all border border-transparent ${
+                                    newChecklistWeeklyDay === d ? "bg-[var(--clean-accent)] text-white border-[var(--clean-accent)]" : "bg-white text-[var(--clean-text-secondary)] hover:text-[var(--clean-text)] border border-[var(--clean-border)]"
                                   }`}
                                 >
                                   {new Date(2025, 0, 5 + d).toLocaleDateString(locale === "he" ? "he" : "en", { weekday: "narrow" })}
@@ -742,8 +752,8 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                                   key={day}
                                   type="button"
                                   onClick={() => setNewChecklistMonthlyDay(day)}
-                                  className={`py-2 rounded-sm text-xs font-bold transition-all ${
-                                    newChecklistMonthlyDay === day ? "bg-[#008080] text-white" : "bg-white text-slate-600 hover:bg-gray-50 border border-gray-100"
+                                  className={`py-2 text-xs font-medium transition-all border border-transparent ${
+                                    newChecklistMonthlyDay === day ? "bg-[var(--clean-accent)] text-white border-[var(--clean-accent)]" : "bg-white text-[var(--clean-text-secondary)] hover:text-[var(--clean-text)] border border-[var(--clean-border)]"
                                   }`}
                                 >
                                   {day}
@@ -755,39 +765,39 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
 
                         {isFounder && (
                           <div>
-                            <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">
-                              <User className="w-4 h-4 text-[#008080]" strokeWidth={2} />
+                            <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-[var(--clean-text-secondary)] mb-2">
+                              <User className="w-4 h-4 text-[var(--clean-accent)]" strokeWidth={1.75} />
                               {locale === "he" ? "הוקצה ל" : "Assign to"}
                             </p>
                             <div className="relative">
                               <button
                                 type="button"
                                 onClick={() => setNewChecklistAssignPickerOpen((o) => !o)}
-                                className="w-full flex items-center gap-3 px-4 py-3 rounded-sm bg-white border border-gray-100 text-left focus:ring-1 focus:ring-[#008080]/20 focus:border-[#008080]/40 transition-all"
+                                className="w-full flex items-center gap-3 px-4 py-3 bg-white border border-[var(--clean-border)] text-left focus:border-[var(--clean-accent)] outline-none transition-colors"
                               >
                                 {selectedContact ? (
                                   <>
-                                    <UserAvatar name={selectedContact.name} email={selectedContact.email} imageUrl={selectedContact.avatar} size="md" className="flex-shrink-0 ring-2 ring-[#008080]/20 rounded-sm" />
-                                    <span className="text-sm font-bold text-gray-900 truncate">{selectedContact.name}</span>
+                                    <UserAvatar name={selectedContact.name} email={selectedContact.email} imageUrl={selectedContact.avatar} size="md" className="flex-shrink-0 border border-[var(--clean-accent)]" />
+                                    <span className="text-[13px] font-medium text-[var(--clean-text)] truncate">{selectedContact.name}</span>
                                   </>
                                 ) : (
                                   <>
                                     <User className="w-5 h-5 text-gray-400" strokeWidth={2} />
-                                    <span className="text-sm font-medium text-gray-500">{locale === "he" ? "בחר משתמש" : "Select user"}</span>
+                                    <span className="text-[13px] font-medium text-[var(--clean-text-secondary)]">{locale === "he" ? "בחר משתמש" : "Select user"}</span>
                                   </>
                                 )}
                               </button>
                               {newChecklistAssignPickerOpen && (
-                                <div className="absolute left-0 right-0 top-full mt-1 py-2 rounded-sm bg-white border border-gray-100 shadow-lg max-h-64 overflow-y-auto z-10">
-                                  <div className="px-3 pb-2 border-b border-gray-100">
-                                    <div className="flex items-center gap-2 px-3 py-2 rounded-sm bg-white border border-gray-100">
-                                      <Search className="w-4 h-4 text-gray-500" strokeWidth={2} />
+                                <div className="absolute left-0 right-0 top-full mt-1 py-2 bg-white border border-[var(--clean-border)] max-h-64 overflow-y-auto z-10">
+                                  <div className="px-3 pb-2 border-b border-[var(--clean-border)]">
+                                    <div className="flex items-center gap-2 px-3 py-2 bg-white border border-[var(--clean-border)]">
+                                      <Search className="w-4 h-4 text-[var(--clean-text-secondary)]" strokeWidth={1.75} />
                                       <input
                                         type="text"
                                         value={newChecklistAssignSearch}
                                         onChange={(e) => setNewChecklistAssignSearch(e.target.value)}
                                         placeholder={locale === "he" ? "חיפוש..." : "Search..."}
-                                        className="flex-1 min-w-0 bg-transparent text-sm font-medium text-gray-900 placeholder-gray-400 outline-none"
+                                        className="flex-1 min-w-0 bg-transparent text-[13px] font-medium text-[var(--clean-text)] placeholder-[var(--clean-text-secondary)] outline-none"
                                       />
                                     </div>
                                   </div>
@@ -797,10 +807,10 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                                         <button
                                           type="button"
                                           onClick={() => { setNewChecklistAssignedTo(c.userId); setNewChecklistAssignPickerOpen(false); setNewChecklistAssignSearch(""); }}
-                                          className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50/80 border-b border-gray-100 last:border-0 transition-colors"
+                                          className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[var(--clean-border)] border-b border-[var(--clean-border)] last:border-0 transition-colors"
                                         >
-                                          <UserAvatar name={c.name} email={c.email} imageUrl={c.avatar} size="md" className="flex-shrink-0 ring-2 ring-gray-200 rounded-sm" />
-                                          <span className="text-sm font-bold text-gray-900 truncate">{c.name}</span>
+                                          <UserAvatar name={c.name} email={c.email} imageUrl={c.avatar} size="md" className="flex-shrink-0 border border-[var(--clean-border)]" />
+                                          <span className="text-[13px] font-medium text-[var(--clean-text)] truncate">{c.name}</span>
                                         </button>
                                       </li>
                                     ))}
@@ -813,22 +823,22 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                         )}
 
                         <label className="flex items-center gap-3 cursor-pointer py-2">
-                          <MessageCircleOff className="w-4 h-4 text-slate-400" strokeWidth={2} />
+                          <MessageCircleOff className="w-4 h-4 text-[var(--clean-text-secondary)]" strokeWidth={1.75} />
                           <input
                             type="checkbox"
                             checked={newChecklistDisableComments}
                             onChange={(e) => setNewChecklistDisableComments(e.target.checked)}
-                            className="rounded-sm border-gray-300 text-[#008080] focus:ring-[#008080] w-4 h-4"
+                            className="border-[var(--clean-border)] text-[var(--clean-accent)] focus:ring-0 w-4 h-4"
                           />
-                          <span className="text-sm font-semibold text-gray-700">{locale === "he" ? "השבת תגובות" : "Disable comments"}</span>
+                          <span className="text-[13px] font-medium text-[var(--clean-text)]">{locale === "he" ? "השבת תגובות" : "Disable comments"}</span>
                         </label>
                       </div>
 
-                      <div className="px-6 py-5 flex justify-end gap-3 border-t border-gray-100 mt-6">
-                        <button type="button" onClick={() => setNewChecklistModalOpen(false)} className="px-5 py-3 rounded-sm text-sm font-semibold text-slate-600 hover:text-gray-900 border border-gray-100 hover:bg-gray-50 transition-colors">
+                      <div className="px-6 py-5 flex justify-end gap-3 border-t border-[var(--clean-border)] mt-6">
+                        <button type="button" onClick={() => setNewChecklistModalOpen(false)} className="px-5 py-2.5 text-[13px] font-medium text-[var(--clean-text-secondary)] hover:text-[var(--clean-text)] border border-[var(--clean-border)] hover:bg-[var(--clean-border)] transition-colors">
                           {locale === "he" ? "ביטול" : "Cancel"}
                         </button>
-                        <button type="button" onClick={handleCreateChecklist} className="px-5 py-3 rounded-sm bg-[#008080] text-white text-sm font-semibold hover:bg-[#006666] transition-colors">
+                        <button type="button" onClick={handleCreateChecklist} className="px-5 py-2.5 bg-[var(--clean-accent)] text-white text-[13px] font-medium hover:bg-[var(--clean-accent-hover)] transition-colors">
                           {locale === "he" ? "צור רשימה" : "Create"}
                         </button>
                       </div>
@@ -1174,56 +1184,56 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
       {/* Create Folder Modal */}
       {createFolderModalOpen && (
         <>
-          <div className="fixed inset-0 z-40 bg-black/40" aria-hidden onClick={() => setCreateFolderModalOpen(false)} />
+          <div className="fixed inset-0 z-40 bg-black/20" aria-hidden onClick={() => setCreateFolderModalOpen(false)} />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div
-              className="w-full max-w-md rounded-sm bg-white border border-gray-100 shadow-sm overflow-hidden"
+              className="clean-modal w-full max-w-md overflow-hidden bg-white"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="px-5 py-4 border-b border-gray-100">
-                <h2 className="text-lg font-bold text-gray-900">{locale === "he" ? "תיקייה חדשה" : "New Folder"}</h2>
+              <div className="px-5 py-4 border-b border-[var(--clean-border)]">
+                <h2 className="text-lg font-semibold text-[var(--clean-text)] tracking-wide">{locale === "he" ? "תיקייה חדשה" : "New Folder"}</h2>
               </div>
               <div className="p-5 space-y-4">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">{locale === "he" ? "שם תיקייה" : "Folder name"}</label>
+                  <label className="block text-[13px] font-medium text-[var(--clean-text)] mb-1.5">{locale === "he" ? "שם תיקייה" : "Folder name"}</label>
                   <input
                     type="text"
                     value={modalFolderName}
                     onChange={(e) => setModalFolderName(e.target.value)}
                     placeholder={locale === "he" ? "הזן שם תיקייה" : "Enter folder name"}
-                    className="w-full px-4 py-2.5 rounded-sm border border-gray-100 bg-white text-gray-900 placeholder-slate-400 text-sm font-medium focus:ring-1 focus:ring-[#008080]/20 focus:border-[#008080]/40 outline-none"
+                    className="w-full px-4 py-2.5 border border-[var(--clean-border)] bg-white text-[var(--clean-text)] placeholder-[var(--clean-text-secondary)] text-[13px] font-medium focus:border-[var(--clean-accent)] outline-none"
                     autoFocus
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">{locale === "he" ? "שתף עם..." : "Share with..."}</label>
-                  <div className="max-h-32 overflow-y-auto rounded-sm border border-gray-100 bg-white p-2 space-y-1">
+                  <label className="block text-[13px] font-medium text-[var(--clean-text)] mb-1.5">{locale === "he" ? "שתף עם..." : "Share with..."}</label>
+                  <div className="max-h-32 overflow-y-auto border border-[var(--clean-border)] bg-white p-2 space-y-1">
                     {contacts.length === 0 ? (
-                      <p className="text-xs text-gray-500 py-2 px-2">{locale === "he" ? "אין אנשי קשר. הוסף אנשי קשר להזמנה." : "No contacts. Add contacts to invite."}</p>
+                      <p className="text-xs text-[var(--clean-text-secondary)] py-2 px-2">{locale === "he" ? "אין אנשי קשר. הוסף אנשי קשר להזמנה." : "No contacts. Add contacts to invite."}</p>
                     ) : (
                       contacts.map((c) => (
                         <label
                           key={c.id}
-                          className="flex items-center gap-2 py-2 px-2 rounded-sm hover:bg-gray-100 cursor-pointer"
+                          className="flex items-center gap-2 py-2 px-2 hover:bg-[var(--clean-border)] cursor-pointer"
                         >
                           <input
                             type="checkbox"
                             checked={modalSharedWithIds.includes(c.id)}
                             onChange={() => toggleModalShareContact(c.id)}
-                            className="rounded-sm border-gray-300 text-[#008080] focus:ring-[#008080]"
+                            className="border-[var(--clean-border)] text-[var(--clean-accent)] focus:ring-0 w-4 h-4"
                           />
-                          <span className="text-sm font-medium text-gray-800 truncate">{c.name || c.email || c.id}</span>
+                          <span className="text-[13px] font-medium text-[var(--clean-text)] truncate">{c.name || c.email || c.id}</span>
                         </label>
                       ))
                     )}
                   </div>
                 </div>
               </div>
-              <div className="px-5 py-4 border-t border-gray-100 flex justify-end gap-2">
+              <div className="px-5 py-4 border-t border-[var(--clean-border)] flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setCreateFolderModalOpen(false)}
-                  className="px-4 py-2.5 rounded-sm border border-gray-100 text-slate-600 text-sm font-semibold hover:bg-gray-50"
+                  className="px-4 py-2.5 text-[13px] font-medium text-[var(--clean-text-secondary)] hover:text-[var(--clean-text)] border border-[var(--clean-border)] hover:bg-[var(--clean-border)]"
                 >
                   {locale === "he" ? "ביטול" : "Cancel"}
                 </button>
@@ -1231,7 +1241,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                   type="button"
                   onClick={handleCreateFolderFromModal}
                   disabled={!modalFolderName.trim()}
-                  className="px-4 py-2.5 rounded-sm bg-[#008080] text-white text-sm font-semibold hover:bg-[#006666] disabled:opacity-50 disabled:pointer-events-none"
+                  className="px-4 py-2.5 bg-[var(--clean-accent)] text-white text-[13px] font-medium hover:bg-[var(--clean-accent-hover)] disabled:opacity-50 disabled:pointer-events-none"
                 >
                   {locale === "he" ? "צור" : "Create"}
                 </button>

@@ -23,13 +23,18 @@ function DashboardPageInner() {
   const { profile } = useProfile();
   const searchParams = useSearchParams();
   const cardSlug = profile?.username ? slugFromUsername(profile.username) : "card";
+  const paymentsTabFromUrl = searchParams.get("paymentsTab") as "overview" | "payments" | "finance" | "invoices" | null;
   const [panelIndex, setPanelIndex] = useState(2);
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (searchParams.get("open") === "board") setPanelIndex(BOARD_PANEL_INDEX);
-  }, [searchParams]);
+    else if (searchParams.get("panel") !== null) {
+      const n = parseInt(searchParams.get("panel") ?? "", 10);
+      if (!isNaN(n) && n >= 0 && n <= 4) setPanelIndex(n);
+    } else if (paymentsTabFromUrl) setPanelIndex(0);
+  }, [searchParams, paymentsTabFromUrl]);
   const setPanelIndexSafe = useCallback((value: number | ((prev: number) => number)) => {
     setPanelIndex((prev) => {
       const next = typeof value === "function" ? value(prev) : value;
@@ -143,7 +148,12 @@ function DashboardPageInner() {
         </div>
       </header>
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-        <DashboardPanels panelIndex={panelIndex} setPanelIndex={setPanelIndexSafe} boardTab={searchParams.get("tab")} />
+        <DashboardPanels
+          panelIndex={panelIndex}
+          setPanelIndex={setPanelIndexSafe}
+          boardTab={searchParams.get("tab")}
+          initialPaymentsTab={paymentsTabFromUrl ?? undefined}
+        />
       </div>
     </div>
   );

@@ -34,7 +34,7 @@ function ScoreCircle({ score, size = 48 }: { score: number; size?: number }) {
           fill="none"
           stroke="currentColor"
           strokeWidth={stroke}
-          className="text-gray-100"
+          className="text-[var(--clean-border)]"
         />
         <circle
           cx={size / 2}
@@ -46,10 +46,10 @@ function ScoreCircle({ score, size = 48 }: { score: number; size?: number }) {
           strokeLinecap="round"
           strokeDasharray={circumference}
           strokeDashoffset={offset}
-          className="text-[#008080] transition-all duration-500 ease-out"
+          className="text-[var(--clean-accent)] transition-all duration-500 ease-out"
         />
       </svg>
-      <span className="absolute inset-0 flex items-center justify-center text-xs font-semibold text-gray-700 tabular-nums">
+      <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-[var(--clean-text)] tabular-nums">
         {score}%
       </span>
     </div>
@@ -159,11 +159,13 @@ export function RecurringChecklistCard({
   };
 
   return (
-    <div className="rounded-sm bg-white border border-gray-100 overflow-hidden transition-all duration-150 hover:border-gray-200">
+    <div className="clean-card overflow-hidden flex">
+      <div className="w-[3px] flex-shrink-0 bg-[var(--clean-accent)]" aria-hidden />
+      <div className="flex-1 min-w-0">
       <button
         type="button"
         onClick={() => setExpanded((e) => !e)}
-        className="w-full p-4 flex items-center gap-3 text-left hover:bg-gray-50/50 transition-colors"
+        className="w-full p-3 flex items-center gap-3 text-left hover:bg-[var(--clean-border)]/50 transition-colors"
       >
         <ScoreCircle score={checklist.currentScore} />
         <div className="flex-1 min-w-0 flex items-center gap-2">
@@ -171,21 +173,21 @@ export function RecurringChecklistCard({
             <UserAvatar name={checklist.assignedTo} size="sm" className="flex-shrink-0" />
           )}
           <div className="min-w-0">
-            <h3 className="font-medium text-gray-900 truncate">{checklist.title}</h3>
-            <p className="text-xs text-gray-500 capitalize">{checklist.frequency}</p>
+            <h3 className="font-medium text-[13px] text-[var(--clean-text)] tracking-wide truncate">{checklist.title}</h3>
+            <p className="text-xs text-[var(--clean-text-secondary)] capitalize">{checklist.frequency}</p>
             {showAssignedTo && assignedToLabel && (
-              <p className="text-xs text-[#008080] mt-0.5 truncate">{assignedToLabel}</p>
+              <p className="text-xs text-[var(--clean-accent)] mt-0.5 truncate">{assignedToLabel}</p>
             )}
           </div>
         </div>
         {expanded ? (
-          <ChevronUp className="w-5 h-5 text-gray-400 shrink-0" />
+          <ChevronUp className="w-5 h-5 text-[var(--clean-text-secondary)] shrink-0" strokeWidth={1.75} />
         ) : (
-          <ChevronDown className="w-5 h-5 text-gray-400 shrink-0" />
+          <ChevronDown className="w-5 h-5 text-[var(--clean-text-secondary)] shrink-0" strokeWidth={1.75} />
         )}
       </button>
       {expanded && (
-        <div className="px-4 pb-4 pt-0 border-t border-gray-100/80 space-y-2">
+        <div className="px-4 pb-4 pt-0 border-t border-[var(--clean-border)] space-y-2">
           <ul className="space-y-1">
             {checklist.items.map((item) => (
               <li key={item.id} className="flex items-center gap-2">
@@ -193,23 +195,23 @@ export function RecurringChecklistCard({
                   type="button"
                   onClick={() => canToggle && handleToggle(item.id)}
                   disabled={!canToggle}
-                  className={`flex items-center gap-2 w-full text-left py-1.5 px-2 rounded-sm hover:bg-gray-50 transition-colors ${!canToggle ? "opacity-75 cursor-not-allowed" : ""}`}
+                  className={`flex items-center gap-2 w-full text-left py-1.5 px-2 hover:bg-[var(--clean-border)]/50 transition-colors ${!canToggle ? "opacity-75 cursor-not-allowed" : ""}`}
                 >
-                  <span className="flex-shrink-0 w-5 h-5 rounded-sm border-2 flex items-center justify-center border-gray-300">
+                  <span className="flex-shrink-0 w-5 h-5 border border-[var(--clean-border)] flex items-center justify-center">
                     {item.isDone ? (
-                      <Check className="w-3 h-3 text-[#008080]" strokeWidth={3} />
+                      <Check className="w-3 h-3 text-[var(--clean-accent)]" strokeWidth={2.5} />
                     ) : (
-                      <Circle className="w-3 h-3 text-gray-300" />
+                      <Circle className="w-3 h-3 text-[var(--clean-border)]" strokeWidth={1.75} />
                     )}
                   </span>
                   <span
-                    className={`flex-1 text-sm ${item.isDone ? "text-gray-500 line-through" : "text-gray-900"}`}
+                    className={`flex-1 text-[13px] ${item.isDone ? "text-[var(--clean-text-secondary)] line-through" : "text-[var(--clean-text)]"}`}
                   >
                     {item.text}
                   </span>
                   {hasFeedback(item) && (
-                    <span className="flex-shrink-0 text-[#008080]" title={locale === "he" ? "יש תגובה" : "Has feedback"}>
-                      <Paperclip className="w-3.5 h-3.5" />
+                    <span className="flex-shrink-0 text-[var(--clean-accent)]" title={locale === "he" ? "יש תגובה" : "Has feedback"}>
+                      <Paperclip className="w-3.5 h-3.5" strokeWidth={1.75} />
                     </span>
                   )}
                 </button>
@@ -217,17 +219,17 @@ export function RecurringChecklistCard({
                   <button
                     type="button"
                     onClick={() => openFeedbackTray(item)}
-                    className={`p-1 rounded-sm flex-shrink-0 ${feedbackTrayItemId === item.id ? "bg-[#008080]/15 text-[#008080]" : "text-gray-500 hover:bg-[#008080]/10 hover:text-[#008080]"}`}
+                    className={`p-1 flex-shrink-0 transition-colors ${feedbackTrayItemId === item.id ? "bg-[var(--clean-accent)]/10 text-[var(--clean-accent)]" : "text-[var(--clean-text-secondary)] hover:bg-[var(--clean-accent)]/5 hover:text-[var(--clean-accent)]"}`}
                     title={locale === "he" ? "תגובה / מדיה" : "Comment / feedback"}
                     aria-label="Comment"
                   >
-                    <MessageSquare className="w-4 h-4" />
+                    <MessageSquare className="w-4 h-4" strokeWidth={1.75} />
                   </button>
                 )}
                 <button
                   type="button"
                   onClick={() => handlePing(item)}
-                  className="p-1 rounded-sm text-[#008080] hover:bg-[#008080]/10 flex-shrink-0"
+                  className="p-1 text-[var(--clean-text-secondary)] hover:text-[var(--clean-accent)] hover:bg-[var(--clean-accent)]/5 flex-shrink-0 transition-colors"
                   title={locale === "he" ? "שלח תזכורת" : "Send reminder (ping)"}
                   aria-label="Ping"
                 >
@@ -244,7 +246,7 @@ export function RecurringChecklistCard({
                     <button
                       type="button"
                       onClick={() => removeItem(checklist.id, item.id)}
-                      className="p-1 rounded-sm text-gray-400 hover:text-red-500 hover:bg-red-50"
+                      className="p-1 text-[var(--clean-text-secondary)] hover:text-red-500 hover:bg-red-50 transition-colors"
                       aria-label={locale === "he" ? "מחק" : "Remove"}
                     >
                       <Trash2 className="w-4 h-4" />
@@ -338,6 +340,7 @@ export function RecurringChecklistCard({
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }

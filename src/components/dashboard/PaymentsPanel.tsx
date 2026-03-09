@@ -7,8 +7,9 @@ import { useBoard } from "@/contexts/BoardContext";
 import { useArchitect } from "@/contexts/ArchitectContext";
 import type { BillCategory } from "@/contexts/BillsContext";
 import { parseBillFromFile, type BillExtraction } from "@/lib/bill-parser";
-import { Wallet, Plus, Image as ImageIcon, Calendar, Sparkles, ListTodo, Check, X } from "lucide-react";
+import { Wallet, Plus, Image as ImageIcon, Calendar, Sparkles, ListTodo, Check, X, BarChart3, Receipt, FileText } from "lucide-react";
 import { PanelWrapper } from "@/components/dashboard/PanelWrapper";
+import { FinanceTabContent } from "@/components/dashboard/FinanceTabContent";
 
 const CATEGORIES: { value: BillCategory; labelEn: string; labelHe: string }[] = [
   { value: "electricity", labelEn: "Electricity", labelHe: "חשמל" },
@@ -19,13 +20,19 @@ const CATEGORIES: { value: BillCategory; labelEn: string; labelHe: string }[] = 
   { value: "other", labelEn: "Other", labelHe: "אחר" },
 ];
 
-type PaymentsPanelProps = { onOpenBoard?: () => void };
+export type PaymentsTabId = "overview" | "payments" | "finance" | "invoices";
 
-export function PaymentsPanel({ onOpenBoard }: PaymentsPanelProps) {
+type PaymentsPanelProps = {
+  onOpenBoard?: () => void;
+  initialTab?: PaymentsTabId;
+};
+
+export function PaymentsPanel({ onOpenBoard, initialTab }: PaymentsPanelProps) {
   const { locale } = useLocale();
   const { bills, addBill, updateBill, removeBill } = useBills();
   const { addGivenTask } = useBoard();
   const { state: architectState, setSuggestedBillId } = useArchitect();
+  const [activeTab, setActiveTab] = useState<PaymentsTabId>(initialTab ?? "overview");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<BillCategory | "">("");
@@ -39,6 +46,10 @@ export function PaymentsPanel({ onOpenBoard }: PaymentsPanelProps) {
   const [scanResult, setScanResult] = useState<BillExtraction | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const aiFileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (initialTab) setActiveTab(initialTab);
+  }, [initialTab]);
 
   const isHe = locale === "he";
 
@@ -55,7 +66,6 @@ export function PaymentsPanel({ onOpenBoard }: PaymentsPanelProps) {
     [filtered]
   );
 
-  // Predictive Payment: suggest which bill to pay first (earliest due among pending) — uses real Board/bills history
   const suggestedBillId = useMemo(() => {
     if (!architectState.predictivePaymentEnabled) return null;
     const pending = bills.filter((b) => b.status === "pending").sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1));
@@ -164,157 +174,239 @@ export function PaymentsPanel({ onOpenBoard }: PaymentsPanelProps) {
     setShowForm(true);
   };
 
+  const tabLabels: { id: PaymentsTabId; labelEn: string; labelHe: string }[] = [
+    { id: "overview", labelEn: "Overview", labelHe: "סקירה" },
+    { id: "payments", labelEn: "Payments", labelHe: "תשלומים" },
+    { id: "finance", labelEn: "Finance", labelHe: "כספים" },
+    { id: "invoices", labelEn: "Invoices", labelHe: "חשבוניות" },
+  ];
+
   const header = (
-    <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-      <h2 className="text-lg font-semibold text-gray-900 tracking-heading flex items-center gap-2">
-        <Wallet className="w-5 h-5 text-[#008080]" strokeWidth={2} />
-        {isHe ? "תשלומים" : "Payments"}
-      </h2>
-      <button type="button" onClick={() => setShowForm((o) => !o)} className="p-2.5 rounded-xl bg-[#008080] text-white hover:bg-[#006666] transition-colors" aria-label="Add bill">
-        <Plus className="w-5 h-5" strokeWidth={2} />
-      </button>
-    </div>
+    <>
+      <div className="px-4 py-3 border-b border-[var(--clean-border)] bg-white flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-[var(--clean-text)] tracking-wide flex items-center gap-2">
+          <Wallet className="w-5 h-5 text-[var(--clean-accent)]" strokeWidth={1.75} />
+          {isHe ? "מרכז פיננסי" : "Payments"}
+        </h2>
+        {activeTab === "payments" && (
+          <button
+            type="button"
+            onClick={() => setShowForm((o) => !o)}
+            className="p-2 border border-[var(--clean-accent)] bg-[var(--clean-accent)] text-white hover:bg-[var(--clean-accent-hover)] transition-colors"
+            aria-label={isHe ? "הוסף חשבון" : "Add bill"}
+          >
+            <Plus className="w-5 h-5" strokeWidth={1.75} />
+          </button>
+        )}
+      </div>
+      <div className="flex border-b border-[var(--clean-border)] bg-white overflow-x-auto scrollbar-hide">
+        {tabLabels.map(({ id, labelEn, labelHe }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setActiveTab(id)}
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-medium whitespace-nowrap transition-all border-b-2 -mb-px ${
+              activeTab === id
+                ? "border-[var(--clean-accent)] text-[var(--clean-accent)]"
+                : "border-transparent text-[var(--clean-text-secondary)] hover:text-[var(--clean-text)]"
+            }`}
+          >
+            {id === "overview" && <BarChart3 className="w-3.5 h-3.5" strokeWidth={1.75} />}
+            {id === "payments" && <Wallet className="w-3.5 h-3.5" strokeWidth={1.75} />}
+            {id === "finance" && <Receipt className="w-3.5 h-3.5" strokeWidth={1.75} />}
+            {id === "invoices" && <FileText className="w-3.5 h-3.5" strokeWidth={1.75} />}
+            {isHe ? labelHe : labelEn}
+          </button>
+        ))}
+      </div>
+    </>
   );
 
   return (
-    <PanelWrapper header={header} className="border border-gray-200 bg-white">
-      <div className="flex-shrink-0 px-6 py-4 border-b border-gray-200 space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="border border-gray-200 px-3 py-2 text-sm" />
-          <span className="text-gray-400">–</span>
-          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="border border-gray-200 px-3 py-2 text-sm" />
-        </div>
-        <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value as BillCategory | "")} className="border border-gray-200 px-3 py-2 text-sm w-full">
-          <option value="">{isHe ? "כל הקטגוריות" : "All categories"}</option>
-          {CATEGORIES.map((c) => (
-            <option key={c.value} value={c.value}>{isHe ? c.labelHe : c.labelEn}</option>
-          ))}
-        </select>
-        <div className="flex items-center gap-2 text-sm font-medium">
-          <span className="text-gray-600">{isHe ? "סה\"כ לתשלום:" : "Total Due:"}</span>
-          <span className="text-[#008080]">{totalDue.toFixed(2)} ₪</span>
-        </div>
-      </div>
-
-      {/* Scan result — Gemini-style clean card */}
-      {scanResult && (
-        <div className="flex-shrink-0 px-4 py-4 lg:px-6 border-b border-gray-200/80 bg-[#fafafa]">
-          <div className="max-w-lg mx-auto rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-[#008080]" strokeWidth={2} />
-              <span className="text-sm font-semibold text-gray-900">{isHe ? "תוצאות סריקה" : "Scan result"}</span>
-            </div>
-            <div className="p-4 lg:p-5 space-y-3">
-              <div className="flex justify-between items-start">
-                <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">{isHe ? "ספק" : "Provider"}</span>
-                <span className="text-sm font-semibold text-gray-900 text-right max-w-[70%]">{scanResult.provider}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">{isHe ? "סכום" : "Amount"}</span>
-                <span className="text-lg font-bold text-[#008080]">{scanResult.amount.toFixed(2)} ₪</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">{isHe ? "תאריך יעד" : "Due date"}</span>
-                <span className="text-sm font-medium text-gray-800">{scanResult.dueDate != null ? String(scanResult.dueDate) : ""}</span>
-              </div>
-            </div>
-            <div className="px-4 py-3 border-t border-gray-100 bg-gray-50/50 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={handleAddToBoard}
-                className="inline-flex items-center gap-2 px-3 py-2.5 rounded-xl bg-[#008080] text-white text-sm font-medium hover:bg-[#006666]"
-              >
-                <ListTodo className="w-4 h-4" strokeWidth={2} />
-                {isHe ? "הוסף ללוח" : "Add to Board"}
-              </button>
-              <button
-                type="button"
-                onClick={handleAddToPaymentsFromScan}
-                className="inline-flex items-center gap-2 px-3 py-2.5 rounded-xl border border-[#008080]/40 text-[#008080] text-sm font-medium hover:bg-[#008080]/5"
-              >
-                <Check className="w-4 h-4" strokeWidth={2} />
-                {isHe ? "הוסף לתשלומים" : "Add to Payments"}
-              </button>
-              <button type="button" onClick={handleUseScanInForm} className="inline-flex items-center gap-2 px-3 py-2.5 rounded-xl border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-100">
-                {isHe ? "ערוך בטופס" : "Edit in form"}
-              </button>
-              <button type="button" onClick={() => setScanResult(null)} className="inline-flex items-center gap-2 px-3 py-2.5 rounded-xl text-gray-500 text-sm font-medium hover:bg-gray-100">
-                <X className="w-4 h-4" strokeWidth={2} />
-                {isHe ? "סגור" : "Dismiss"}
-              </button>
-            </div>
+    <PanelWrapper header={header} className="clean-app border border-[var(--clean-border)] bg-white flex flex-col">
+      {activeTab === "overview" && (
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 bg-white space-y-4">
+          <div className="border border-[var(--clean-border)] bg-white p-5">
+            <p className="text-xs font-medium text-[var(--clean-text-secondary)] uppercase tracking-wider mb-1">{isHe ? "סה״כ לתשלום (חשבונות)" : "Total Due (Bills)"}</p>
+            <p className="text-2xl font-semibold text-[var(--clean-text)] tabular-nums">{totalDue.toFixed(2)} ₪</p>
+            <p className="text-xs text-[var(--clean-text-secondary)] mt-1">{isHe ? "חשבונות ממתינים" : "Pending bills"}</p>
           </div>
+          <p className="text-[13px] text-[var(--clean-text-secondary)]">
+            {isHe ? "עבור ל'תשלומים' כדי לראות רשימת חשבונות, או ל'כספים' לסיכום פיננסי." : "Go to Payments for the bills list, or Finance for financial summary."}
+          </p>
         </div>
       )}
 
-      {showForm && (
-        <div className="flex-shrink-0 p-6 border-b border-gray-200 bg-gray-50/50 space-y-3">
-          <div className="flex gap-2">
-            <input ref={aiFileInputRef} type="file" accept="image/*,application/pdf" onChange={onAiFileChange} className="hidden" />
-            <button
-              type="button"
-              disabled={aiExtracting}
-              onClick={() => aiFileInputRef.current?.click()}
-              className="flex items-center gap-1.5 border border-[#008080]/50 px-3 py-2 text-sm text-[#008080] bg-[#008080]/5"
+      {activeTab === "payments" && (
+        <>
+          <div className="flex-shrink-0 px-4 py-3 border-b border-[var(--clean-border)] bg-white space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="border border-[var(--clean-border)] px-3 py-2 text-[13px] text-[var(--clean-text)] bg-white"
+              />
+              <span className="text-[var(--clean-text-secondary)]">–</span>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="border border-[var(--clean-border)] px-3 py-2 text-[13px] text-[var(--clean-text)] bg-white"
+              />
+            </div>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value as BillCategory | "")}
+              className="border border-[var(--clean-border)] px-3 py-2 text-[13px] w-full bg-white text-[var(--clean-text)]"
             >
-              <Sparkles className="w-4 h-4" strokeWidth={2} />
-              {aiExtracting ? (isHe ? "מחלץ..." : "Extracting...") : (isHe ? "AI מחלץ מחשבון/תמונה" : "AI extract from bill/photo")}
-            </button>
+              <option value="">{isHe ? "כל הקטגוריות" : "All categories"}</option>
+              {CATEGORIES.map((c) => (
+                <option key={c.value} value={c.value}>{isHe ? c.labelHe : c.labelEn}</option>
+              ))}
+            </select>
+            <div className="flex items-center gap-2 text-[13px] font-medium">
+              <span className="text-[var(--clean-text-secondary)]">{isHe ? "סה\"כ לתשלום:" : "Total Due:"}</span>
+              <span className="text-[var(--clean-accent)]">{totalDue.toFixed(2)} ₪</span>
+            </div>
           </div>
-          <select value={category} onChange={(e) => setCategory(e.target.value as BillCategory)} className="w-full border border-gray-200 px-3 py-2 text-sm">
-            {CATEGORIES.map((c) => (
-              <option key={c.value} value={c.value}>{isHe ? c.labelHe : c.labelEn}</option>
-            ))}
-          </select>
-          <input type="text" value={provider} onChange={(e) => setProvider(e.target.value)} placeholder={isHe ? "ספק" : "Provider"} className="w-full border border-gray-200 px-3 py-2 text-sm" />
-          <input type="number" min={0} step={0.01} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={isHe ? "סכום" : "Amount"} className="w-full border border-gray-200 px-3 py-2 text-sm" />
-          <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full border border-gray-200 px-3 py-2 text-sm" />
-          <div className="flex items-center gap-2">
-            <input ref={fileInputRef} type="file" accept="image/*" onChange={onFileChange} className="hidden" />
-            <button type="button" onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1.5 border border-gray-200 px-3 py-2 text-sm text-[#008080]">
-              <ImageIcon className="w-4 h-4" strokeWidth={2} />
-              {attachment ? (isHe ? "תמונה מצורפת" : "Photo attached") : (isHe ? "צרף חשבון" : "Attach bill")}
-            </button>
-            {attachment && <img src={attachment} alt="" className="w-10 h-10 object-cover border border-gray-200" />}
-          </div>
-          <div className="flex gap-2">
-            <button type="button" onClick={() => setShowForm(false)} className="flex-1 py-2.5 border border-gray-300 text-sm">{isHe ? "ביטול" : "Cancel"}</button>
-            <button type="button" onClick={handleAdd} className="flex-1 py-2.5 bg-[#008080] text-white text-sm">{isHe ? "הוסף" : "Add"}</button>
-          </div>
-        </div>
+
+          {scanResult && (
+            <div className="flex-shrink-0 px-4 py-4 border-b border-[var(--clean-border)] bg-white">
+              <div className="max-w-lg mx-auto border border-[var(--clean-border)] bg-white overflow-hidden">
+                <div className="px-4 py-3 border-b border-[var(--clean-border)] flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-[var(--clean-accent)]" strokeWidth={1.75} />
+                  <span className="text-[13px] font-medium text-[var(--clean-text)]">{isHe ? "תוצאות סריקה" : "Scan result"}</span>
+                </div>
+                <div className="p-4 space-y-3">
+                  <div className="flex justify-between items-start">
+                    <span className="text-xs font-medium text-[var(--clean-text-secondary)] uppercase tracking-wide">{isHe ? "ספק" : "Provider"}</span>
+                    <span className="text-[13px] font-medium text-[var(--clean-text)] text-right max-w-[70%]">{scanResult.provider}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-medium text-[var(--clean-text-secondary)] uppercase tracking-wide">{isHe ? "סכום" : "Amount"}</span>
+                    <span className="text-lg font-semibold text-[var(--clean-accent)]">{scanResult.amount.toFixed(2)} ₪</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-medium text-[var(--clean-text-secondary)] uppercase tracking-wide">{isHe ? "תאריך יעד" : "Due date"}</span>
+                    <span className="text-[13px] font-medium text-[var(--clean-text)]">{scanResult.dueDate != null ? String(scanResult.dueDate) : ""}</span>
+                  </div>
+                </div>
+                <div className="px-4 py-3 border-t border-[var(--clean-border)] flex flex-wrap gap-2 bg-white">
+                  <button
+                    type="button"
+                    onClick={handleAddToBoard}
+                    className="inline-flex items-center gap-2 px-3 py-2 bg-[var(--clean-accent)] text-white text-[13px] font-medium hover:bg-[var(--clean-accent-hover)]"
+                  >
+                    <ListTodo className="w-4 h-4" strokeWidth={1.75} />
+                    {isHe ? "הוסף ללוח" : "Add to Board"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAddToPaymentsFromScan}
+                    className="inline-flex items-center gap-2 px-3 py-2 border border-[var(--clean-accent)] text-[var(--clean-accent)] text-[13px] font-medium hover:bg-[var(--clean-accent)]/5"
+                  >
+                    <Check className="w-4 h-4" strokeWidth={1.75} />
+                    {isHe ? "הוסף לתשלומים" : "Add to Payments"}
+                  </button>
+                  <button type="button" onClick={handleUseScanInForm} className="inline-flex items-center gap-2 px-3 py-2 border border-[var(--clean-border)] text-[var(--clean-text)] text-[13px] font-medium hover:bg-[var(--clean-border)]/50">
+                    {isHe ? "ערוך בטופס" : "Edit in form"}
+                  </button>
+                  <button type="button" onClick={() => setScanResult(null)} className="inline-flex items-center gap-2 px-3 py-2 text-[var(--clean-text-secondary)] text-[13px] font-medium hover:bg-[var(--clean-border)]/50">
+                    <X className="w-4 h-4" strokeWidth={1.75} />
+                    {isHe ? "סגור" : "Dismiss"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showForm && (
+            <div className="flex-shrink-0 p-4 border-b border-[var(--clean-border)] bg-white space-y-3">
+              <div className="flex gap-2">
+                <input ref={aiFileInputRef} type="file" accept="image/*,application/pdf" onChange={onAiFileChange} className="hidden" />
+                <button
+                  type="button"
+                  disabled={aiExtracting}
+                  onClick={() => aiFileInputRef.current?.click()}
+                  className="flex items-center gap-1.5 border border-[var(--clean-accent)] px-3 py-2 text-[13px] text-[var(--clean-accent)] bg-[var(--clean-accent)]/5"
+                >
+                  <Sparkles className="w-4 h-4" strokeWidth={1.75} />
+                  {aiExtracting ? (isHe ? "מחלץ..." : "Extracting...") : (isHe ? "AI מחלץ מחשבון/תמונה" : "AI extract from bill/photo")}
+                </button>
+              </div>
+              <select value={category} onChange={(e) => setCategory(e.target.value as BillCategory)} className="w-full border border-[var(--clean-border)] px-3 py-2 text-[13px] bg-white text-[var(--clean-text)]">
+                {CATEGORIES.map((c) => (
+                  <option key={c.value} value={c.value}>{isHe ? c.labelHe : c.labelEn}</option>
+                ))}
+              </select>
+              <input type="text" value={provider} onChange={(e) => setProvider(e.target.value)} placeholder={isHe ? "ספק" : "Provider"} className="w-full border border-[var(--clean-border)] px-3 py-2 text-[13px] text-[var(--clean-text)] bg-white placeholder-[var(--clean-text-secondary)]" />
+              <input type="number" min={0} step={0.01} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={isHe ? "סכום" : "Amount"} className="w-full border border-[var(--clean-border)] px-3 py-2 text-[13px] text-[var(--clean-text)] bg-white placeholder-[var(--clean-text-secondary)]" />
+              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full border border-[var(--clean-border)] px-3 py-2 text-[13px] text-[var(--clean-text)] bg-white" />
+              <div className="flex items-center gap-2">
+                <input ref={fileInputRef} type="file" accept="image/*" onChange={onFileChange} className="hidden" />
+                <button type="button" onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1.5 border border-[var(--clean-border)] px-3 py-2 text-[13px] text-[var(--clean-accent)] hover:bg-[var(--clean-accent)]/5">
+                  <ImageIcon className="w-4 h-4" strokeWidth={1.75} />
+                  {attachment ? (isHe ? "תמונה מצורפת" : "Photo attached") : (isHe ? "צרף חשבון" : "Attach bill")}
+                </button>
+                {attachment && <img src={attachment} alt="" className="w-10 h-10 object-cover border border-[var(--clean-border)]" />}
+              </div>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setShowForm(false)} className="flex-1 py-2.5 border border-[var(--clean-border)] text-[var(--clean-text-secondary)] text-[13px] font-medium hover:bg-[var(--clean-border)]/50">{isHe ? "ביטול" : "Cancel"}</button>
+                <button type="button" onClick={handleAdd} className="flex-1 py-2.5 bg-[var(--clean-accent)] text-white text-[13px] font-medium hover:bg-[var(--clean-accent-hover)]">{isHe ? "הוסף" : "Add"}</button>
+              </div>
+            </div>
+          )}
+
+          <ul className="flex-1 min-h-0 p-4 space-y-3 overflow-y-auto bg-white">
+            {filtered.length === 0 && <li className="text-[13px] text-[var(--clean-text-secondary)] py-4 text-center">{isHe ? "אין חשבונות. הוסף עם +" : "No bills. Add with +."}</li>}
+            {filtered.map((b) => {
+              const cat = (b.category ?? "other") as BillCategory;
+              const catLabel = CATEGORIES.find((c) => c.value === cat);
+              const isPayFirst = architectState.predictivePaymentEnabled && architectState.suggestedBillId === b.id;
+              return (
+                <li
+                  key={b.id}
+                  className={`border bg-white p-4 flex items-center gap-4 ${isPayFirst ? "border-[var(--clean-accent)]" : "border-[var(--clean-border)]"}`}
+                >
+                  {b.attachmentDataUrl && <img src={b.attachmentDataUrl} alt="" className="w-12 h-12 object-cover flex-shrink-0 border border-[var(--clean-border)]" />}
+                  <div className="flex-1 min-w-0">
+                    {isPayFirst && (
+                      <p className="text-xs font-medium text-[var(--clean-accent)] uppercase tracking-wide mb-0.5">{isHe ? "שלם קודם — מומלץ" : "Pay this first — suggested"}</p>
+                    )}
+                    <p className="font-medium text-[var(--clean-text)] text-[13px] truncate">{b.provider}</p>
+                    <p className="text-xs text-[var(--clean-text-secondary)] flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5" strokeWidth={1.75} />
+                      {b.dueDate != null ? String(b.dueDate) : ""}
+                      {catLabel && <span className="ml-1">· {isHe ? catLabel.labelHe : catLabel.labelEn}</span>}
+                    </p>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <p className="font-semibold text-[var(--clean-accent)] text-[13px]">{b.amount.toFixed(2)} ₪</p>
+                    <select
+                      value={b.status}
+                      onChange={(e) => updateBill(b.id, { status: e.target.value as "pending" | "paid" })}
+                      className="text-xs border border-[var(--clean-border)] mt-0.5 px-2 py-1 bg-white text-[var(--clean-text)]"
+                    >
+                      <option value="pending">{isHe ? "ממתין" : "Pending"}</option>
+                      <option value="paid">{isHe ? "שולם" : "Paid"}</option>
+                    </select>
+                  </div>
+                  <button type="button" onClick={() => removeBill(b.id)} className="text-red-500 hover:underline text-xs">×</button>
+                </li>
+              );
+            })}
+          </ul>
+        </>
       )}
 
-      <ul className="flex-1 min-h-0 p-6 space-y-3">
-        {filtered.length === 0 && <li className="text-sm text-gray-500 py-4 text-center">{isHe ? "אין חשבונות. הוסף עם +" : "No bills. Add with +."}</li>}
-        {filtered.map((b) => {
-          const cat = (b.category ?? "other") as BillCategory;
-          const catLabel = CATEGORIES.find((c) => c.value === cat);
-          const isPayFirst = architectState.predictivePaymentEnabled && architectState.suggestedBillId === b.id;
-          return (
-            <li key={b.id} className={`border bg-white p-6 flex items-center gap-4 ${isPayFirst ? "border-[#008080] ring-1 ring-[#008080]/30" : "border-gray-200"}`}>
-              {b.attachmentDataUrl && <img src={b.attachmentDataUrl} alt="" className="w-12 h-12 object-cover flex-shrink-0 border border-gray-200" />}
-              <div className="flex-1 min-w-0">
-                {isPayFirst && (
-                  <p className="text-xs font-semibold text-[#008080] uppercase tracking-wide mb-0.5">{isHe ? "שלם קודם — מומלץ" : "Pay this first — suggested"}</p>
-                )}
-                <p className="font-medium text-gray-900 truncate">{b.provider}</p>
-                <p className="text-xs text-gray-500 flex items-center gap-1">
-                  <Calendar className="w-3.5 h-3.5" strokeWidth={2} />{b.dueDate != null ? String(b.dueDate) : ""}
-                  {catLabel && <span className="ml-1">· {isHe ? catLabel.labelHe : catLabel.labelEn}</span>}
-                </p>
-              </div>
-              <div className="text-right flex-shrink-0">
-                <p className="font-semibold text-[#008080]">{b.amount.toFixed(2)} ₪</p>
-                <select value={b.status} onChange={(e) => updateBill(b.id, { status: e.target.value as "pending" | "paid" })} className="text-xs border border-gray-200 mt-0.5 px-2 py-1">
-                  <option value="pending">{isHe ? "ממתין" : "Pending"}</option>
-                  <option value="paid">{isHe ? "שולם" : "Paid"}</option>
-                </select>
-              </div>
-              <button type="button" onClick={() => removeBill(b.id)} className="text-red-500 hover:underline text-xs">×</button>
-            </li>
-          );
-        })}
-      </ul>
+      {activeTab === "finance" && <FinanceTabContent />}
+
+      {activeTab === "invoices" && (
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 bg-white flex items-center justify-center">
+          <p className="text-[13px] text-[var(--clean-text-secondary)]">{isHe ? "חשבוניות — בקרוב" : "Invoices — Coming soon"}</p>
+        </div>
+      )}
     </PanelWrapper>
   );
 }

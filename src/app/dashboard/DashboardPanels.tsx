@@ -22,14 +22,17 @@ const PANEL_COUNT = 5;
 const DEFAULT_PANEL_INDEX = 2;
 export const BOARD_PANEL_INDEX = 3;
 
+import type { PaymentsTabId } from "@/components/dashboard/PaymentsPanel";
+
 export type DashboardPanelsProps = {
   panelIndex?: number;
   setPanelIndex?: (value: number | ((prev: number) => number)) => void;
   boardTab?: string | null;
+  initialPaymentsTab?: PaymentsTabId;
 };
 
 export function DashboardPanels(props: DashboardPanelsProps = {}) {
-  const { panelIndex: controlledIndex, setPanelIndex: controlledSetIndex, boardTab: boardTabProp } = props;
+  const { panelIndex: controlledIndex, setPanelIndex: controlledSetIndex, boardTab: boardTabProp, initialPaymentsTab } = props;
   const searchParams = useSearchParams();
   const boardTab = boardTabProp ?? searchParams.get("tab") ?? undefined;
   const { locale } = useLocale();
@@ -65,10 +68,14 @@ export function DashboardPanels(props: DashboardPanelsProps = {}) {
 
       {/* Main content: flex child that shrinks; padding-bottom keeps bottom nav visible */}
       <div
-        className="flex-1 min-h-0 min-w-0 overflow-hidden flex flex-col p-3 sm:p-4 pb-2 bg-background"
+        className="flex-1 min-h-0 min-w-0 overflow-hidden flex flex-col p-3 sm:p-4 pb-2 bg-white"
         data-architect-layout={architectState.adaptiveLayoutMode}
       >
-        {safePanelIndex === 0 && <div className="flex-1 min-h-0 flex flex-col"><PaymentsPanel onOpenBoard={() => setPanelIndexSafe(3)} /></div>}
+        {safePanelIndex === 0 && (
+          <div className="flex-1 min-h-0 flex flex-col">
+            <PaymentsPanel onOpenBoard={() => setPanelIndexSafe(3)} initialTab={initialPaymentsTab} />
+          </div>
+        )}
         {safePanelIndex === 1 && <div className="flex-1 min-h-0 flex flex-col"><ExplorePanel /></div>}
         {safePanelIndex === 2 && <div className="flex-1 min-h-0 flex flex-col"><ToolFanPanel onOpenBoard={() => setPanelIndexSafe(3)} /></div>}
         {safePanelIndex === 3 && <div className="flex-1 min-h-0 flex flex-col"><StrategicBoard locale={locale} onBack={() => setPanelIndexSafe(2)} initialMainTab={boardTab} /></div>}

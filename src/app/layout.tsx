@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { Inter, Roboto, Cormorant_Garamond } from "next/font/google";
+import { Inter, Roboto, Cormorant_Garamond, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { LocaleProvider } from "@/contexts/LocaleContext";
 import { ProfileProvider } from "@/contexts/ProfileContext";
@@ -41,6 +41,13 @@ const cormorant = Cormorant_Garamond({
   display: "swap",
 });
 
+const plusJakarta = Plus_Jakarta_Sans({
+  weight: ["400", "500", "600", "700"],
+  subsets: ["latin"],
+  variable: "--font-plus-jakarta",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "OllinChat",
   description: "Unified workspace, identity hub, AI partnership",
@@ -56,8 +63,8 @@ export default function RootLayout({
   children: ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${roboto.variable} ${cormorant.variable}`} suppressHydrationWarning>
-      <body className="min-h-screen font-sans antialiased bg-background text-gray-900">
+    <html lang="en" className={`${inter.variable} ${roboto.variable} ${cormorant.variable} ${plusJakarta.variable}`} suppressHydrationWarning>
+      <body className="min-h-screen antialiased bg-white text-[var(--clean-text)]" style={{ fontFamily: "var(--font-plus-jakarta), ui-sans-serif, system-ui, sans-serif" }}>
         <LocaleProvider initialLocale="en">
           <ProfileProvider>
             <BoardProvider>

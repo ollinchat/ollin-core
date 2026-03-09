@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 :root {
-  --background: #f8f9fa;
+  --background: #FFFFFF;
   --surface: #ffffff;
   --surface-elevated: #ffffff;
   --primary: #008080;
@@ -23,17 +23,53 @@
   --shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.06);
   --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.08);
   --shadow-glow-accent: 0 0 24px rgba(0, 128, 128, 0.2);
+
+  /* Clean Minimal Board (Linear/Vercel-style) */
+  --clean-bg: #FFFFFF;
+  --clean-text: #1E293B;
+  --clean-text-secondary: #64748B;
+  --clean-border: #F1F5F9;
+  --clean-accent: #008080;
+  --clean-accent-hover: #006666;
+}
+
+/* Clean card: white, 1px border, no shadow, sharp */
+.clean-card {
+  background: var(--clean-bg);
+  border: 1px solid var(--clean-border);
+  box-shadow: none;
+  transition: border-color 0.15s ease;
+}
+.clean-card:hover {
+  border-color: #E2E8F0;
+}
+
+/* Clean modal: white, thin border */
+.clean-modal {
+  background: var(--clean-bg);
+  border: 1px solid var(--clean-border);
+  box-shadow: none;
 }
 
 body {
   background: var(--background);
-  color: #171717;
+  color: var(--clean-text);
   -webkit-font-smoothing: antialiased;
 }
 
-/* Premium typography: luxury letter-spacing on headings */
-h1, h2, h3, .heading-premium {
-  letter-spacing: 0.05em;
+/* Clean / Minimal typography: Plus Jakarta Sans, slightly smaller, luxury letter-spacing */
+.clean-app,
+.clean-app input,
+.clean-app textarea,
+.clean-app button {
+  font-family: var(--font-plus-jakarta), ui-sans-serif, system-ui, sans-serif;
+}
+.clean-app {
+  font-size: 0.8125rem;
+  letter-spacing: 0.02em;
+}
+.clean-app h1, .clean-app h2, .clean-app h3 {
+  letter-spacing: 0.03em;
 }
 
 /* Dark bottom nav (light theme app) */
