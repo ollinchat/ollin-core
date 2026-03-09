@@ -15,6 +15,7 @@ import {
   MapPin,
   Brain,
 } from "lucide-react";
+import { generateUUID } from "@/lib/uuid";
 
 type AIMessage = { id: string; role: "user" | "assistant"; text: string; createdAt: number };
 
@@ -54,11 +55,11 @@ export function AIFullScreen({ onClose }: AIFullScreenProps) {
   const handleSend = () => {
     const text = input.trim();
     if (!text) return;
-    const userMsg: AIMessage = { id: crypto.randomUUID(), role: "user", text, createdAt: Date.now() };
+    const userMsg: AIMessage = { id: generateUUID(), role: "user", text, createdAt: Date.now() };
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
     const reply: AIMessage = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       role: "assistant",
       text: isHe ? "התקבל. חיבור לאולין יגיע בקרוב." : "Got it. Ollin connection coming soon.",
       createdAt: Date.now() + 1,

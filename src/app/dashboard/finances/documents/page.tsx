@@ -15,6 +15,7 @@ import { DocumentCard } from "@/components/finances/DocumentCard";
 import type { Quote, DeliveryNote, LineItem } from "@/lib/finance-types";
 import { TAX_INVOICE_HEADER_EN, TAX_INVOICE_HEADER_HE, QUOTE_HEADER_EN, QUOTE_HEADER_HE, DELIVERY_NOTE_HEADER_EN, DELIVERY_NOTE_HEADER_HE, DEFAULT_VAT_RATE } from "@/lib/finance-types";
 import { LiveDocumentEditor } from "@/components/finances/LiveDocumentEditor";
+import { generateUUID } from "@/lib/uuid";
 
 function openInvoicePdf(inv: TaxInvoice, companyName: string, signatureDataUrl?: string, locale: "en" | "he" = "en") {
   const title = locale === "he" ? TAX_INVOICE_HEADER_HE : TAX_INVOICE_HEADER_EN;
@@ -922,7 +923,7 @@ function LegacyFinanceDocumentsPage() {
   const [deliveryNoteDesc, setDeliveryNoteDesc] = useState("");
   const [deliveryNoteNotes, setDeliveryNoteNotes] = useState("");
   const [quoteUseDocumentEditor, setQuoteUseDocumentEditor] = useState(false);
-  const [quoteEditorItems, setQuoteEditorItems] = useState<LineItem[]>([{ id: crypto.randomUUID(), description: "", quantity: 1, unitPrice: 0 }]);
+  const [quoteEditorItems, setQuoteEditorItems] = useState<LineItem[]>([{ id: generateUUID(), description: "", quantity: 1, unitPrice: 0 }]);
   const [quoteEditorVatRate, setQuoteEditorVatRate] = useState(DEFAULT_VAT_RATE);
   const [quoteEditorDate, setQuoteEditorDate] = useState(new Date().toISOString().slice(0, 10));
   const [quoteEditorDueDate, setQuoteEditorDueDate] = useState("");
@@ -1001,7 +1002,7 @@ function LegacyFinanceDocumentsPage() {
       vatRate: quoteEditorVatRate,
     });
     setQuoteClientId("");
-    setQuoteEditorItems([{ id: crypto.randomUUID(), description: "", quantity: 1, unitPrice: 0 }]);
+    setQuoteEditorItems([{ id: generateUUID(), description: "", quantity: 1, unitPrice: 0 }]);
     setQuoteEditorDate(new Date().toISOString().slice(0, 10));
     setQuoteEditorDueDate("");
     setQuoteEditorVatRate(companyProfile?.vatRate ?? DEFAULT_VAT_RATE);
@@ -1020,7 +1021,7 @@ function LegacyFinanceDocumentsPage() {
       clientAddress: client.address,
       clientVatId: client.vatId,
       clientHpNumber: client.hpNumber,
-      items: [{ id: crypto.randomUUID(), description: deliveryNoteDesc.trim() || "Item", quantity: 1, unitPrice: amountNum }],
+      items: [{ id: generateUUID(), description: deliveryNoteDesc.trim() || "Item", quantity: 1, unitPrice: amountNum }],
       date: new Date().toISOString().slice(0, 10),
       notes: deliveryNoteNotes.trim() || undefined,
     });

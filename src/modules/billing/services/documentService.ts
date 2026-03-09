@@ -16,6 +16,7 @@ import {
   billingVatFromSubtotal,
 } from "../types";
 import * as vault from "../vault/documentVault";
+import { generateUUID } from "@/lib/uuid";
 
 function nextNumber(prefix: string, existing: BillingDocument[]): string {
   const used = new Set(existing.map((d) => d.number));
@@ -46,14 +47,14 @@ export function createDraft(
   clientPhone?: string,
   clientAddress?: string,
   clientTaxId?: string,
-  items: BillingLineItem[] = [{ id: crypto.randomUUID(), description: "Item", quantity: 1, unitPrice: 0 }]
+  items: BillingLineItem[] = [{ id: generateUUID(), description: "Item", quantity: 1, unitPrice: 0 }]
 ): BillingDocument {
   const docs = vault.getAllDocuments(userId);
   const number = nextNumber("DRAFT", docs);
   const { subtotal, vatAmount, total } = baseFromItems(items);
   const now = Date.now();
   const doc: BillingDocument = {
-    id: crypto.randomUUID(),
+    id: generateUUID(),
     number,
     type: "draft",
     status: "draft",
@@ -84,7 +85,7 @@ export function convertDraftToQuote(userId: string, draftId: string): BillingQuo
   const number = nextNumber("Q", docs.filter((d) => d.type === "quote"));
   const quote: BillingQuote = {
     ...draft,
-    id: crypto.randomUUID(),
+    id: generateUUID(),
     number,
     type: "quote",
     status: "pending",
@@ -103,7 +104,7 @@ export function convertQuoteToInvoice(userId: string, quoteId: string): BillingI
   const number = nextNumber("INV", docs.filter((d) => d.type === "invoice"));
   const invoice: BillingInvoice = {
     ...quote,
-    id: crypto.randomUUID(),
+    id: generateUUID(),
     number,
     type: "invoice",
     status: "pending",
@@ -125,7 +126,7 @@ export function convertDeliveryNoteToInvoice(userId: string, deliveryNoteId: str
   const invoice: BillingInvoice = {
     ...dn,
     ...totals,
-    id: crypto.randomUUID(),
+    id: generateUUID(),
     number,
     type: "invoice",
     status: "pending",
@@ -156,7 +157,7 @@ export function createReceiptForInvoice(userId: string, invoiceId: string): Bill
   const number = nextNumber("RCP", docs.filter((d) => d.type === "receipt"));
   const receipt: BillingReceipt = {
     ...invoice,
-    id: crypto.randomUUID(),
+    id: generateUUID(),
     number,
     type: "receipt",
     invoiceId,
@@ -175,7 +176,7 @@ export function issueCreditNote(userId: string, invoiceId: string): BillingCredi
   const number = nextNumber("CN", docs.filter((d) => d.type === "credit_note"));
   const credit: BillingCreditNote = {
     ...invoice,
-    id: crypto.randomUUID(),
+    id: generateUUID(),
     number,
     type: "credit_note",
     status: "canceled",
@@ -262,7 +263,7 @@ export function duplicateDocument(userId: string, docId: string): BillingDocumen
   if (!doc) return null;
   const newDoc: BillingDocument = {
     ...doc,
-    id: crypto.randomUUID(),
+    id: generateUUID(),
     number: nextNumber("DRAFT", vault.getAllDocuments(userId)),
     type: "draft",
     status: "draft",

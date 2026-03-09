@@ -14,6 +14,7 @@ import { useBilling } from "@/contexts/BillingContext";
 import { useInternalMessages } from "@/contexts/ChatEngineContext";
 import { useContacts } from "@/contexts/ContactsContext";
 import type { BillingClient, BillingLineItem } from "@/modules/billing/types";
+import { generateUUID } from "@/lib/uuid";
 
 const TEAL = "#008080";
 
@@ -24,7 +25,7 @@ type NewInvoiceModalProps = {
 };
 
 const emptyLineItem = (): BillingLineItem => ({
-  id: crypto.randomUUID(),
+  id: generateUUID(),
   description: "",
   quantity: 1,
   unitPrice: 0,
@@ -86,7 +87,7 @@ export function NewInvoiceModal({ open, onClose, onSuccess }: NewInvoiceModalPro
     const items = validItems.length > 0 ? validItems : [emptyLineItem()];
     const normalized = items.map((i) => ({
       ...i,
-      id: i.id || crypto.randomUUID(),
+      id: i.id || generateUUID(),
       description: i.description.trim() || "Item",
       quantity: Math.max(0, Number(i.quantity)),
       unitPrice: Math.max(0, Number(i.unitPrice)),

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
+import { generateUUID } from "@/lib/uuid";
 
 /** Internal = Emil, employees (for task/checklist assignment). External clients are in Finance. */
 export interface Contact {
@@ -81,7 +82,7 @@ export function ContactsProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const addContact = useCallback((c: Omit<Contact, "id" | "createdAt">): Contact => {
-    const contact: Contact = { ...c, id: crypto.randomUUID(), createdAt: Date.now() };
+    const contact: Contact = { ...c, id: generateUUID(), createdAt: Date.now() };
     setContacts((prev) => {
       const next = [contact, ...prev];
       saveContacts(next);

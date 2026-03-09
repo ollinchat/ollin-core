@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { BLOCK_LIBRARY } from "@/components/profile-builder/block-registry";
+import { generateUUID } from "@/lib/uuid";
 
 const TEAL = "#008080";
 
@@ -12,7 +13,7 @@ export default function ProfileBuilderPage() {
   const [blocks, setBlocks] = useState<{ id: string; label: string }[]>([]);
 
   const addPlaceholderBlock = (label: string) => {
-    setBlocks((prev) => [...prev, { id: crypto.randomUUID(), label }]);
+    setBlocks((prev) => [...prev, { id: generateUUID(), label }]);
     setMenuOpen(false);
   };
 

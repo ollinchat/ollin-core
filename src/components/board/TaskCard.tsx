@@ -12,6 +12,7 @@ import { UserAvatar } from "@/components/ui/UserAvatar";
 import { UserSelector, buildInternalUsers } from "./UserSelector";
 import { MediaToolbox } from "./MediaToolbox";
 import { Check, ChevronDown, ChevronUp, Trash2, Archive, Bell, MessageSquare } from "lucide-react";
+import { generateUUID } from "@/lib/uuid";
 
 type TaskCardProps = {
   task: BoardTask;
@@ -83,7 +84,7 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
 
   const addChecklistItem = () => {
     const newItem: ChecklistItem = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       label: "",
       done: false,
     };
@@ -93,7 +94,7 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
   const addTaskAttachment = (att: Omit<TaskAttachment, "id" | "createdAt">) => {
     const newAtt: TaskAttachment = {
       ...att,
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       createdAt: Date.now(),
     };
     updateTask(task.id, { attachments: [...(task.attachments ?? []), newAtt] });
@@ -102,7 +103,7 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
   const addChecklistItemAttachment = (itemId: string, att: Omit<TaskAttachment, "id" | "createdAt">) => {
     const newAtt: TaskAttachment = {
       ...att,
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       createdAt: Date.now(),
     };
     const next = task.checklist.map((c) =>
@@ -114,7 +115,7 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
   const addCommentAttachment = (att: Omit<TaskAttachment, "id" | "createdAt">) => {
     const newAtt: TaskAttachment = {
       ...att,
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       createdAt: Date.now(),
     };
     setCommentAttachments((prev) => [...prev, newAtt]);
@@ -127,7 +128,7 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
     const text = commentText.trim();
     if (!text || !profile?.userId) return;
     const newComment: TaskComment = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       userId: profile.userId,
       text,
       attachments: commentAttachments.length > 0 ? commentAttachments : undefined,

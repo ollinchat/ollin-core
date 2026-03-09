@@ -28,6 +28,7 @@ import {
   Plus,
   FileText,
   MessageSquare,
+  MessageCircleOff,
   Building2,
   Archive,
   StickyNote,
@@ -35,6 +36,9 @@ import {
   ChevronLeft,
   LayoutGrid,
   List,
+  Mic,
+  ImagePlus,
+  Send,
 } from "lucide-react";
 import { calculateTotalBalance, type OllinFinanceEntry } from "@/lib/finance-types";
 import type { TranslationKey } from "@/lib/translations";
@@ -80,7 +84,10 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
   const [folderSearchQuery, setFolderSearchQuery] = useState("");
   const [insideFolderId, setInsideFolderId] = useState<SystemFolderId | string | null>(null);
   const [taskSubTab, setTaskSubTab] = useState<TaskSubTab>("given");
-  const [quickAddTitle, setQuickAddTitle] = useState("");
+  const [quickAddText, setQuickAddText] = useState("");
+  const [quickAddDueDate, setQuickAddDueDate] = useState<string | null>(null);
+  const [quickAddPriority, setQuickAddPriority] = useState<"low" | "medium" | "high" | null>(null);
+  const [quickAddNoComments, setQuickAddNoComments] = useState(false);
   const [createFolderModalOpen, setCreateFolderModalOpen] = useState(false);
   const [modalFolderName, setModalFolderName] = useState("");
   const [modalSharedWithIds, setModalSharedWithIds] = useState<string[]>([]);
@@ -135,13 +142,41 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
   }, []);
   const totalBurn = calculateTotalBalance(liveEntries);
 
+  /** First line or full text is the task title */
   const handleQuickAdd = (kind: "given" | "received") => {
-    const title = quickAddTitle.trim();
-    if (!title) return;
-    if (kind === "given") addGivenTask({ title, otherParty: "—", checklist: [], done: false, creatorId: currentUserId });
-    else addReceivedTask({ title, otherParty: "—", checklist: [], done: false, creatorId: currentUserId });
-    setQuickAddTitle("");
+    const raw = quickAddText.trim();
+    if (!raw) return;
+    const title = raw.includes("\n") ? raw.split("\n")[0].trim() || raw : raw;
+    const dueDateMs = quickAddDueDate ? new Date(quickAddDueDate).getTime() : undefined;
+    const payload = {
+      title,
+      otherParty: "—",
+      checklist: [],
+      done: false,
+      creatorId: currentUserId,
+      ...(dueDateMs && { dueDate: dueDateMs }),
+      ...(quickAddNoComments && { comments: [] }),
+    };
+    if (kind === "given") addGivenTask(payload);
+    else addReceivedTask(payload);
+    setQuickAddText("");
+    setQuickAddDueDate(null);
+    setQuickAddPriority(null);
+    setQuickAddNoComments(false);
   };
+
+  const [quickAddDatePickerOpen, setQuickAddDatePickerOpen] = useState(false);
+
+  /** True if selected date falls within the next 7 days (for input border) */
+  const isQuickAddDueNextWeek = quickAddDueDate
+    ? (() => {
+        const d = new Date(quickAddDueDate);
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        const in7 = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+        return d >= now && d <= in7;
+      })()
+    : false;
 
   const handleCreateFolderFromModal = () => {
     const name = modalFolderName.trim();
@@ -239,24 +274,114 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
               </button>
             </div>
 
-            {/* Quick Add: single "+ Add" — adds to current tab (GIVEN or RECEIVED) */}
-            <div className="flex flex-wrap items-center gap-2 mb-4">
-              <input
-                type="text"
-                value={quickAddTitle}
-                onChange={(e) => setQuickAddTitle(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleQuickAdd(taskSubTab)}
-                placeholder={locale === "he" ? "כותרת משימה..." : "Task title..."}
-                className="flex-1 min-w-[120px] px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-900 placeholder-gray-400 text-sm"
+            {/* Minimalist task creation: messaging-style input + action row */}
+            <div
+              className={`mb-4 rounded-2xl border-2 bg-white/60 backdrop-blur-md transition-colors ${
+                isQuickAddDueNextWeek ? "border-amber-300/70 shadow-sm shadow-amber-100/50" : "border-[#008080]/15 focus-within:border-[#008080]/30"
+              }`}
+            >
+              <textarea
+                value={quickAddText}
+                onChange={(e) => setQuickAddText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleQuickAdd(taskSubTab);
+                  }
+                }}
+                placeholder={locale === "he" ? "משימה חדשה..." : "New task..."}
+                rows={2}
+                className="w-full min-h-[52px] max-h-24 px-4 py-3 rounded-t-2xl bg-transparent text-gray-900 placeholder-gray-500 text-sm resize-none border-0 focus:ring-0 focus:outline-none"
               />
-              <button
-                type="button"
-                onClick={() => handleQuickAdd(taskSubTab)}
-                className="px-3 py-2 rounded-xl border border-[#006666] bg-[#008080] text-white text-sm font-medium flex items-center gap-1"
-              >
-                <Plus className="w-4 h-4" />
-                {locale === "he" ? "הוסף משימה" : "Add Task"}
-              </button>
+              <div className="flex items-center justify-between gap-1 px-2 py-1.5 border-t border-[#008080]/10 rounded-b-2xl">
+                <div className="flex items-center gap-0.5">
+                  {/* Priority dots */}
+                  {(["high", "medium", "low"] as const).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setQuickAddPriority(quickAddPriority === p ? null : p)}
+                      className={`w-6 h-6 rounded-full flex items-center justify-center transition-opacity ${
+                        quickAddPriority === p
+                          ? p === "high"
+                            ? "bg-red-400"
+                            : p === "medium"
+                              ? "bg-amber-400"
+                              : "bg-emerald-400"
+                          : "bg-gray-200/80 hover:bg-gray-300/80"
+                      }`}
+                      title={p === "high" ? "High" : p === "medium" ? "Medium" : "Low"}
+                      aria-label={p === "high" ? "High priority" : p === "medium" ? "Medium priority" : "Low priority"}
+                    >
+                      <span className="sr-only">{p}</span>
+                    </button>
+                  ))}
+                  <span className="w-px h-4 bg-gray-200 mx-1" aria-hidden />
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setQuickAddDatePickerOpen((o) => !o)}
+                      className={`p-1.5 rounded-lg transition-colors ${quickAddDueDate ? "bg-[#008080]/15 text-[#008080]" : "text-gray-500 hover:bg-[#008080]/10 hover:text-[#008080]"}`}
+                      title={locale === "he" ? "תאריך" : "Date"}
+                      aria-label="Pick date"
+                    >
+                      <Calendar className="w-4 h-4" />
+                    </button>
+                    {quickAddDatePickerOpen && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setQuickAddDatePickerOpen(false)} aria-hidden />
+                        <div className="absolute left-0 bottom-full mb-1 z-20 p-2 rounded-xl bg-white/95 backdrop-blur border border-gray-200 shadow-lg">
+                          <input
+                            type="date"
+                            value={quickAddDueDate ?? ""}
+                            onChange={(e) => {
+                              setQuickAddDueDate(e.target.value || null);
+                              setQuickAddDatePickerOpen(false);
+                            }}
+                            className="text-sm border border-gray-200 rounded-lg px-2 py-1.5"
+                          />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {}}
+                    className="p-1.5 rounded-lg text-gray-500 hover:bg-[#008080]/10 hover:text-[#008080] transition-colors"
+                    title={locale === "he" ? "קול" : "Voice"}
+                    aria-label="Voice"
+                  >
+                    <Mic className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {}}
+                    className="p-1.5 rounded-lg text-gray-500 hover:bg-[#008080]/10 hover:text-[#008080] transition-colors"
+                    title={locale === "he" ? "תמונה" : "Image"}
+                    aria-label="Image"
+                  >
+                    <ImagePlus className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setQuickAddNoComments((c) => !c)}
+                    className={`p-1.5 rounded-lg transition-colors ${quickAddNoComments ? "bg-[#008080]/15 text-[#008080]" : "text-gray-500 hover:bg-[#008080]/10 hover:text-[#008080]"}`}
+                    title={locale === "he" ? "ללא תגובות" : "No comments"}
+                    aria-label="No comments"
+                    aria-pressed={quickAddNoComments}
+                  >
+                    <MessageCircleOff className="w-4 h-4" />
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleQuickAdd(taskSubTab)}
+                  className="p-2 rounded-full bg-[#008080]/90 text-white hover:bg-[#006666] transition-colors flex items-center justify-center"
+                  aria-label={locale === "he" ? "שלח משימה" : "Add task"}
+                >
+                  <Send className="w-4 h-4" strokeWidth={2.5} />
+                </button>
+              </div>
             </div>
 
             <div className="space-y-3">

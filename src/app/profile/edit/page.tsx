@@ -19,6 +19,7 @@ import {
   type ProfileBlock,
   type ProfileBlockType,
 } from "@/lib/profile-types";
+import { generateUUID } from "@/lib/uuid";
 import {
   User,
   Building2,
@@ -101,7 +102,7 @@ export default function ProfileEditPage() {
       try {
         const url = await readFileAsDataUrl(file);
         const item: PortfolioItem = {
-          id: crypto.randomUUID(),
+          id: generateUUID(),
           image: url,
           description: "",
         };
@@ -137,7 +138,7 @@ export default function ProfileEditPage() {
 
   const addProject = useCallback(() => {
     updateProfile({
-      projects: [...projects, { id: crypto.randomUUID(), title: "", date: "", images: [], description: "" }],
+      projects: [...projects, { id: generateUUID(), title: "", date: "", images: [], description: "" }],
     });
   }, [projects, updateProfile]);
 
@@ -159,7 +160,7 @@ export default function ProfileEditPage() {
 
   const addPressLink = useCallback(() => {
     updateProfile({
-      pressMedia: [...pressMedia, { id: crypto.randomUUID(), label: "", url: "" }],
+      pressMedia: [...pressMedia, { id: generateUUID(), label: "", url: "" }],
     });
   }, [pressMedia, updateProfile]);
 
@@ -198,7 +199,7 @@ export default function ProfileEditPage() {
       if (type === "lead_form") defaultConfig.lead_form = { title: "Get in touch", successMessage: "Thanks! We'll be in touch soon." };
       if (type === "countdown") defaultConfig.countdown = { target_date: new Date(Date.now() + 86400000 * 7).toISOString().slice(0, 16), label: "Countdown" };
       const newBlock: ProfileBlock = {
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         type,
         order: blocks.length,
         visible: true,
@@ -233,7 +234,7 @@ export default function ProfileEditPage() {
       if (!tpl) return;
       const newBlocks: ProfileBlock[] = tpl.blocks.map((b, i) => ({
         ...b,
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         order: i,
       }));
       updateProfile({ blocks: newBlocks });
@@ -604,7 +605,7 @@ export default function ProfileEditPage() {
                 onClick={() => {
                   const blocks = profile.blocks ?? [];
                   const newBlock: ProfileBlock = {
-                    id: crypto.randomUUID(),
+                    id: generateUUID(),
                     type,
                     order: blocks.length,
                     visible: true,

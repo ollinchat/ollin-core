@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { X, Plus } from "lucide-react";
 import type { ProfileBlock, TestimonialItem, FAQItem } from "@/lib/profile-types";
+import { generateUUID } from "@/lib/uuid";
 
 type Props = {
   block: ProfileBlock;
@@ -72,7 +73,7 @@ function TestimonialsSettings({
   const items = config?.items ?? [];
 
   const add = () => {
-    onChange([...items, { id: crypto.randomUUID(), name: "", text: "", stars: 5, avatar: "" }]);
+    onChange([...items, { id: generateUUID(), name: "", text: "", stars: 5, avatar: "" }]);
   };
 
   const update = (id: string, updates: Partial<TestimonialItem>) => {
@@ -114,7 +115,7 @@ function FAQSettings({
   const faqs = config?.faqs ?? [];
 
   const add = () => {
-    onChange([...faqs, { id: crypto.randomUUID(), question: "", answer: "" }]);
+    onChange([...faqs, { id: generateUUID(), question: "", answer: "" }]);
   };
 
   const update = (id: string, updates: Partial<FAQItem>) => {

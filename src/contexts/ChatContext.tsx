@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from "react";
+import { generateUUID } from "@/lib/uuid";
 
 export type ChatMessage =
   | { id: string; role: "user" | "assistant"; content: string }
@@ -93,7 +94,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const sendMessage = useCallback((content: string) => {
-    const userMsg: ChatMessage = { id: crypto.randomUUID(), role: "user", content };
+    const userMsg: ChatMessage = { id: generateUUID(), role: "user", content };
     const taskIntent = isExplicitTaskIntent(content);
     setLastTaskIntent(taskIntent);
     let prevSnapshot: ChatMessage[] = [];
@@ -109,7 +110,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       /(מי מוכר|איפה יש|ליד|באזור|קרוב)/.test(content);
 
     if (isNearby) {
-      const placeholderId = crypto.randomUUID();
+      const placeholderId = generateUUID();
       const loadingMsg: ChatMessage = { id: placeholderId, role: "assistant", content: isHebrew(content) ? "מחפש באזור…" : "Searching nearby…" };
       setMessages((prev) => {
         const next = [...prev, loadingMsg];
@@ -154,7 +155,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
     setTimeout(() => {
       const reply = generateReplySync(content, [...prevSnapshot, userMsg]);
-      const assistantMsg: ChatMessage = { id: crypto.randomUUID(), role: "assistant", content: reply };
+      const assistantMsg: ChatMessage = { id: generateUUID(), role: "assistant", content: reply };
       setMessages((prev) => {
         const next = [...prev, assistantMsg];
         saveMessages(next);
@@ -164,7 +165,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const addFormMessage = useCallback((formType: "poll" | "event" | "task") => {
-    const formMsg: ChatMessage = { id: crypto.randomUUID(), type: "form", formType };
+    const formMsg: ChatMessage = { id: generateUUID(), type: "form", formType };
     setMessages((prev) => {
       const next = [...prev, formMsg];
       saveMessages(next);

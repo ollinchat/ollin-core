@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
+import { generateUUID } from "@/lib/uuid";
 
 const STORAGE_KEY = "ollin_notes";
 
@@ -79,7 +80,7 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const addFolder = useCallback((name: string) => {
-    const folder: NoteFolder = { id: crypto.randomUUID(), name, order: folders.length };
+    const folder: NoteFolder = { id: generateUUID(), name, order: folders.length };
     setFolders((prev) => {
       const next = [...prev, folder];
       saveFolders(next);
@@ -95,7 +96,7 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
 
   const addNote = useCallback((folderId: string, title = "New note") => {
     const now = Date.now();
-    const note: NoteRecord = { id: crypto.randomUUID(), folderId, title, body: "", createdAt: now, updatedAt: now };
+    const note: NoteRecord = { id: generateUUID(), folderId, title, body: "", createdAt: now, updatedAt: now };
     setNotes((prev) => {
       const next = [note, ...prev];
       saveNotes(next);

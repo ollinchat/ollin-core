@@ -9,6 +9,7 @@ import * as documentService from "@/modules/billing/services/documentService";
 import * as vault from "@/modules/billing/vault/documentVault";
 import * as auditService from "@/modules/billing/services/auditService";
 import { generateDocumentPdf } from "@/modules/billing/services/pdfService";
+import { generateUUID } from "@/lib/uuid";
 
 const CLIENTS_PREFIX = "ollin_billing_clients_";
 const EXPENSES_PREFIX = "ollin_billing_expenses_";
@@ -108,9 +109,9 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
         const now = Date.now();
         const isoDaysAgo = (days: number) => new Date(now - days * 86400000).toISOString().slice(0, 10);
 
-        const seed1: BillingClient = { id: crypto.randomUUID(), name: "Acme Ltd", email: "billing@acme.com", phone: "+1 555 0101", address: "123 Business St", taxId: "512345678" };
-        const seed2: BillingClient = { id: crypto.randomUUID(), name: "Beta Corp", email: "finance@beta.com", phone: "+1 555 0202", address: "45 Market Ave", taxId: "598765432" };
-        const seed3: BillingClient = { id: crypto.randomUUID(), name: "Jane Doe", email: "jane@example.com", phone: "+1 555 0303" };
+        const seed1: BillingClient = { id: generateUUID(), name: "Acme Ltd", email: "billing@acme.com", phone: "+1 555 0101", address: "123 Business St", taxId: "512345678" };
+        const seed2: BillingClient = { id: generateUUID(), name: "Beta Corp", email: "finance@beta.com", phone: "+1 555 0202", address: "45 Market Ave", taxId: "598765432" };
+        const seed3: BillingClient = { id: generateUUID(), name: "Jane Doe", email: "jane@example.com", phone: "+1 555 0303" };
         const seededClients = [seed1, seed2, seed3];
         const mergedClients = existingClients.length > 0 ? [...existingClients, ...seededClients] : seededClients;
         saveJson(clientsKey, mergedClients);
@@ -120,8 +121,8 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
         const c3 = existingClients[2] ?? seed3;
 
         const vatRate = 17;
-        const items1: BillingLineItem[] = [{ id: crypto.randomUUID(), description: "Consulting (10h)", quantity: 10, unitPrice: 120 }];
-        const items2: BillingLineItem[] = [{ id: crypto.randomUUID(), description: "Annual license", quantity: 1, unitPrice: 2500 }];
+        const items1: BillingLineItem[] = [{ id: generateUUID(), description: "Consulting (10h)", quantity: 10, unitPrice: 120 }];
+        const items2: BillingLineItem[] = [{ id: generateUUID(), description: "Annual license", quantity: 1, unitPrice: 2500 }];
         const subtotal1 = 1200;
         const vat1 = Math.round((subtotal1 * vatRate) / 100 * 100) / 100;
         const total1 = subtotal1 + vat1;
@@ -129,12 +130,12 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
         const vat2 = Math.round((subtotal2 * vatRate) / 100 * 100) / 100;
         const total2 = subtotal2 + vat2;
 
-        const invPaidId = crypto.randomUUID();
-        const invOverdueId = crypto.randomUUID();
+        const invPaidId = generateUUID();
+        const invOverdueId = generateUUID();
 
         const docs: BillingDocument[] = [
           {
-            id: crypto.randomUUID(),
+            id: generateUUID(),
             number: "Q-1001",
             type: "quote",
             status: "pending",
@@ -202,7 +203,7 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
             auditTrail: [],
           },
           {
-            id: crypto.randomUUID(),
+            id: generateUUID(),
             number: "RCP-2001",
             type: "receipt",
             status: "paid",
@@ -225,7 +226,7 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
             auditTrail: [],
           },
           {
-            id: crypto.randomUUID(),
+            id: generateUUID(),
             number: "DN-3001",
             type: "delivery_note",
             status: "draft",
@@ -234,7 +235,7 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
             clientName: c3.name,
             clientEmail: c3.email,
             clientPhone: c3.phone,
-            items: [{ id: crypto.randomUUID(), description: "Hardware delivery", quantity: 1, unitPrice: 0 }],
+            items: [{ id: generateUUID(), description: "Hardware delivery", quantity: 1, unitPrice: 0 }],
             subtotal: 0,
             vatRate,
             vatAmount: 0,
@@ -249,8 +250,8 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
         docs.forEach((d) => vault.createDocument(userId, d));
 
         const seededExpenses: BillingExpense[] = [
-          { id: crypto.randomUUID(), vendor: "Cloud Hosting", amount: 99, category: "Infrastructure", date: isoDaysAgo(7), createdAt: now - 7 * 86400000 },
-          { id: crypto.randomUUID(), vendor: "Office Supplies Co", amount: 340, category: "Office", date: isoDaysAgo(1), createdAt: now - 1 * 86400000 },
+          { id: generateUUID(), vendor: "Cloud Hosting", amount: 99, category: "Infrastructure", date: isoDaysAgo(7), createdAt: now - 7 * 86400000 },
+          { id: generateUUID(), vendor: "Office Supplies Co", amount: 340, category: "Office", date: isoDaysAgo(1), createdAt: now - 1 * 86400000 },
         ];
         saveJson(expensesKey, seededExpenses);
 
@@ -266,7 +267,7 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
   const addClient = useCallback(
     (c: Omit<BillingClient, "id">): BillingClient | null => {
       if (!userId) return null;
-      const client: BillingClient = { ...c, id: crypto.randomUUID() };
+      const client: BillingClient = { ...c, id: generateUUID() };
       const key = CLIENTS_PREFIX + userId;
       setClients((prev) => {
         const next = [client, ...prev];
@@ -307,7 +308,7 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
   const addExpense = useCallback(
     (e: Omit<BillingExpense, "id" | "createdAt">): BillingExpense | null => {
       if (!userId) return null;
-      const expense: BillingExpense = { ...e, id: crypto.randomUUID(), createdAt: Date.now() };
+      const expense: BillingExpense = { ...e, id: generateUUID(), createdAt: Date.now() };
       const key = EXPENSES_PREFIX + userId;
       setExpenses((prev) => {
         const next = [expense, ...prev];

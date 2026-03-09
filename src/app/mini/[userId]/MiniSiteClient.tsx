@@ -26,6 +26,7 @@ import { useMiniSiteData } from "@/contexts/MiniSiteContext";
 import type { MiniSiteData, MiniSitePortfolioItem } from "@/lib/minisite-types";
 import { sampleMiniSiteData } from "@/lib/minisite-types";
 import type { WorkExperienceItem } from "@/lib/profile-types";
+import { generateUUID } from "@/lib/uuid";
 
 const TEAL = "#008080";
 
@@ -99,7 +100,7 @@ export function MiniSiteClient({ profileUserId }: { profileUserId: string }) {
       ...prev,
       cvItems: [
         ...prev.cvItems,
-        { id: crypto.randomUUID(), title: "", company: "", period: "", description: "" },
+        { id: generateUUID(), title: "", company: "", period: "", description: "" },
       ],
     }));
   }, [updateData]);
@@ -123,7 +124,7 @@ export function MiniSiteClient({ profileUserId }: { profileUserId: string }) {
       ...prev,
       portfolioItems: [
         ...prev.portfolioItems,
-        { id: crypto.randomUUID(), image: "", title: "", link: "" },
+        { id: generateUUID(), image: "", title: "", link: "" },
       ],
     }));
   }, [updateData]);

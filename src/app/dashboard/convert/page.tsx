@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useLocale } from "@/contexts/LocaleContext";
 import { ChevronLeft, FileCode2, Upload, Download, FileText } from "lucide-react";
+import { generateUUID } from "@/lib/uuid";
 
 const TEAL = "#008080";
 const STORAGE_KEY = "ollin_convert_history";
@@ -67,7 +68,7 @@ export default function ConvertPage() {
   }, []);
 
   const addToHistory = useCallback((entry: Omit<HistoryEntry, "id">) => {
-    const newEntry: HistoryEntry = { ...entry, id: crypto.randomUUID() };
+    const newEntry: HistoryEntry = { ...entry, id: generateUUID() };
     setHistory((prev) => {
       const next = [newEntry, ...prev];
       saveHistory(next);

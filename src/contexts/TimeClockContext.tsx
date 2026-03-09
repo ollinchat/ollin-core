@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import type { TimeClockEntry } from "@/lib/timeclock-types";
 import { loadTimeClockFromSupabase, saveTimeClockToSupabase } from "@/lib/supabase-sync";
+import { generateUUID } from "@/lib/uuid";
 
 const STORAGE_KEY = "ollin_timeclock";
 
@@ -78,7 +79,7 @@ export function TimeClockProvider({ children }: { children: React.ReactNode }) {
       label = mock.label + " (mocked)";
     }
     const entry: TimeClockEntry = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       type,
       timestamp: Date.now(),
       lat,

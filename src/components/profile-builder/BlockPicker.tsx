@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { BLOCK_LIBRARY } from "./block-registry";
 import type { ProfileBlockType } from "@/lib/profile-builder-types";
 import { getDefaultBlockConfig } from "@/lib/profile-builder-types";
+import { generateUUID } from "@/lib/uuid";
 
 const TEAL = "#008080";
 
@@ -77,7 +78,7 @@ export function BlockPicker({ open, onClose, onSelect }: Props) {
 /** Helper: create a new block from type (for use when user picks from BlockPicker) */
 export function createBlock(type: ProfileBlockType, order: number) {
   return {
-    id: crypto.randomUUID(),
+    id: generateUUID(),
     type,
     order,
     config: getDefaultBlockConfig(type),

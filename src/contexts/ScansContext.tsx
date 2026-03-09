@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import type { ScannedDoc } from "@/lib/finance-types";
 import { loadScansFromSupabase, saveScansToSupabase } from "@/lib/supabase-sync";
+import { generateUUID } from "@/lib/uuid";
 
 const STORAGE_KEY = "ollin_scans";
 
@@ -50,7 +51,7 @@ export function ScansProvider({ children }: { children: React.ReactNode }) {
   const addDoc = useCallback((doc: Omit<ScannedDoc, "id" | "scannedAt">) => {
     const full: ScannedDoc = {
       ...doc,
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       scannedAt: Date.now(),
     };
     setDocs((prev) => {

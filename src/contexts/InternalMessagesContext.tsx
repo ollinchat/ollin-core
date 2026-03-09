@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from "react";
+import { generateUUID } from "@/lib/uuid";
 
 export type MessagePart = { type: "text"; content: string } | { type: "voice"; url: string } | { type: "file"; url: string; name: string };
 
@@ -137,7 +138,7 @@ export function InternalMessagesProvider({ children }: { children: React.ReactNo
 
   const sendText = useCallback((contactId: string, text: string, currentUserId = "me") => {
     const msg: InternalMessage = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       conversationId: conversationId(currentUserId, contactId),
       senderId: currentUserId,
       parts: [{ type: "text", content: text }],
@@ -154,7 +155,7 @@ export function InternalMessagesProvider({ children }: { children: React.ReactNo
   const sendVoice = useCallback((contactId: string, blob: Blob, currentUserId = "me") => {
     const url = URL.createObjectURL(blob);
     const msg: InternalMessage = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       conversationId: conversationId(currentUserId, contactId),
       senderId: currentUserId,
       parts: [{ type: "voice", url }],
@@ -173,7 +174,7 @@ export function InternalMessagesProvider({ children }: { children: React.ReactNo
     reader.onload = () => {
       const url = reader.result as string;
       const msg: InternalMessage = {
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         conversationId: conversationId(currentUserId, contactId),
         senderId: currentUserId,
         parts: [{ type: "file", url, name: file.name }],
@@ -203,7 +204,7 @@ export function InternalMessagesProvider({ children }: { children: React.ReactNo
   const sendTextToGroup = useCallback((groupId: string, text: string, currentUserId = "me") => {
     const cid = GROUP_PREFIX + groupId;
     const msg: InternalMessage = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       conversationId: cid,
       senderId: currentUserId,
       parts: [{ type: "text", content: text }],
@@ -219,7 +220,7 @@ export function InternalMessagesProvider({ children }: { children: React.ReactNo
 
   const createGroup = useCallback((name: string, participantIds: string[]) => {
     const group: GroupConversation = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       name: name.trim() || "Group",
       participantIds: [...participantIds],
       createdAt: Date.now(),

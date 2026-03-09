@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
+import { generateUUID } from "@/lib/uuid";
 
 export type BillCategory = "electricity" | "water" | "car_finance" | "fines" | "vaad_bayit" | "other";
 
@@ -50,7 +51,7 @@ export function BillsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => setBills(loadBills()), []);
 
   const addBill = useCallback((b: Omit<BillEntry, "id" | "createdAt">) => {
-    const entry: BillEntry = { ...b, category: b.category ?? "other", id: crypto.randomUUID(), createdAt: Date.now() };
+    const entry: BillEntry = { ...b, category: b.category ?? "other", id: generateUUID(), createdAt: Date.now() };
     setBills((prev) => {
       const next = [entry, ...prev];
       saveBills(next);

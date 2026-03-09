@@ -3,6 +3,7 @@
 import type { LineItem } from "@/lib/finance-types";
 import { DEFAULT_VAT_RATE, subtotalFromItems, vatFromSubtotal } from "@/lib/finance-types";
 import { QUOTE_HEADER_EN, QUOTE_HEADER_HE, TAX_INVOICE_HEADER_EN, TAX_INVOICE_HEADER_HE } from "@/lib/finance-types";
+import { generateUUID } from "@/lib/uuid";
 
 type DocKind = "quote" | "invoice";
 
@@ -70,7 +71,7 @@ export function LiveDocumentEditor({
   const total = subtotal + vatAmount;
 
   const addRow = () => {
-    onItemsChange([...items, { id: crypto.randomUUID(), description: "", quantity: 1, unitPrice: 0 }]);
+    onItemsChange([...items, { id: generateUUID(), description: "", quantity: 1, unitPrice: 0 }]);
   };
 
   const updateItem = (id: string, patch: Partial<LineItem>) => {

@@ -8,6 +8,7 @@ import type {
   RecurringFrequency,
 } from "@/lib/recurring-checklist-types";
 import { FOUNDER_USER_ID } from "@/lib/recurring-checklist-types";
+import { generateUUID } from "@/lib/uuid";
 
 const CHECKLISTS_KEY = "ollin_recurring_checklists";
 const HISTORY_KEY = "ollin_performance_history";
@@ -204,7 +205,7 @@ export function ChecklistsProvider({ children }: { children: React.ReactNode }) 
           const score = computeChecklistScore(cl);
           const completed = cl.items.filter((x) => x.isDone).length;
           newHistory.push({
-            id: crypto.randomUUID(),
+            id: generateUUID(),
             checklistId: cl.id,
             date: last,
             score,
@@ -262,13 +263,13 @@ export function ChecklistsProvider({ children }: { children: React.ReactNode }) 
       const today = todayStr();
       const newOne: RecurringChecklist = {
         ...payload,
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         currentScore: 0,
         lastResetDate: today,
         createdAt: Date.now(),
         items: payload.items.map((it) => ({
           ...it,
-          id: it.id || crypto.randomUUID(),
+          id: it.id || generateUUID(),
           weight: it.weight ?? 1,
         })),
       };
@@ -319,7 +320,7 @@ export function ChecklistsProvider({ children }: { children: React.ReactNode }) 
 
   const addItem = useCallback((checklistId: string, text: string, weight = 1) => {
     const newItem: RecurringChecklistItem = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       text,
       isDone: false,
       weight,

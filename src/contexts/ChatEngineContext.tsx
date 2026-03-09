@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from "react";
 import * as ChatLib from "@/lib/chat-engine";
+import { generateUUID } from "@/lib/uuid";
 
 const DEV_USER_KEY = "ollin_dev_current_user";
 
@@ -155,11 +156,11 @@ export function ChatEngineProvider({ children }: { children: React.ReactNode }) 
     const trimmed = content.trim();
     if (!trimmed) return;
 
-    const userMsg: ChatLib.AIMessage = { id: crypto.randomUUID(), role: "user", content: trimmed };
+    const userMsg: ChatLib.AIMessage = { id: generateUUID(), role: "user", content: trimmed };
     setMessages((prev) => [...prev, userMsg]);
     setIsThinking(true);
 
-    const placeholderId = crypto.randomUUID();
+    const placeholderId = generateUUID();
     setMessages((prev) => [...prev, { id: placeholderId, role: "assistant", content: "Thinking…" } as ChatLib.AIMessage]);
 
     try {
@@ -304,7 +305,7 @@ export function ChatEngineProvider({ children }: { children: React.ReactNode }) 
         ? ChatLib.conversationId(uid, contactId)
         : [uid, contactId].sort().join("--");
       const msg: ChatLib.InternalMessageRecord = {
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         conversationId: cid,
         senderId: uid,
         parts: [{ type: "text", content: trimmed }],
@@ -332,7 +333,7 @@ export function ChatEngineProvider({ children }: { children: React.ReactNode }) 
         : [uid, contactId].sort().join("--");
       const url = URL.createObjectURL(blob);
       const msg: ChatLib.InternalMessageRecord = {
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         conversationId: cid,
         senderId: uid,
         parts: [{ type: "voice", url }],
@@ -362,7 +363,7 @@ export function ChatEngineProvider({ children }: { children: React.ReactNode }) 
           : [uid, contactId].sort().join("--");
         const url = reader.result as string;
         const msg: ChatLib.InternalMessageRecord = {
-          id: crypto.randomUUID(),
+          id: generateUUID(),
           conversationId: cid,
           senderId: uid,
           parts: [{ type: "file", url, name: file.name }],

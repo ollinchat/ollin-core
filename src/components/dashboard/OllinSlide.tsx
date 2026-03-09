@@ -32,6 +32,7 @@ import { t } from "@/lib/translations";
 import { PollCreator } from "@/components/board/PollCreator";
 import { MeetingEventFormModal } from "@/components/board/MeetingEventFormModal";
 import { GPSClockModal } from "@/components/tools/GPSClockModal";
+import { generateUUID } from "@/lib/uuid";
 
 const EASE_SMOOTH = [0.32, 0.72, 0, 1];
 const TRANSITION_MS = 300;
@@ -187,7 +188,7 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
   const handleNewChat = useCallback(() => {
     const firstUser = messages.find((m) => "role" in m && m.role === "user");
     const title = typeof firstUser?.content === "string" ? firstUser.content.slice(0, 40).trim() || (isHe ? "שיחה חדשה" : "New Chat") : isHe ? "שיחה חדשה" : "New Chat";
-    if (messages.length > 0) setTopics((prev) => [{ id: crypto.randomUUID(), title }, ...prev]);
+    if (messages.length > 0) setTopics((prev) => [{ id: generateUUID(), title }, ...prev]);
     clearMessages();
     setTopicsSidebarOpen(false);
   }, [messages, isHe, clearMessages]);
@@ -299,12 +300,9 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
                       key={key}
                       type="button"
                       onClick={onOpenScanner}
-                      className="flex flex-col items-center justify-center gap-1.5 py-2.5 px-2 rounded-2xl bg-white border-2 border-purple-100 hover:border-purple-200 hover:bg-purple-50/50 transition-all shadow-sm group"
+                      className={tileClass}
                     >
-                      <div className="w-9 h-9 rounded-full bg-purple-50 flex items-center justify-center group-hover:bg-purple-100">
-                        <Icon className="w-4 h-4 text-purple-600" strokeWidth={2} />
-                      </div>
-                      <span className="text-[11px] font-semibold text-center leading-tight text-gray-700">{isHe ? labelHe : labelEn}</span>
+                      {tileContent}
                     </button>
                   );
                 }

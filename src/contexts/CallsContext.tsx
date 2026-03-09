@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
+import { generateUUID } from "@/lib/uuid";
 
 export interface CallRecording {
   id: string;
@@ -43,7 +44,7 @@ export function CallsProvider({ children }: { children: React.ReactNode }) {
     setCalls(loadCalls());
   }, []);
   const addCall = useCallback((rec: Omit<CallRecording, "id">) => {
-    const entry: CallRecording = { ...rec, id: crypto.randomUUID() };
+    const entry: CallRecording = { ...rec, id: generateUUID() };
     setCalls((prev) => {
       const next = [entry, ...prev];
       saveCalls(next);

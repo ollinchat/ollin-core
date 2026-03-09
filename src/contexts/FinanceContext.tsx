@@ -20,6 +20,7 @@ import {
 } from "@/lib/finance-types";
 import { getNextQuoteNumber, getNextInvoiceNumber, getNextReceiptNumber } from "@/lib/invoice-template";
 import { getNextDeliveryNoteNumber } from "@/lib/document-numbering";
+import { generateUUID } from "@/lib/uuid";
 
 const STORAGE_KEYS = {
   company: "ollin_finance_company",
@@ -55,14 +56,14 @@ const defaultCompany: CompanyProfile = { name: "", vatId: "", address: "" };
 function ensureLineItems(items: LineItem[]): LineItem[] {
   return items.map((i) => ({
     ...i,
-    id: i.id || crypto.randomUUID(),
+    id: i.id || generateUUID(),
   }));
 }
 
 function fromLegacyAmount(amount: string | number | undefined, description: string): LineItem[] {
   const num = typeof amount === "string" ? parseFloat(amount.replace(/,/g, "")) : Number(amount) || 0;
   return [
-    { id: crypto.randomUUID(), description: description || "Item", quantity: 1, unitPrice: num },
+    { id: generateUUID(), description: description || "Item", quantity: 1, unitPrice: num },
   ];
 }
 
@@ -76,7 +77,7 @@ function normalizeQuote(raw: unknown): Quote {
   const vatAmount = "vatAmount" in q && typeof q.vatAmount === "number" ? q.vatAmount : vatFromSubtotal(subtotal, vatRate);
   const total = "total" in q && typeof q.total === "number" ? q.total : subtotal + vatAmount;
   return {
-    id: (q.id as string) || crypto.randomUUID(),
+    id: (q.id as string) || generateUUID(),
     number: (q.number as string) || "",
     status: (q.status as Quote["status"]) || "draft",
     clientId: (q.clientId as string) || "",
@@ -106,7 +107,7 @@ function normalizeInvoice(raw: unknown): TaxInvoice {
   const vatAmount = "vatAmount" in inv && typeof inv.vatAmount === "number" ? inv.vatAmount : vatFromSubtotal(subtotal, vatRate);
   const total = "total" in inv && typeof inv.total === "number" ? inv.total : subtotal + vatAmount;
   return {
-    id: (inv.id as string) || crypto.randomUUID(),
+    id: (inv.id as string) || generateUUID(),
     number: (inv.number as string) || "",
     status: (inv.status as TaxInvoice["status"]) || "draft",
     quoteId: inv.quoteId as string | undefined,
@@ -137,7 +138,7 @@ function normalizeReceipt(raw: unknown): Receipt {
   const vatAmount = "vatAmount" in r && typeof r.vatAmount === "number" ? r.vatAmount : vatFromSubtotal(subtotal, vatRate);
   const total = "total" in r && typeof r.total === "number" ? r.total : subtotal + vatAmount;
   return {
-    id: (r.id as string) || crypto.randomUUID(),
+    id: (r.id as string) || generateUUID(),
     number: (r.number as string) || "",
     status: (r.status as Receipt["status"]) || "draft",
     invoiceId: r.invoiceId as string | undefined,
@@ -167,7 +168,7 @@ function normalizeDeliveryNote(raw: unknown): DeliveryNote {
   const vatAmount = "vatAmount" in r && typeof r.vatAmount === "number" ? r.vatAmount : vatFromSubtotal(subtotal, vatRate);
   const total = "total" in r && typeof r.total === "number" ? r.total : subtotal + vatAmount;
   return {
-    id: (r.id as string) || crypto.randomUUID(),
+    id: (r.id as string) || generateUUID(),
     number: (r.number as string) || "",
     status: (r.status as DeliveryNote["status"]) || "draft",
     clientId: (r.clientId as string) || "",
@@ -242,32 +243,32 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     if (rawClients.length === 0 && !alreadySeeded && typeof window !== "undefined") {
       const now = Date.now();
       const t = (d: number) => new Date(now - d * 86400000).toISOString().slice(0, 10);
-      const c1 = crypto.randomUUID();
-      const c2 = crypto.randomUUID();
-      const c3 = crypto.randomUUID();
+      const c1 = generateUUID();
+      const c2 = generateUUID();
+      const c3 = generateUUID();
       const seedClients: FinanceClient[] = [
         { id: c1, name: "Acme Ltd", email: "billing@acme.com", clientType: "company", address: "123 Business St", createdAt: now },
         { id: c2, name: "Beta Corp", email: "finance@beta.com", clientType: "company", createdAt: now },
         { id: c3, name: "Jane Doe", email: "jane@example.com", clientType: "private", createdAt: now },
       ];
-      const items1: LineItem[] = [{ id: crypto.randomUUID(), description: "Consulting", quantity: 10, unitPrice: 120 }];
-      const items2: LineItem[] = [{ id: crypto.randomUUID(), description: "License fee", quantity: 1, unitPrice: 2500 }];
+      const items1: LineItem[] = [{ id: generateUUID(), description: "Consulting", quantity: 10, unitPrice: 120 }];
+      const items2: LineItem[] = [{ id: generateUUID(), description: "License fee", quantity: 1, unitPrice: 2500 }];
       const st1 = 1200; const vat1 = 216; const tot1 = 1416;
       const st2 = 2500; const vat2 = 450; const tot2 = 2950;
       const seedQuotes: Quote[] = [
-        { id: crypto.randomUUID(), number: "Q-1", status: "draft", clientId: c1, clientName: "Acme Ltd", items: items1, date: t(5), subtotal: st1, vatRate: 18, vatAmount: vat1, total: tot1, createdAt: now - 5 * 86400000 },
-        { id: crypto.randomUUID(), number: "Q-2", status: "sent", clientId: c2, clientName: "Beta Corp", items: items2, date: t(3), subtotal: st2, vatRate: 18, vatAmount: vat2, total: tot2, createdAt: now - 3 * 86400000 },
+        { id: generateUUID(), number: "Q-1", status: "draft", clientId: c1, clientName: "Acme Ltd", items: items1, date: t(5), subtotal: st1, vatRate: 18, vatAmount: vat1, total: tot1, createdAt: now - 5 * 86400000 },
+        { id: generateUUID(), number: "Q-2", status: "sent", clientId: c2, clientName: "Beta Corp", items: items2, date: t(3), subtotal: st2, vatRate: 18, vatAmount: vat2, total: tot2, createdAt: now - 3 * 86400000 },
       ];
       const seedInvoices: TaxInvoice[] = [
-        { id: crypto.randomUUID(), number: "INV-1001", status: "paid", clientId: c1, clientName: "Acme Ltd", items: items1, date: t(10), subtotal: st1, vatRate: 18, vatAmount: vat1, total: tot1, createdAt: now - 10 * 86400000 },
-        { id: crypto.randomUUID(), number: "INV-1002", status: "sent", clientId: c2, clientName: "Beta Corp", items: items2, date: t(2), dueDate: t(30), subtotal: st2, vatRate: 18, vatAmount: vat2, total: tot2, createdAt: now - 2 * 86400000 },
+        { id: generateUUID(), number: "INV-1001", status: "paid", clientId: c1, clientName: "Acme Ltd", items: items1, date: t(10), subtotal: st1, vatRate: 18, vatAmount: vat1, total: tot1, createdAt: now - 10 * 86400000 },
+        { id: generateUUID(), number: "INV-1002", status: "sent", clientId: c2, clientName: "Beta Corp", items: items2, date: t(2), dueDate: t(30), subtotal: st2, vatRate: 18, vatAmount: vat2, total: tot2, createdAt: now - 2 * 86400000 },
       ];
       const seedReceipts: Receipt[] = [
-        { id: crypto.randomUUID(), number: "RCP-1", status: "paid", invoiceId: seedInvoices[0].id, clientId: c1, clientName: "Acme Ltd", items: items1, date: t(10), subtotal: st1, vatRate: 18, vatAmount: vat1, total: tot1, createdAt: now - 9 * 86400000 },
+        { id: generateUUID(), number: "RCP-1", status: "paid", invoiceId: seedInvoices[0].id, clientId: c1, clientName: "Acme Ltd", items: items1, date: t(10), subtotal: st1, vatRate: 18, vatAmount: vat1, total: tot1, createdAt: now - 9 * 86400000 },
       ];
       const seedExpenses: Expense[] = [
-        { id: crypto.randomUUID(), vendor: "Office Supplies Co", amount: 340, category: "Office", date: t(1), createdAt: now },
-        { id: crypto.randomUUID(), vendor: "Cloud Hosting", amount: 99, category: "Infrastructure", date: t(7), createdAt: now - 7 * 86400000 },
+        { id: generateUUID(), vendor: "Office Supplies Co", amount: 340, category: "Office", date: t(1), createdAt: now },
+        { id: generateUUID(), vendor: "Cloud Hosting", amount: 99, category: "Infrastructure", date: t(7), createdAt: now - 7 * 86400000 },
       ];
       setCompanyProfileState({ ...defaultCompany, name: "My Company", nameEn: "My Company", vatRate: 18 });
       setClients(seedClients);
@@ -323,7 +324,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const addClient = useCallback((c: Omit<FinanceClient, "id" | "createdAt">) => {
-    const id = crypto.randomUUID();
+    const id = generateUUID();
     const createdAt = Date.now();
     const client: FinanceClient = { ...c, id, createdAt };
     setClients((prev) => {
@@ -390,7 +391,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
   const addQuote = useCallback((q: QuoteInput): Quote => {
     const built = buildQuoteFromInput(q);
-    const id = crypto.randomUUID();
+    const id = generateUUID();
     const number = getNextQuoteNumber();
     const createdAt = Date.now();
     const quote: Quote = { ...built, id, number, createdAt };
@@ -428,7 +429,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const addInvoice = useCallback((inv: Omit<TaxInvoice, "id" | "number" | "status" | "createdAt">): TaxInvoice => {
-    const id = crypto.randomUUID();
+    const id = generateUUID();
     const number = getNextInvoiceNumber();
     const status: DocStatus = "draft";
     const createdAt = Date.now();
@@ -501,7 +502,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   }, [quotes, addInvoice]);
 
   const addReceipt = useCallback((r: Omit<Receipt, "id" | "number" | "status" | "createdAt">): Receipt => {
-    const id = crypto.randomUUID();
+    const id = generateUUID();
     const number = getNextReceiptNumber();
     const status: DocStatus = "draft";
     const createdAt = Date.now();
@@ -548,7 +549,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const addDeliveryNote = useCallback((d: Omit<DeliveryNote, "id" | "number" | "status" | "createdAt" | "subtotal" | "vatRate" | "vatAmount" | "total"> & Partial<Pick<DeliveryNote, "subtotal" | "vatRate" | "vatAmount" | "total">>): DeliveryNote => {
-    const id = crypto.randomUUID();
+    const id = generateUUID();
     const number = getNextDeliveryNoteNumber();
     const status: DocStatus = "draft";
     const createdAt = Date.now();
@@ -596,7 +597,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   const addExpense = useCallback((e: Omit<Expense, "id" | "createdAt">): Expense => {
     const expense: Expense = {
       ...e,
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       createdAt: Date.now(),
     };
     setExpenses((prev) => {

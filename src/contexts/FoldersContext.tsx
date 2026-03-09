@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
+import { generateUUID } from "@/lib/uuid";
 
 const STORAGE_KEY = "ollin_folders";
 
@@ -53,7 +54,7 @@ export function FoldersProvider({ children }: { children: React.ReactNode }) {
     const trimmed = name.trim();
     if (!trimmed) return;
     const item: FolderItem = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       name: trimmed,
       createdAt: Date.now(),
     };

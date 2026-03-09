@@ -8,6 +8,7 @@ import type {
   SummarySelection,
 } from "@/lib/board-types";
 import { loadBoardFromSupabase, saveBoardToSupabase } from "@/lib/supabase-sync";
+import { generateUUID } from "@/lib/uuid";
 
 const STORAGE_KEY = "ollin_board";
 
@@ -147,7 +148,7 @@ export function BoardProvider({ children }: { children: React.ReactNode }) {
     (task: Omit<BoardTask, "id" | "createdAt">) => {
       const newTask: BoardTask = {
         ...task,
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         createdAt: Date.now(),
       };
       updateBoard((prev) => ({ ...prev, given: [newTask, ...prev.given] }));
@@ -159,7 +160,7 @@ export function BoardProvider({ children }: { children: React.ReactNode }) {
     (task: Omit<BoardTask, "id" | "createdAt">) => {
       const newTask: BoardTask = {
         ...task,
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         createdAt: Date.now(),
       };
       updateBoard((prev) => ({ ...prev, received: [newTask, ...prev.received] }));
@@ -292,7 +293,7 @@ export function BoardProvider({ children }: { children: React.ReactNode }) {
     (m: Omit<MeetingOrEvent, "id" | "createdAt">) => {
       const item: MeetingOrEvent = {
         ...m,
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         createdAt: Date.now(),
       };
       updateBoard((prev) => ({ ...prev, meetings: [item, ...prev.meetings] }));
@@ -304,7 +305,7 @@ export function BoardProvider({ children }: { children: React.ReactNode }) {
     (e: Omit<MeetingOrEvent, "id" | "createdAt">) => {
       const item: MeetingOrEvent = {
         ...e,
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         createdAt: Date.now(),
       };
       updateBoard((prev) => ({ ...prev, events: [item, ...prev.events] }));
