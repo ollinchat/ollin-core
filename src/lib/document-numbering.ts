@@ -58,3 +58,9 @@ export function getNextReceiptNumber(): string {
 export function getNextDeliveryNoteNumber(): string {
   return formatDocNumber(getAndIncrement("deliveryNote"));
 }
+
+/** Preview the next number for a type without incrementing (for form display). */
+export function getNextNumberPreview(key: keyof DocumentNumberingConfig): string {
+  const config = loadDocumentNumbering();
+  return String(config[key]).padStart(3, "0");
+}

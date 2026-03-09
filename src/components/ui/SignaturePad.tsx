@@ -110,26 +110,26 @@ export function SignaturePad({
           type="checkbox"
           checked={useSavedSignature}
           onChange={(e) => onUseSavedChange(e.target.checked)}
-          className="rounded border-gray-300 text-accent accent-accent"
+          className="rounded-sm border-gray-200 text-[#008080] accent-[#008080]"
         />
         {labelUseSaved}
       </label>
       {useSavedSignature ? (
-        <div className="rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 p-4 min-h-[100px] flex items-center justify-center">
+        <div className="rounded-sm border border-gray-100 border-dashed bg-white p-4 min-h-[100px] flex items-center justify-center">
           {savedSignatureDataUrl ? (
             <img src={savedSignatureDataUrl} alt="Saved signature" className="max-h-20 max-w-[200px] object-contain" />
           ) : (
-            <p className="text-sm text-gray-500">No saved signature. Add one in Profile → Signature.</p>
+            <p className="text-sm text-slate-500 font-medium">No saved signature. Draw or upload one below.</p>
           )}
         </div>
       ) : (
         <>
-          <p className="text-xs text-gray-500">{labelSign}</p>
+          <p className="text-xs font-medium text-slate-600">{labelSign}</p>
           <canvas
             ref={canvasRef}
             width={320}
             height={120}
-            className="w-full max-w-md h-[120px] rounded-2xl border-2 border-gray-200 bg-white touch-none cursor-crosshair"
+            className="w-full max-w-md h-[120px] rounded-sm border border-gray-100 bg-white touch-none cursor-crosshair"
             style={{ width: "100%", maxWidth: "320px" }}
             onMouseDown={start}
             onMouseMove={move}
@@ -139,7 +139,7 @@ export function SignaturePad({
             onTouchMove={move}
             onTouchEnd={end}
           />
-          <button type="button" onClick={clear} className="text-sm text-accent hover:underline">
+          <button type="button" onClick={clear} className="text-sm font-medium text-[#008080] hover:underline">
             Clear
           </button>
         </>

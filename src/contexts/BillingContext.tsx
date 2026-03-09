@@ -48,6 +48,7 @@ type BillingContextType = {
   createDraft: (client: BillingClient, items?: BillingLineItem[]) => BillingDocument | null;
   convertToQuote: (draftId: string) => BillingDocument | null;
   convertQuoteToInvoice: (quoteId: string) => BillingDocument | null;
+  createDeliveryNote: (client: BillingClient, items?: BillingLineItem[]) => BillingDocument | null;
   convertDeliveryNoteToInvoice: (deliveryNoteId: string) => BillingDocument | null;
   markPaid: (invoiceId: string) => BillingDocument | null;
   createReceipt: (invoiceId: string) => BillingDocument | null;
@@ -372,6 +373,25 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
     [userId, refreshDocuments]
   );
 
+  const createDeliveryNote = useCallback(
+    (client: BillingClient, items?: BillingLineItem[]) => {
+      if (!userId) return null;
+      const doc = documentService.createDeliveryNote(
+        userId,
+        client.id,
+        client.name,
+        client.email,
+        client.phone,
+        client.address,
+        client.taxId,
+        items
+      );
+      refreshDocuments();
+      return doc;
+    },
+    [userId, refreshDocuments]
+  );
+
   const convertDeliveryNoteToInvoice = useCallback(
     (deliveryNoteId: string) => {
       if (!userId) return null;
@@ -518,6 +538,7 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
       createDraft,
       convertToQuote,
       convertQuoteToInvoice,
+      createDeliveryNote,
       convertDeliveryNoteToInvoice,
       markPaid,
       createReceipt,
@@ -546,6 +567,7 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
       createDraft,
       convertToQuote,
       convertQuoteToInvoice,
+      createDeliveryNote,
       convertDeliveryNoteToInvoice,
       markPaid,
       createReceipt,

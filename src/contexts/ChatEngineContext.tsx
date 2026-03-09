@@ -6,20 +6,52 @@ import { generateUUID } from "@/lib/uuid";
 
 const DEV_USER_KEY = "ollin_dev_current_user";
 
+/** Document language preference for generated documents */
+export type DocumentLanguagePreference = "he" | "en" | "bilingual";
+
+/** Bank details for payments (shown on tax invoices, not on receipts) */
+export interface BankDetails {
+  iban?: string;
+  swift?: string;
+  bitLink?: string;
+  bankName?: string;
+  branchNumber?: string;
+  accountNumber?: string;
+}
+
 /** Business/issuer identity for billing (From section on invoices). */
 export interface BusinessProfile {
   legalName: string;
   taxId: string;
   address: string;
   businessLogo: string;
-  bankDetails: { iban?: string; swift?: string; bitLink?: string };
+  bankDetails: BankDetails;
   /** Bilingual display */
   legalNameEn?: string;
   legalNameHe?: string;
   addressEn?: string;
   addressHe?: string;
+  /** Structured address (bilingual) for document generation */
+  addressCityEn?: string;
+  addressCityHe?: string;
+  addressStreetEn?: string;
+  addressStreetHe?: string;
+  addressZipEn?: string;
+  addressZipHe?: string;
+  addressCountryEn?: string;
+  addressCountryHe?: string;
+  /** Office contact (synced across languages for documents) */
+  officeEmail?: string;
+  officePhone?: string;
   /** Signature image (data URL) for PDFs */
   signature?: string;
+  /** Document language: Hebrew only, English only, or both */
+  documentLanguage?: DocumentLanguagePreference;
+  /** Initial sequence numbers for document numbering */
+  initialInvoiceNumber?: number;
+  initialReceiptNumber?: number;
+  initialQuoteNumber?: number;
+  initialDeliveryNoteNumber?: number;
 }
 
 export type DevCurrentUser = {

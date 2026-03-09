@@ -13,6 +13,8 @@ import type { BillingDocument, BillingExpense } from "@/modules/billing/types";
 import { ChevronLeft, FileText, Receipt, FileStack, Plus, Package, Fingerprint, UserPlus, DollarSign, TrendingUp, Download, Trash2, ChevronDown, X, Loader2, MoreVertical, Share2, Settings, Upload, Camera } from "lucide-react";
 import { DocumentCard } from "@/components/finances/DocumentCard";
 import type { Quote, DeliveryNote, LineItem } from "@/lib/finance-types";
+import { getNextNumberPreview } from "@/lib/document-numbering";
+import type { BillingClient, BillingLineItem } from "@/modules/billing/types";
 import { TAX_INVOICE_HEADER_EN, TAX_INVOICE_HEADER_HE, QUOTE_HEADER_EN, QUOTE_HEADER_HE, DELIVERY_NOTE_HEADER_EN, DELIVERY_NOTE_HEADER_HE, DEFAULT_VAT_RATE } from "@/lib/finance-types";
 import { LiveDocumentEditor } from "@/components/finances/LiveDocumentEditor";
 import { generateUUID } from "@/lib/uuid";
@@ -142,35 +144,35 @@ function ExpenseModal({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50">
-      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full">
+      <div className="bg-white rounded-sm border border-gray-100 shadow-xl max-w-md w-full">
         <div className="flex items-center justify-between p-4 border-b border-gray-100">
           <h2 className="font-semibold text-gray-900">Add Expense</h2>
-          <button type="button" onClick={onClose} className="p-2 rounded-xl text-gray-500 hover:bg-gray-100">
-            ✕
+          <button type="button" onClick={onClose} className="p-2 rounded-sm text-gray-500 hover:bg-gray-100">
+            <X className="w-4 h-4" />
           </button>
         </div>
         <div className="p-4 space-y-3">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Vendor</label>
-            <input value={vendor} onChange={(e) => setVendor(e.target.value)} className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-gray-900" />
+            <input value={vendor} onChange={(e) => setVendor(e.target.value)} className="w-full rounded-sm border border-gray-100 px-3 py-2.5 text-gray-900" />
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
-              <input type="number" min={0} step={0.01} value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-gray-900" />
+              <input type="number" min={0} step={0.01} value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full rounded-sm border border-gray-100 px-3 py-2.5 text-gray-900" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-gray-900" />
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full rounded-sm border border-gray-100 px-3 py-2.5 text-gray-900" />
             </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-            <input value={category} onChange={(e) => setCategory(e.target.value)} className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-gray-900" />
+            <input value={category} onChange={(e) => setCategory(e.target.value)} className="w-full rounded-sm border border-gray-100 px-3 py-2.5 text-gray-900" />
           </div>
         </div>
         <div className="flex gap-2 p-4 border-t border-gray-100">
-          <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-700 font-medium">Cancel</button>
+          <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-sm bg-gray-100 text-gray-700 font-medium">Cancel</button>
           <button
             type="button"
             onClick={() => {
@@ -183,7 +185,7 @@ function ExpenseModal({
               onClose();
             }}
             disabled={!vendor.trim()}
-            className="flex-1 py-2.5 rounded-xl text-white font-medium disabled:opacity-50"
+            className="flex-1 py-2.5 rounded-sm text-white font-medium disabled:opacity-50"
             style={{ backgroundColor: TEAL }}
           >
             Save
@@ -194,16 +196,186 @@ function ExpenseModal({
   );
 }
 
+function emptyLineItem(): BillingLineItem {
+  return { id: generateUUID(), description: "", quantity: 1, unitPrice: 0 };
+}
+
+function DocumentCreateSlideOver({
+  open,
+  type,
+  title,
+  docNumberPreview,
+  documentLanguage,
+  bankDetails,
+  clientOptions,
+  onClose,
+  onSubmit,
+  isSubmitting,
+}: {
+  open: boolean;
+  type: "quote" | "invoice" | "delivery_note";
+  title: string;
+  docNumberPreview: string;
+  documentLanguage?: string;
+  bankDetails?: { iban?: string; swift?: string; bitLink?: string };
+  clientOptions: BillingClient[];
+  onClose: () => void;
+  onSubmit: (client: BillingClient, items: BillingLineItem[]) => void;
+  isSubmitting: boolean;
+}) {
+  const [selectedClient, setSelectedClient] = useState<BillingClient | null>(null);
+  const [lineItems, setLineItems] = useState<BillingLineItem[]>([emptyLineItem()]);
+
+  const addLine = useCallback(() => setLineItems((p) => [...p, emptyLineItem()]), []);
+  const removeLine = useCallback((id: string) => setLineItems((p) => (p.length <= 1 ? p : p.filter((i) => i.id !== id))), []);
+  const updateLine = useCallback((id: string, patch: Partial<BillingLineItem>) => {
+    setLineItems((p) => p.map((i) => (i.id === id ? { ...i, ...patch } : i)));
+  }, []);
+
+  const validItems = useMemo(
+    () => lineItems.filter((i) => i.description.trim() || i.quantity > 0 || i.unitPrice > 0),
+    [lineItems]
+  );
+
+  const handleSubmit = useCallback(() => {
+    if (!selectedClient) return;
+    const items = validItems.length > 0 ? validItems : [emptyLineItem()];
+    const normalized = items.map((i) => ({
+      ...i,
+      id: i.id || generateUUID(),
+      description: i.description.trim() || "Item",
+      quantity: Math.max(0, Number(i.quantity)),
+      unitPrice: Math.max(0, Number(i.unitPrice)),
+    }));
+    onSubmit(selectedClient, normalized);
+  }, [selectedClient, validItems, onSubmit]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[110] flex justify-end bg-black/40" onClick={onClose}>
+      <motion.div
+        initial={{ x: "100%" }}
+        animate={{ x: 0 }}
+        exit={{ x: "100%" }}
+        transition={{ type: "tween", duration: 0.25 }}
+        className="w-full max-w-lg bg-white border-l border-gray-100 shadow-xl flex flex-col max-h-screen"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 flex-shrink-0">
+          <h2 className="font-semibold text-gray-900 text-lg">{title}</h2>
+          <button type="button" onClick={onClose} className="p-2 rounded-sm text-gray-500 hover:bg-gray-100" aria-label="Close">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Document Number</label>
+            <p className="text-sm font-medium text-gray-900">#{docNumberPreview}</p>
+          </div>
+          {documentLanguage && (
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Document Language</label>
+              <p className="text-sm text-gray-700">{documentLanguage === "he" ? "Hebrew" : documentLanguage === "en" ? "English" : "Bilingual"}</p>
+            </div>
+          )}
+          {type === "invoice" && bankDetails && (bankDetails.iban || bankDetails.swift || bankDetails.bitLink) && (
+            <div className="rounded-sm border border-gray-100 p-3 bg-gray-50/50">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Bank Details (included on invoice)</label>
+              {bankDetails.iban && <p className="text-sm text-gray-700">IBAN: {bankDetails.iban}</p>}
+              {bankDetails.swift && <p className="text-sm text-gray-700">SWIFT: {bankDetails.swift}</p>}
+              {bankDetails.bitLink && <p className="text-sm text-gray-700">Payment link: {bankDetails.bitLink}</p>}
+            </div>
+          )}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Client</label>
+            <select
+              value={selectedClient?.id ?? ""}
+              onChange={(e) => {
+                const c = clientOptions.find((x) => x.id === e.target.value) ?? null;
+                setSelectedClient(c);
+              }}
+              className="w-full rounded-sm border border-gray-100 px-3 py-2 text-sm text-gray-900 bg-white"
+            >
+              <option value="">Select client…</option>
+              {clientOptions.map((c) => (
+                <option key={c.id} value={c.id}>{c.name} {c.email ? `(${c.email})` : ""}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-gray-700">Line Items</label>
+              <button type="button" onClick={addLine} className="text-xs font-medium text-gray-600 hover:text-gray-900 flex items-center gap-1">
+                <Plus className="w-3.5 h-3.5" /> Add line
+              </button>
+            </div>
+            <div className="space-y-2">
+              {lineItems.map((item) => (
+                <div key={item.id} className="grid grid-cols-[1fr_70px_90px_auto] gap-2 items-center rounded-sm border border-gray-100 p-2">
+                  <input
+                    type="text"
+                    value={item.description}
+                    onChange={(e) => updateLine(item.id, { description: e.target.value })}
+                    placeholder="Description"
+                    className="rounded-sm border border-gray-100 px-2 py-1.5 text-xs"
+                  />
+                  <input
+                    type="number"
+                    min={0}
+                    value={item.quantity}
+                    onChange={(e) => updateLine(item.id, { quantity: parseFloat(e.target.value) || 0 })}
+                    placeholder="Qty"
+                    className="rounded-sm border border-gray-100 px-2 py-1.5 text-xs"
+                  />
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={item.unitPrice}
+                    onChange={(e) => updateLine(item.id, { unitPrice: parseFloat(e.target.value) || 0 })}
+                    placeholder="Price"
+                    className="rounded-sm border border-gray-100 px-2 py-1.5 text-xs"
+                  />
+                  <button type="button" onClick={() => removeLine(item.id)} className="p-1.5 rounded-sm text-gray-400 hover:bg-gray-100 hover:text-red-600" aria-label="Remove">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-2 p-4 border-t border-gray-100 flex-shrink-0">
+          <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-sm border border-gray-100 text-gray-700 font-medium">Cancel</button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={!selectedClient || isSubmitting}
+            className="flex-1 py-2.5 rounded-sm text-white font-semibold disabled:opacity-50"
+            style={{ backgroundColor: TEAL }}
+          >
+            {isSubmitting ? "Creating…" : "Create"}
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
 export default function DocumentsPage() {
   const { locale } = useLocale();
   const {
     documents,
     clients: billingClients,
     expenses,
+    businessProfile,
     downloadPdf,
     getShareLink,
     addExpense,
+    createDraft,
+    convertToQuote,
     convertQuoteToInvoice,
+    createDeliveryNote,
     convertDeliveryNoteToInvoice,
     createReceipt,
     markPaid,
@@ -224,6 +396,8 @@ export default function DocumentsPage() {
   const [openMenuDocId, setOpenMenuDocId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [previewExpense, setPreviewExpense] = useState<BillingExpense | null>(null);
+  type CreateModalType = "quote" | "invoice" | "receipt" | "delivery_note" | "credit_note" | "expense";
+  const [createModal, setCreateModal] = useState<CreateModalType | null>(null);
 
   const showSuccessToast = useCallback((message: string) => {
     setToastMessage(message);
@@ -371,12 +545,68 @@ export default function DocumentsPage() {
       const contact = contacts.find((c) => c.id === contactId || c.phone === contactId);
       byId.set(contactId, { id: contactId, name: contact?.name ?? contactId });
     });
-    // also include any clients present on documents
     documents.forEach((d) => {
       if (!byId.has(d.clientId)) byId.set(d.clientId, { id: d.clientId, name: d.clientName || d.clientId });
     });
     return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [billingClients, chatList, contacts, documents]);
+
+  const billingClientOptions = useMemo((): BillingClient[] => {
+    return clientOptions.map(({ id, name }) => {
+      const fromBilling = billingClients.find((c) => c.id === id);
+      if (fromBilling) return fromBilling;
+      const fromDoc = documents.find((d) => d.clientId === id);
+      if (fromDoc) return { id, name, email: fromDoc.clientEmail, phone: fromDoc.clientPhone, address: fromDoc.clientAddress, taxId: fromDoc.clientTaxId };
+      const contact = contacts.find((c) => c.id === id || c.phone === id);
+      return { id, name, email: contact?.email, phone: contact?.phone };
+    });
+  }, [clientOptions, billingClients, documents, contacts]);
+
+  const [createDocSubmitting, setCreateDocSubmitting] = useState(false);
+  const handleCreateDocument = useCallback(
+    (type: "quote" | "invoice" | "delivery_note") =>
+      (client: BillingClient, items: BillingLineItem[]) => {
+        setCreateDocSubmitting(true);
+        setTimeout(() => {
+          try {
+            if (type === "delivery_note") {
+              const doc = createDeliveryNote(client, items);
+              if (doc) {
+                setCreateModal(null);
+                setActiveTab("delivery_notes");
+                showSuccessToast("Delivery note created");
+              }
+            } else {
+              const draft = createDraft(client, items);
+              if (!draft) {
+                setCreateDocSubmitting(false);
+                return;
+              }
+              const quote = convertToQuote(draft.id);
+              if (!quote) {
+                setCreateDocSubmitting(false);
+                return;
+              }
+              if (type === "invoice") {
+                const inv = convertQuoteToInvoice(quote.id);
+                if (inv) {
+                  setCreateModal(null);
+                  setActiveTab("invoices");
+                  showSuccessToast("Invoice created");
+                }
+              } else {
+                setCreateModal(null);
+                setActiveTab("quotes");
+                showSuccessToast("Quote created");
+              }
+            }
+          } finally {
+            setCreateDocSubmitting(false);
+          }
+        }, 300);
+      },
+    [createDraft, convertToQuote, convertQuoteToInvoice, createDeliveryNote, showSuccessToast]
+  );
 
   const inRange = (iso: string) => {
     if (dateFrom && iso < dateFrom) return false;
@@ -581,8 +811,8 @@ export default function DocumentsPage() {
       <main className="flex-1 px-4 py-4">
         {activeTab !== "expenses" ? (
           <div className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
-            {/* Section header: bold small-caps */}
-            <div className="px-4 py-2 border-b border-gray-100 bg-gray-50/50">
+            {/* Section header: title + Create New button */}
+            <div className="px-4 py-2 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between gap-3">
               <h2 className="text-xs font-bold uppercase tracking-wider text-gray-600">
                 {activeTab === "quotes" && "Pending Quotes"}
                 {activeTab === "invoices" && "Recent Invoices"}
@@ -590,6 +820,41 @@ export default function DocumentsPage() {
                 {activeTab === "delivery_notes" && "Delivery Notes"}
                 {activeTab === "cancellations" && "Canceled Documents"}
               </h2>
+              {activeTab !== "cancellations" && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCreateModal(
+                      activeTab === "quotes"
+                        ? "quote"
+                        : activeTab === "invoices"
+                          ? "invoice"
+                          : activeTab === "receipts"
+                            ? "receipt"
+                            : "delivery_note"
+                    )
+                  }
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[13px] font-semibold text-white shrink-0 transition-opacity hover:opacity-90"
+                  style={{ backgroundColor: TEAL }}
+                >
+                  <Plus className="w-4 h-4" />
+                  {activeTab === "quotes" && (locale === "he" ? "הצעת מחיר חדשה" : "New Quote")}
+                  {activeTab === "invoices" && (locale === "he" ? "חשבונית חדשה" : "New Invoice")}
+                  {activeTab === "receipts" && (locale === "he" ? "קבלה חדשה" : "New Receipt")}
+                  {activeTab === "delivery_notes" && (locale === "he" ? "תעודת משלוח חדשה" : "New Delivery Note")}
+                </button>
+              )}
+              {activeTab === "cancellations" && (
+                <button
+                  type="button"
+                  onClick={() => setCreateModal("credit_note")}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[13px] font-semibold text-white shrink-0 transition-opacity hover:opacity-90"
+                  style={{ backgroundColor: TEAL }}
+                >
+                  <Plus className="w-4 h-4" />
+                  New Credit Note
+                </button>
+              )}
             </div>
             <table className="w-full text-xs">
               <thead className="bg-gray-50/80 border-b border-gray-100">
@@ -761,16 +1026,28 @@ export default function DocumentsPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            <div className="flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={handleScanReceipt}
-                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-100 bg-white text-[12px] font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
-              >
-                <Camera className="w-4 h-4 text-gray-600" />
-                Scan Receipt
-              </button>
-              <button
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCreateModal("expense")}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
+                  style={{ backgroundColor: TEAL }}
+                >
+                  <Plus className="w-4 h-4" />
+                  {locale === "he" ? "הוצאה חדשה" : "New Expense"}
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleScanReceipt}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-100 bg-white text-[12px] font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  <Camera className="w-4 h-4 text-gray-600" />
+                  Scan Receipt
+                </button>
+                <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-100 bg-gray-50/70 text-[12px] font-semibold text-gray-700 hover:bg-gray-100 transition-colors"
@@ -836,6 +1113,129 @@ export default function DocumentsPage() {
           </div>
         )}
       </main>
+
+      {/* Create document slide-over (Quote / Invoice / Delivery Note) */}
+      <AnimatePresence>
+        {(createModal === "quote" || createModal === "invoice" || createModal === "delivery_note") && (
+          <DocumentCreateSlideOver
+            open
+            type={createModal}
+            title={
+              createModal === "quote"
+                ? "New Quote"
+                : createModal === "invoice"
+                  ? "New Invoice"
+                  : "New Delivery Note"
+            }
+            docNumberPreview={
+              createModal === "quote"
+                ? getNextNumberPreview("quote")
+                : createModal === "invoice"
+                  ? getNextNumberPreview("invoice")
+                  : getNextNumberPreview("deliveryNote")
+            }
+            documentLanguage={businessProfile?.documentLanguage}
+            bankDetails={createModal === "invoice" ? businessProfile?.bankDetails : undefined}
+            clientOptions={billingClientOptions}
+            onClose={() => setCreateModal(null)}
+            onSubmit={handleCreateDocument(createModal)}
+            isSubmitting={createDocSubmitting}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Create Receipt: select paid invoice */}
+      {createModal === "receipt" && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50" onClick={() => setCreateModal(null)}>
+          <div className="bg-white rounded-sm border border-gray-100 shadow-xl max-w-md w-full max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+              <h2 className="font-semibold text-gray-900">New Receipt — Select paid invoice</h2>
+              <button type="button" onClick={() => setCreateModal(null)} className="p-2 rounded-sm text-gray-500 hover:bg-gray-100">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {documents.filter((d) => d.type === "invoice" && (d.status as string) === "paid").length === 0 ? (
+                <p className="text-sm text-gray-500">No paid invoices. Mark an invoice as paid first.</p>
+              ) : (
+                <ul className="space-y-1">
+                  {documents
+                    .filter((d) => d.type === "invoice" && (d.status as string) === "paid")
+                    .map((inv) => (
+                      <li key={inv.id}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (createReceipt(inv.id)) {
+                              setCreateModal(null);
+                              setActiveTab("receipts");
+                              showSuccessToast("Receipt created");
+                            }
+                          }}
+                          className="w-full text-left px-3 py-2 rounded-sm border border-gray-100 hover:bg-gray-50 text-sm font-medium text-gray-900"
+                        >
+                          Invoice #{inv.number} · {inv.clientName} · {formatMoney(inv.total || 0)}
+                        </button>
+                      </li>
+                    ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Credit Note: select invoice */}
+      {createModal === "credit_note" && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50" onClick={() => setCreateModal(null)}>
+          <div className="bg-white rounded-sm border border-gray-100 shadow-xl max-w-md w-full max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+              <h2 className="font-semibold text-gray-900">New Credit Note — Select invoice to cancel</h2>
+              <button type="button" onClick={() => setCreateModal(null)} className="p-2 rounded-sm text-gray-500 hover:bg-gray-100">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {documents.filter((d) => d.type === "invoice" && (d.status as string) !== "canceled").length === 0 ? (
+                <p className="text-sm text-gray-500">No invoices to cancel.</p>
+              ) : (
+                <ul className="space-y-1">
+                  {documents
+                    .filter((d) => d.type === "invoice" && (d.status as string) !== "canceled")
+                    .map((inv) => (
+                      <li key={inv.id}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (issueCreditNote(inv.id)) {
+                              setCreateModal(null);
+                              setActiveTab("cancellations");
+                              showSuccessToast("Credit note issued");
+                            }
+                          }}
+                          className="w-full text-left px-3 py-2 rounded-sm border border-gray-100 hover:bg-gray-50 text-sm font-medium text-gray-900"
+                        >
+                          Invoice #{inv.number} · {inv.clientName} · {formatMoney(inv.total || 0)}
+                        </button>
+                      </li>
+                    ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Expense modal */}
+      <ExpenseModal
+        open={createModal === "expense"}
+        onClose={() => setCreateModal(null)}
+        onSave={(e) => {
+          addExpense(e);
+          setCreateModal(null);
+          showSuccessToast("Expense added");
+        }}
+      />
 
       {/* Expense preview */}
       <AnimatePresence>

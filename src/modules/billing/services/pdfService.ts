@@ -95,7 +95,6 @@ export async function generateDocumentPdf(
   pdf.setFontSize(9).setTextColor(80, 80, 80);
   if (from.taxId) pdf.text(`Tax ID: ${from.taxId}`, MARGIN, y), (y += 5);
   if (from.address) pdf.text(from.address, MARGIN, y), (y += 5);
-  if (from.bankDetails.iban) pdf.text(`IBAN: ${from.bankDetails.iban}`, MARGIN, y), (y += 5);
   y += 8;
 
   // Doc type & number
@@ -162,6 +161,25 @@ export async function generateDocumentPdf(
   pdf.setFontSize(10).setFont(undefined, "bold");
   pdf.text("Total", tableX + 92, y + 4);
   pdf.text(doc.total.toFixed(2), tableX + 126, y + 4);
+  y += 10;
+
+  // Bank details: only on tax invoices (not on receipts)
+  const showBankDetails = doc.type === "invoice" && from.bankDetails && (from.bankDetails.iban || from.bankDetails.bankName || from.bankDetails.accountNumber);
+  if (showBankDetails) {
+    pdf.setDrawColor(220, 220, 220);
+    pdf.line(MARGIN, y, PAGE_W - MARGIN, y);
+    y += 6;
+    pdf.setFontSize(9).setTextColor(60, 60, 60);
+    pdf.text("Bank details for payment", MARGIN, y);
+    y += 5;
+    if (from.bankDetails.bankName) pdf.text(from.bankDetails.bankName, MARGIN, y), (y += 5);
+    if (from.bankDetails.branchNumber || from.bankDetails.accountNumber) {
+      pdf.text([from.bankDetails.branchNumber, from.bankDetails.accountNumber].filter(Boolean).join(" / "), MARGIN, y);
+      y += 5;
+    }
+    if (from.bankDetails.iban) pdf.text(`IBAN: ${from.bankDetails.iban}`, MARGIN, y), (y += 5);
+    y += 4;
+  }
 
   // Footer on first page
   addFooter(pdf, contentHash, signedAt, options.qrDataUrl ?? null, 1, 1);

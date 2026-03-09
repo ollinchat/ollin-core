@@ -17,6 +17,12 @@ import {
 } from "../types";
 import * as vault from "../vault/documentVault";
 import { generateUUID } from "@/lib/uuid";
+import {
+  getNextQuoteNumber,
+  getNextInvoiceNumber,
+  getNextReceiptNumber,
+  getNextDeliveryNoteNumber,
+} from "@/lib/document-numbering";
 
 function nextNumber(prefix: string, existing: BillingDocument[]): string {
   const used = new Set(existing.map((d) => d.number));
@@ -81,8 +87,7 @@ export function createDraft(
 export function convertDraftToQuote(userId: string, draftId: string): BillingQuote | null {
   const draft = vault.getDocumentById(userId, draftId);
   if (!draft || draft.type !== "draft") return null;
-  const docs = vault.getAllDocuments(userId);
-  const number = nextNumber("Q", docs.filter((d) => d.type === "quote"));
+  const number = getNextQuoteNumber();
   const quote: BillingQuote = {
     ...draft,
     id: generateUUID(),
@@ -100,8 +105,7 @@ export function convertDraftToQuote(userId: string, draftId: string): BillingQuo
 export function convertQuoteToInvoice(userId: string, quoteId: string): BillingInvoice | null {
   const quote = vault.getDocumentById(userId, quoteId) as BillingQuote | null;
   if (!quote || quote.type !== "quote") return null;
-  const docs = vault.getAllDocuments(userId);
-  const number = nextNumber("INV", docs.filter((d) => d.type === "invoice"));
+  const number = getNextInvoiceNumber();
   const invoice: BillingInvoice = {
     ...quote,
     id: generateUUID(),
@@ -120,8 +124,7 @@ export function convertDeliveryNoteToInvoice(userId: string, deliveryNoteId: str
   const dn = vault.getDocumentById(userId, deliveryNoteId) as BillingDeliveryNote | null;
   if (!dn || dn.type !== "delivery_note") return null;
   if (dn.status === "canceled") return null;
-  const docs = vault.getAllDocuments(userId);
-  const number = nextNumber("INV", docs.filter((d) => d.type === "invoice"));
+  const number = getNextInvoiceNumber();
   const totals = baseFromItems(dn.items, dn.vatRate ?? BILLING_VAT_RATE);
   const invoice: BillingInvoice = {
     ...dn,
@@ -153,8 +156,7 @@ export function markInvoicePaid(userId: string, invoiceId: string): BillingInvoi
 export function createReceiptForInvoice(userId: string, invoiceId: string): BillingReceipt | null {
   const invoice = vault.getDocumentById(userId, invoiceId) as BillingInvoice | null;
   if (!invoice || invoice.type !== "invoice" || invoice.status !== "paid") return null;
-  const docs = vault.getAllDocuments(userId);
-  const number = nextNumber("RCP", docs.filter((d) => d.type === "receipt"));
+  const number = getNextReceiptNumber();
   const receipt: BillingReceipt = {
     ...invoice,
     id: generateUUID(),
@@ -166,6 +168,45 @@ export function createReceiptForInvoice(userId: string, invoiceId: string): Bill
   };
   vault.createDocument(userId, receipt);
   return receipt;
+}
+
+/** Create a new delivery note (standalone, not from quote). */
+export function createDeliveryNote(
+  userId: string,
+  clientId: string,
+  clientName: string,
+  clientEmail?: string,
+  clientPhone?: string,
+  clientAddress?: string,
+  clientTaxId?: string,
+  items: BillingLineItem[] = [{ id: generateUUID(), description: "Item", quantity: 1, unitPrice: 0 }]
+): BillingDeliveryNote {
+  const number = getNextDeliveryNoteNumber();
+  const { subtotal, vatAmount, total } = baseFromItems(items, BILLING_VAT_RATE);
+  const now = Date.now();
+  const doc: BillingDeliveryNote = {
+    id: generateUUID(),
+    number,
+    type: "delivery_note",
+    status: "draft",
+    issuerUserId: userId,
+    clientId,
+    clientName,
+    clientEmail,
+    clientPhone,
+    clientAddress,
+    clientTaxId,
+    items,
+    subtotal,
+    vatRate: BILLING_VAT_RATE,
+    vatAmount,
+    total,
+    date: nowIso(),
+    createdAt: now,
+    updatedAt: now,
+    auditTrail: [],
+  };
+  return vault.createDocument(userId, doc) as BillingDeliveryNote;
 }
 
 /** Issue credit note for an invoice (cancel). Invoice becomes canceled and is immutable. */
