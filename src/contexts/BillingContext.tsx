@@ -45,10 +45,10 @@ type BillingContextType = {
   expenses: BillingExpense[];
   addExpense: (e: Omit<BillingExpense, "id" | "createdAt">) => BillingExpense | null;
   removeExpense: (id: string) => void;
-  createDraft: (client: BillingClient, items?: BillingLineItem[]) => BillingDocument | null;
+  createDraft: (client: BillingClient, items?: BillingLineItem[], notes?: string) => BillingDocument | null;
   convertToQuote: (draftId: string) => BillingDocument | null;
   convertQuoteToInvoice: (quoteId: string) => BillingDocument | null;
-  createDeliveryNote: (client: BillingClient, items?: BillingLineItem[]) => BillingDocument | null;
+  createDeliveryNote: (client: BillingClient, items?: BillingLineItem[], notes?: string) => BillingDocument | null;
   convertDeliveryNoteToInvoice: (deliveryNoteId: string) => BillingDocument | null;
   markPaid: (invoiceId: string) => BillingDocument | null;
   createReceipt: (invoiceId: string) => BillingDocument | null;
@@ -335,7 +335,7 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
   );
 
   const createDraft = useCallback(
-    (client: BillingClient, items?: BillingLineItem[]) => {
+    (client: BillingClient, items?: BillingLineItem[], notes?: string) => {
       if (!userId) return null;
       const doc = documentService.createDraft(
         userId,
@@ -345,7 +345,8 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
         client.phone,
         client.address,
         client.taxId,
-        items
+        items,
+        notes
       );
       refreshDocuments();
       return doc;
@@ -374,7 +375,7 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
   );
 
   const createDeliveryNote = useCallback(
-    (client: BillingClient, items?: BillingLineItem[]) => {
+    (client: BillingClient, items?: BillingLineItem[], notes?: string) => {
       if (!userId) return null;
       const doc = documentService.createDeliveryNote(
         userId,
@@ -384,7 +385,8 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
         client.phone,
         client.address,
         client.taxId,
-        items
+        items,
+        notes
       );
       refreshDocuments();
       return doc;

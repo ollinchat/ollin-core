@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocale } from "@/contexts/LocaleContext";
@@ -77,6 +77,7 @@ function companyDisplayName(profile: { name?: string; nameEn?: string; nameHe?: 
 const TEAL = "#008080";
 
 type TabId = "quotes" | "invoices" | "receipts" | "delivery_notes" | "cancellations" | "expenses";
+type CreateModalType = "quote" | "invoice" | "receipt" | "delivery_note" | "credit_note" | "expense";
 type UiStatus = "draft" | "pending" | "paid" | "canceled" | "overdue";
 
 function docTypeLabel(t: BillingDocument["type"]): string {
@@ -200,6 +201,8 @@ function emptyLineItem(): BillingLineItem {
   return { id: generateUUID(), description: "", quantity: 1, unitPrice: 0 };
 }
 
+const VAT_RATE_PCT = 17;
+
 function DocumentCreateSlideOver({
   open,
   type,
@@ -208,6 +211,7 @@ function DocumentCreateSlideOver({
   documentLanguage,
   bankDetails,
   clientOptions,
+  locale,
   onClose,
   onSubmit,
   isSubmitting,
@@ -217,14 +221,16 @@ function DocumentCreateSlideOver({
   title: string;
   docNumberPreview: string;
   documentLanguage?: string;
-  bankDetails?: { iban?: string; swift?: string; bitLink?: string };
+  bankDetails?: { bankName?: string; iban?: string; swift?: string; bitLink?: string };
   clientOptions: BillingClient[];
+  locale: "en" | "he";
   onClose: () => void;
-  onSubmit: (client: BillingClient, items: BillingLineItem[]) => void;
+  onSubmit: (client: BillingClient, items: BillingLineItem[], notes?: string) => void;
   isSubmitting: boolean;
 }) {
   const [selectedClient, setSelectedClient] = useState<BillingClient | null>(null);
   const [lineItems, setLineItems] = useState<BillingLineItem[]>([emptyLineItem()]);
+  const [notes, setNotes] = useState("");
 
   const addLine = useCallback(() => setLineItems((p) => [...p, emptyLineItem()]), []);
   const removeLine = useCallback((id: string) => setLineItems((p) => (p.length <= 1 ? p : p.filter((i) => i.id !== id))), []);
@@ -237,6 +243,12 @@ function DocumentCreateSlideOver({
     [lineItems]
   );
 
+  const { subtotal, vatAmount, total } = useMemo(() => {
+    const st = validItems.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
+    const vat = Math.round((st * VAT_RATE_PCT) / 100 * 100) / 100;
+    return { subtotal: st, vatAmount: vat, total: st + vat };
+  }, [validItems]);
+
   const handleSubmit = useCallback(() => {
     if (!selectedClient) return;
     const items = validItems.length > 0 ? validItems : [emptyLineItem()];
@@ -247,10 +259,32 @@ function DocumentCreateSlideOver({
       quantity: Math.max(0, Number(i.quantity)),
       unitPrice: Math.max(0, Number(i.unitPrice)),
     }));
-    onSubmit(selectedClient, normalized);
-  }, [selectedClient, validItems, onSubmit]);
+    onSubmit(selectedClient, normalized, notes.trim() || undefined);
+  }, [selectedClient, validItems, notes, onSubmit]);
 
   if (!open) return null;
+
+  const t = {
+    docNumber: locale === "he" ? "מס׳ מסמך" : "Document Number",
+    docLanguage: locale === "he" ? "שפת מסמך" : "Document Language",
+    bankDetails: locale === "he" ? "פרטי בנק" : "Bank Details",
+    bankName: locale === "he" ? "שם הבנק" : "Bank Name",
+    client: locale === "he" ? "לקוח" : "Client",
+    lineItems: locale === "he" ? "פריטים" : "Line Items",
+    addLine: locale === "he" ? "הוסף שורה" : "Add line",
+    description: locale === "he" ? "תיאור" : "Description",
+    qty: locale === "he" ? "כמות" : "Qty",
+    price: locale === "he" ? "מחיר" : "Price",
+    subtotal: locale === "he" ? "סיכום ביניים" : "Subtotal",
+    vat: locale === "he" ? "מע\"מ" : "VAT",
+    total: locale === "he" ? "סה\"כ" : "Total",
+    notes: locale === "he" ? "הערות" : "Notes",
+    notesPlaceholder: locale === "he" ? "הערות (אופציונלי)" : "Notes (optional)",
+    selectClient: locale === "he" ? "בחר לקוח…" : "Select client…",
+    cancel: locale === "he" ? "ביטול" : "Cancel",
+    create: locale === "he" ? "צור" : "Create",
+    creating: locale === "he" ? "יוצר…" : "Creating…",
+  };
 
   return (
     <div className="fixed inset-0 z-[110] flex justify-end bg-black/40" onClick={onClose}>
@@ -270,25 +304,26 @@ function DocumentCreateSlideOver({
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Document Number</label>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">{t.docNumber}</label>
             <p className="text-sm font-medium text-gray-900">#{docNumberPreview}</p>
           </div>
           {documentLanguage && (
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Document Language</label>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">{t.docLanguage}</label>
               <p className="text-sm text-gray-700">{documentLanguage === "he" ? "Hebrew" : documentLanguage === "en" ? "English" : "Bilingual"}</p>
             </div>
           )}
-          {type === "invoice" && bankDetails && (bankDetails.iban || bankDetails.swift || bankDetails.bitLink) && (
+          {type === "invoice" && bankDetails && (bankDetails.bankName || bankDetails.iban || bankDetails.swift || bankDetails.bitLink) && (
             <div className="rounded-sm border border-gray-100 p-3 bg-gray-50/50">
-              <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Bank Details (included on invoice)</label>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">{t.bankDetails}</label>
+              {bankDetails.bankName && <p className="text-sm text-gray-700">{t.bankName}: {bankDetails.bankName}</p>}
               {bankDetails.iban && <p className="text-sm text-gray-700">IBAN: {bankDetails.iban}</p>}
               {bankDetails.swift && <p className="text-sm text-gray-700">SWIFT: {bankDetails.swift}</p>}
               {bankDetails.bitLink && <p className="text-sm text-gray-700">Payment link: {bankDetails.bitLink}</p>}
             </div>
           )}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Client</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t.client}</label>
             <select
               value={selectedClient?.id ?? ""}
               onChange={(e) => {
@@ -297,7 +332,7 @@ function DocumentCreateSlideOver({
               }}
               className="w-full rounded-sm border border-gray-100 px-3 py-2 text-sm text-gray-900 bg-white"
             >
-              <option value="">Select client…</option>
+              <option value="">{t.selectClient}</option>
               {clientOptions.map((c) => (
                 <option key={c.id} value={c.id}>{c.name} {c.email ? `(${c.email})` : ""}</option>
               ))}
@@ -305,9 +340,9 @@ function DocumentCreateSlideOver({
           </div>
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="block text-sm font-medium text-gray-700">Line Items</label>
+              <label className="block text-sm font-medium text-gray-700">{t.lineItems}</label>
               <button type="button" onClick={addLine} className="text-xs font-medium text-gray-600 hover:text-gray-900 flex items-center gap-1">
-                <Plus className="w-3.5 h-3.5" /> Add line
+                <Plus className="w-3.5 h-3.5" /> {t.addLine}
               </button>
             </div>
             <div className="space-y-2">
@@ -317,7 +352,7 @@ function DocumentCreateSlideOver({
                     type="text"
                     value={item.description}
                     onChange={(e) => updateLine(item.id, { description: e.target.value })}
-                    placeholder="Description"
+                    placeholder={t.description}
                     className="rounded-sm border border-gray-100 px-2 py-1.5 text-xs"
                   />
                   <input
@@ -325,7 +360,7 @@ function DocumentCreateSlideOver({
                     min={0}
                     value={item.quantity}
                     onChange={(e) => updateLine(item.id, { quantity: parseFloat(e.target.value) || 0 })}
-                    placeholder="Qty"
+                    placeholder={t.qty}
                     className="rounded-sm border border-gray-100 px-2 py-1.5 text-xs"
                   />
                   <input
@@ -334,7 +369,7 @@ function DocumentCreateSlideOver({
                     step={0.01}
                     value={item.unitPrice}
                     onChange={(e) => updateLine(item.id, { unitPrice: parseFloat(e.target.value) || 0 })}
-                    placeholder="Price"
+                    placeholder={t.price}
                     className="rounded-sm border border-gray-100 px-2 py-1.5 text-xs"
                   />
                   <button type="button" onClick={() => removeLine(item.id)} className="p-1.5 rounded-sm text-gray-400 hover:bg-gray-100 hover:text-red-600" aria-label="Remove">
@@ -343,10 +378,34 @@ function DocumentCreateSlideOver({
                 </div>
               ))}
             </div>
+            <div className="mt-2 rounded-sm border border-gray-100 p-3 bg-gray-50/50 text-xs">
+              <div className="flex justify-between text-gray-600">
+                <span>{t.subtotal}</span>
+                <span className="tabular-nums">{formatMoney(subtotal)}</span>
+              </div>
+              <div className="flex justify-between text-gray-600 mt-1">
+                <span>{t.vat} ({VAT_RATE_PCT}%)</span>
+                <span className="tabular-nums">{formatMoney(vatAmount)}</span>
+              </div>
+              <div className="flex justify-between font-semibold text-gray-900 mt-1 pt-1 border-t border-gray-100">
+                <span>{t.total}</span>
+                <span className="tabular-nums">{formatMoney(total)}</span>
+              </div>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t.notes}</label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder={t.notesPlaceholder}
+              rows={2}
+              className="w-full rounded-sm border border-gray-100 px-3 py-2 text-sm text-gray-900 bg-white resize-none"
+            />
           </div>
         </div>
         <div className="flex gap-2 p-4 border-t border-gray-100 flex-shrink-0">
-          <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-sm border border-gray-100 text-gray-700 font-medium">Cancel</button>
+          <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-sm border border-gray-100 text-gray-700 font-medium">{t.cancel}</button>
           <button
             type="button"
             onClick={handleSubmit}
@@ -354,7 +413,7 @@ function DocumentCreateSlideOver({
             className="flex-1 py-2.5 rounded-sm text-white font-semibold disabled:opacity-50"
             style={{ backgroundColor: TEAL }}
           >
-            {isSubmitting ? "Creating…" : "Create"}
+            {isSubmitting ? t.creating : t.create}
           </button>
         </div>
       </motion.div>
@@ -396,7 +455,6 @@ export default function DocumentsPage() {
   const [openMenuDocId, setOpenMenuDocId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [previewExpense, setPreviewExpense] = useState<BillingExpense | null>(null);
-  type CreateModalType = "quote" | "invoice" | "receipt" | "delivery_note" | "credit_note" | "expense";
   const [createModal, setCreateModal] = useState<CreateModalType | null>(null);
 
   const showSuccessToast = useCallback((message: string) => {
@@ -565,19 +623,19 @@ export default function DocumentsPage() {
   const [createDocSubmitting, setCreateDocSubmitting] = useState(false);
   const handleCreateDocument = useCallback(
     (type: "quote" | "invoice" | "delivery_note") =>
-      (client: BillingClient, items: BillingLineItem[]) => {
+      (client: BillingClient, items: BillingLineItem[], notes?: string) => {
         setCreateDocSubmitting(true);
         setTimeout(() => {
           try {
             if (type === "delivery_note") {
-              const doc = createDeliveryNote(client, items);
+              const doc = createDeliveryNote(client, items, notes);
               if (doc) {
                 setCreateModal(null);
                 setActiveTab("delivery_notes");
                 showSuccessToast("Delivery note created");
               }
             } else {
-              const draft = createDraft(client, items);
+              const draft = createDraft(client, items, notes);
               if (!draft) {
                 setCreateDocSubmitting(false);
                 return;
@@ -1067,6 +1125,7 @@ export default function DocumentsPage() {
                   handleUploadExpenseFile(f);
                 }}
               />
+              </div>
             </div>
 
             <div className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
@@ -1137,6 +1196,7 @@ export default function DocumentsPage() {
             documentLanguage={businessProfile?.documentLanguage}
             bankDetails={createModal === "invoice" ? businessProfile?.bankDetails : undefined}
             clientOptions={billingClientOptions}
+            locale={locale}
             onClose={() => setCreateModal(null)}
             onSubmit={handleCreateDocument(createModal)}
             isSubmitting={createDocSubmitting}

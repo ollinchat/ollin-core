@@ -81,6 +81,8 @@ export interface BillingDocumentBase {
   total: number;
   date: string; // ISO date
   dueDate?: string;
+  /** Free-text notes (הערות) */
+  notes?: string;
   createdAt: number;
   updatedAt: number;
   /** SHA-256 hash when finalized (invoice issued / receipt) */

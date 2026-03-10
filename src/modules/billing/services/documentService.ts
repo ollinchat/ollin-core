@@ -53,7 +53,8 @@ export function createDraft(
   clientPhone?: string,
   clientAddress?: string,
   clientTaxId?: string,
-  items: BillingLineItem[] = [{ id: generateUUID(), description: "Item", quantity: 1, unitPrice: 0 }]
+  items: BillingLineItem[] = [{ id: generateUUID(), description: "Item", quantity: 1, unitPrice: 0 }],
+  notes?: string
 ): BillingDocument {
   const docs = vault.getAllDocuments(userId);
   const number = nextNumber("DRAFT", docs);
@@ -77,6 +78,7 @@ export function createDraft(
     vatAmount,
     total,
     date: nowIso(),
+    notes,
     createdAt: now,
     updatedAt: now,
     auditTrail: [],
@@ -179,7 +181,8 @@ export function createDeliveryNote(
   clientPhone?: string,
   clientAddress?: string,
   clientTaxId?: string,
-  items: BillingLineItem[] = [{ id: generateUUID(), description: "Item", quantity: 1, unitPrice: 0 }]
+  items: BillingLineItem[] = [{ id: generateUUID(), description: "Item", quantity: 1, unitPrice: 0 }],
+  notes?: string
 ): BillingDeliveryNote {
   const number = getNextDeliveryNoteNumber();
   const { subtotal, vatAmount, total } = baseFromItems(items, BILLING_VAT_RATE);
@@ -202,6 +205,7 @@ export function createDeliveryNote(
     vatAmount,
     total,
     date: nowIso(),
+    notes,
     createdAt: now,
     updatedAt: now,
     auditTrail: [],
