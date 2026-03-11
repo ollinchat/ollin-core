@@ -203,17 +203,36 @@ export async function generateDocumentPdf(
   });
 
   const formatPdfAmount = (n: number) => (n < 0 ? `-${(-n).toFixed(2)}` : n.toFixed(2));
+  const totalDiscountAmount = doc.items.reduce((sum, i) => {
+    const pct = i.discountPct ?? 0;
+    if (pct <= 0) return sum;
+    return sum + Math.round(i.quantity * i.unitPrice * (pct / 100) * 100) / 100;
+  }, 0);
   const totalsLabelX = tableX + tableW - 44;
   const totalsValueX = tableX + tableW - 22;
   y += 4;
-  pdf.setFontSize(8);
+  pdf.setDrawColor(220, 220, 220);
+  pdf.line(tableX, y, tableX + tableW, y);
+  y += 5;
+  pdf.setFontSize(8).setTextColor(60, 60, 60);
+  if (hasDiscount && totalDiscountAmount > 0) {
+    const subtotalBefore = doc.subtotal + totalDiscountAmount;
+    pdf.text("Subtotal (before discount)", totalsLabelX, y + 3);
+    pdf.text(formatPdfAmount(subtotalBefore), totalsValueX, y + 3);
+    y += 4;
+    pdf.text("Discount", totalsLabelX, y + 3);
+    pdf.setTextColor(0, 128, 0);
+    pdf.text(`-${formatPdfAmount(totalDiscountAmount)}`, totalsValueX, y + 3);
+    pdf.setTextColor(60, 60, 60);
+    y += 4;
+  }
   pdf.text("Subtotal", totalsLabelX, y + 3);
   pdf.text(formatPdfAmount(doc.subtotal), totalsValueX, y + 3);
   y += 4;
   pdf.text(`VAT (${doc.vatRate}%)`, totalsLabelX, y + 3);
   pdf.text(formatPdfAmount(doc.vatAmount), totalsValueX, y + 3);
   y += 4;
-  pdf.setFontSize(9).setFont(undefined, "bold");
+  pdf.setFontSize(9).setFont(undefined, "bold").setTextColor(0, 0, 0);
   pdf.text("Total", totalsLabelX, y + 3);
   pdf.text(formatPdfAmount(doc.total), totalsValueX, y + 3);
   y += 6;

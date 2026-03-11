@@ -230,6 +230,12 @@ function UnifiedDocumentPreview({
     const pct = i.discountPct ?? 0;
     return Math.round(i.quantity * i.unitPrice * (1 - pct / 100) * 100) / 100;
   };
+  const totalDiscountAmount = items.reduce((sum, i) => {
+    const pct = i.discountPct ?? 0;
+    if (pct <= 0) return sum;
+    return sum + Math.round(i.quantity * i.unitPrice * (pct / 100) * 100) / 100;
+  }, 0);
+  const subtotalBeforeDiscount = subtotal + totalDiscountAmount;
   const docTypeLabel =
     docType === "invoice" ? (lang === "he" ? "חשבונית" : "Invoice")
     : docType === "quote" ? (lang === "he" ? "הצעת מחיר" : "Quote")
@@ -242,10 +248,17 @@ function UnifiedDocumentPreview({
   const textSizeSmall = compact ? "text-[9px]" : "text-[10px]";
   const hasBank = bankDetails && (bankDetails.bankName || bankDetails.branchNumber || bankDetails.accountNumber || bankDetails.iban || bankDetails.swift || bankDetails.bitLink);
   const formatAmount = (n: number) => (n < 0 ? `-${currencySymbol}${formatMoney(-n)}` : `${currencySymbol}${formatMoney(n)}`);
+  const LsubtotalBefore = lang === "he" ? "סיכום לפני הנחה" : "Subtotal (before discount)";
+  const Ldiscount = lang === "he" ? "הנחה" : "Discount";
   return (
     <div
-      className={`relative bg-white rounded-none border border-gray-200 overflow-hidden ${compact ? "shadow-md max-w-[420px]" : "shadow-xl"} ${scale}`}
-      style={{ fontFamily: "Inter, var(--font-sans), ui-sans-serif, system-ui, sans-serif", width: compact ? undefined : 595, minHeight: compact ? undefined : 842 }}
+      className={`relative bg-white overflow-hidden ${compact ? "shadow-md max-w-[420px]" : "shadow-lg border border-gray-200"} ${scale}`}
+      style={{
+        fontFamily: "Inter, var(--font-sans), ui-sans-serif, system-ui, sans-serif",
+        width: compact ? undefined : 595,
+        height: compact ? undefined : 842,
+        minHeight: compact ? undefined : 842,
+      }}
     >
       {isCanceled && (
         <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none" aria-hidden>
@@ -342,21 +355,29 @@ function UnifiedDocumentPreview({
           </div>
         )}
 
-        {/* Totals – compact */}
-        <div className={`mt-2 pt-2 border-t border-gray-200 space-y-0.5 ${textSize}`}>
+        {/* Totals: Subtotal → Discount (if exists) → VAT → Total */}
+        <div className={`mt-2 pt-2 border-t-2 border-gray-200 space-y-1 ${textSize}`}>
+          {hasAnyDiscount && totalDiscountAmount > 0 && (
+            <>
+              <div className="flex justify-between text-gray-600">
+                <span>{LsubtotalBefore}</span>
+                <span className="tabular-nums">{formatAmount(subtotalBeforeDiscount)}</span>
+              </div>
+              <div className="flex justify-between text-gray-600">
+                <span>{Ldiscount}</span>
+                <span className="tabular-nums text-emerald-600">-{currencySymbol}{formatMoney(totalDiscountAmount)}</span>
+              </div>
+            </>
+          )}
           <div className="flex justify-between text-gray-600">
             <span>{L.subtotal}</span>
-            <span className="tabular-nums">{formatAmount(subtotal)}</span>
-          </div>
-          <div className="flex justify-between text-gray-600">
-            <span>{L.vatBase}</span>
             <span className="tabular-nums">{formatAmount(subtotal)}</span>
           </div>
           <div className="flex justify-between text-gray-600">
             <span>{L.vatRateLabel(vatRate)}</span>
             <span className="tabular-nums">{formatAmount(vatAmount)}</span>
           </div>
-          <div className="flex justify-between font-bold pt-1 text-gray-900" style={{ color: TEAL }}>
+          <div className="flex justify-between font-bold pt-1 text-gray-900 border-t border-gray-200" style={{ color: TEAL }}>
             <span>{L.grandTotal}</span>
             <span className="tabular-nums">{formatAmount(total)}</span>
           </div>
@@ -1925,15 +1946,16 @@ export default function DocumentsPage() {
         </AnimatePresence>
       </section>
 
-      {/* Tabs */}
+      {/* Tabs – sharp corners, smooth transition */}
       <div className="px-4 pt-3">
-        <div className="flex gap-2 p-1.5 rounded-2xl bg-gray-100/80 overflow-x-auto border border-gray-100 shadow-sm">
+        <div className="flex gap-1 p-1 bg-gray-100 border border-gray-200 overflow-x-auto">
           {tabs.map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => setActiveTab(t.id)}
-              className={`flex-1 min-w-0 py-3 px-4 rounded-xl text-[13px] flex items-center justify-center gap-1.5 whitespace-nowrap transition-all duration-200 ${activeTab === t.id ? "bg-white shadow-sm text-gray-900 font-semibold border border-gray-100" : "text-gray-500 font-medium hover:text-gray-700 hover:bg-white/60"}`}
+              className={`flex-1 min-w-0 py-2.5 px-3 text-[13px] flex items-center justify-center gap-1.5 whitespace-nowrap transition-all duration-200 ${activeTab === t.id ? "bg-white text-gray-900 font-semibold border border-gray-200 shadow-sm" : "text-gray-500 font-medium hover:text-gray-700 hover:bg-white/70"}`}
+              style={{ fontFamily: "Inter, var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
             >
               {t.icon}
               {t.label}
@@ -1942,18 +1964,26 @@ export default function DocumentsPage() {
         </div>
       </div>
 
-      {/* Table */}
-      <main className="flex-1 px-4 py-4">
+      {/* Main content */}
+      <main className="flex-1 px-4 py-4" style={{ fontFamily: "Inter, var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+        <AnimatePresence mode="wait">
         {activeTab !== "expenses" ? (
-          <div className="rounded-2xl bg-white border border-gray-100 shadow-md overflow-visible">
-            {/* Section header: title + Create New button */}
-            <div className="px-4 py-2 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between gap-3">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-gray-600">
-                {activeTab === "quotes" && "Pending Quotes"}
-                {activeTab === "invoices" && "Recent Invoices"}
-                {activeTab === "receipts" && "Receipts"}
-                {activeTab === "delivery_notes" && "Delivery Notes"}
-                {activeTab === "cancellations" && "Canceled Documents"}
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="bg-white border border-gray-200 shadow-sm overflow-visible"
+          >
+            {/* Section header */}
+            <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between gap-3">
+              <h2 className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                {activeTab === "quotes" && (locale === "he" ? "הצעות מחיר" : "Quotes")}
+                {activeTab === "invoices" && (locale === "he" ? "חשבוניות" : "Invoices")}
+                {activeTab === "receipts" && (locale === "he" ? "קבלות" : "Receipts")}
+                {activeTab === "delivery_notes" && (locale === "he" ? "תעודות משלוח" : "Delivery Notes")}
+                {activeTab === "cancellations" && (locale === "he" ? "מבוטלים" : "Cancellations")}
               </h2>
               {activeTab !== "cancellations" && (
                 <button
@@ -1969,7 +1999,7 @@ export default function DocumentsPage() {
                             : "delivery_note"
                     )
                   }
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[13px] font-semibold text-white shrink-0 transition-all duration-150 hover:opacity-90 hover:shadow-md"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-[13px] font-semibold text-white shrink-0 transition-all duration-150 hover:opacity-90 shadow-sm"
                   style={{ backgroundColor: TEAL }}
                 >
                   <Plus className="w-4 h-4" />
@@ -1983,17 +2013,17 @@ export default function DocumentsPage() {
                 <button
                   type="button"
                   onClick={() => setCreateModal("credit_note")}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[13px] font-semibold text-white shrink-0 transition-all duration-150 hover:opacity-90 hover:shadow-md"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-[13px] font-semibold text-white shrink-0 transition-all duration-150 hover:opacity-90 shadow-sm"
                   style={{ backgroundColor: TEAL }}
                 >
                   <Plus className="w-4 h-4" />
-                  New Credit Note
+                  {locale === "he" ? "מסמך זיכוי חדש" : "New Credit Note"}
                 </button>
               )}
             </div>
 
-            {/* Luxury filter bar: unified horizontal bar, Search button, thin borders, sharp corners */}
-            <div className="px-4 py-3 border-b border-gray-100 bg-white">
+            {/* Filter bar */}
+            <div className="px-4 py-3 border-b border-gray-200 bg-white">
               {/* Mobile: Filter button that opens drawer */}
               <div className="flex items-center gap-2 lg:hidden">
                 <button
@@ -2206,41 +2236,41 @@ export default function DocumentsPage() {
               )}
             </AnimatePresence>
 
-            <table className="w-full text-xs">
-              <thead className="bg-gray-50/80 border-b border-gray-100">
-                <tr>
-                  <th className="text-left px-4 py-2 text-xs font-semibold text-gray-600 whitespace-nowrap">{locale === "he" ? "סוג / מס'" : "Type / Number"}</th>
-                  <th className="text-left px-4 py-2 text-xs font-semibold text-gray-600 whitespace-nowrap">{locale === "he" ? "לקוח" : "Client"}</th>
-                  <th className="text-left px-4 py-2 text-xs font-semibold text-gray-600 whitespace-nowrap">{locale === "he" ? "תאריך" : "Date"}</th>
-                  <th className="text-right px-4 py-2 text-xs font-semibold text-gray-600 whitespace-nowrap">{locale === "he" ? "סכום" : "Amount"}</th>
-                  <th className="text-left px-4 py-2 text-xs font-semibold text-gray-600 whitespace-nowrap">{locale === "he" ? "סטטוס" : "Status"}</th>
-                  <th className="text-right px-4 py-2 text-xs font-semibold text-gray-600 whitespace-nowrap" />
+            <table className="w-full border-collapse" style={{ fontFamily: "Inter, var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+              <thead>
+                <tr className="border-b border-gray-200 bg-gray-50/90">
+                  <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">{locale === "he" ? "נושא / מסמך" : "Subject / Document"}</th>
+                  <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wider hidden sm:table-cell">{locale === "he" ? "לקוח" : "Client"}</th>
+                  <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">{locale === "he" ? "תאריך" : "Date"}</th>
+                  <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">{locale === "he" ? "סכום" : "Amount"}</th>
+                  <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wider w-[100px]">{locale === "he" ? "סטטוס" : "Status"}</th>
+                  <th className="w-12 px-2 py-2.5" aria-label="Actions" />
                 </tr>
               </thead>
               <tbody>
                 {filteredDocs.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-16 text-center">
-                      <div className="flex flex-col items-center justify-center max-w-sm mx-auto">
-                        <div className="w-16 h-16 rounded-2xl bg-gray-100/80 flex items-center justify-center mb-4" style={{ color: TEAL }}>
-                          <FileText className="w-8 h-8 opacity-70" />
+                    <td colSpan={6} className="px-4 py-20 text-center">
+                      <div className="flex flex-col items-center justify-center max-w-xs mx-auto">
+                        <div className="w-14 h-14 flex items-center justify-center mb-3 opacity-60" style={{ color: TEAL }}>
+                          <FileText className="w-9 h-9" strokeWidth={1.2} />
                         </div>
-                        <p className="text-[15px] font-semibold text-gray-700 mb-1" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+                        <p className="text-[15px] font-semibold text-gray-800 mb-0.5">
                           {locale === "he" ? "לא נמצאו מסמכים" : "No documents found"}
                         </p>
-                        <p className="text-[13px] text-gray-500 mb-4" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+                        <p className="text-[13px] text-gray-500 mb-4">
                           {activeTab === "cancellations"
-                            ? (locale === "he" ? "אין מסמכים מבוטלים או מסמכי זיכוי" : "No canceled documents or credit notes in this view.")
-                            : (locale === "he" ? "בחר טווח תאריכים או לקוח אחר" : "Try adjusting date range or client filter.")}
+                            ? (locale === "he" ? "אין מסמכים מבוטלים או מסמכי זיכוי" : "No canceled documents or credit notes.")
+                            : (locale === "he" ? "נסה טווח תאריכים או לקוח אחר" : "Try date range or client filter.")}
                         </p>
                         {hasActiveFilters && (
                           <button
                             type="button"
                             onClick={clearFilters}
-                            className="rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-[13px] font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all duration-150 shadow-sm"
-                            style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
+                            className="px-4 py-2 text-[13px] font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 transition-colors"
+                            style={{ fontFamily: "Inter, var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
                           >
-                            {locale === "he" ? "נקה מסננים" : "Clear Filters"}
+                            {locale === "he" ? "נקה מסננים" : "Clear filters"}
                           </button>
                         )}
                       </div>
@@ -2257,32 +2287,41 @@ export default function DocumentsPage() {
                     const canCancelQuote = d.type === "quote" && notCanceled;
                     const canCancelDeliveryNote = d.type === "delivery_note" && notCanceled;
                     const canCancelReceipt = d.type === "receipt" && notCanceled;
-                    const titleOrType = (d.title && d.title.trim()) ? d.title.trim() : `${docTypeLabel(d.type)} #${d.number}`;
+                    const subject = (d.title && d.title.trim()) ? d.title.trim() : (locale === "he" ? "ללא כותרת" : "No title");
+                    const metaLine = `${docTypeLabel(d.type)} #${d.number}`;
                     return (
-                      <React.Fragment key={d.id}>
-                        {!isCanceled && (
-                          <tr className="bg-gray-50/30">
-                            <td colSpan={6} className="px-4 py-1.5 border-b border-gray-100 text-gray-800">
-                              <span className="font-bold text-gray-900" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif", fontSize: "13px" }}>
-                                {d.title && d.title.trim() ? d.title : (locale === "he" ? "ללא כותרת" : "No title")}
-                              </span>
-                            </td>
-                          </tr>
-                        )}
-                        <tr className={`border-b border-gray-50 transition-colors duration-150 ${isCanceled ? "bg-gray-100/60 hover:bg-gray-100/80" : "hover:bg-gray-50/70"}`}>
-                        <td className={`px-4 py-2 font-medium whitespace-nowrap ${isCanceled ? "text-gray-500" : "text-gray-900"}`} style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif", fontSize: "13px" }}>
-                          {isCanceled ? titleOrType : `${docTypeLabel(d.type)} #${d.number}`}
+                      <tr
+                        key={d.id}
+                        className={`border-b border-gray-100 transition-colors duration-150 ${isCanceled ? "bg-gray-50/70 hover:bg-gray-50" : "hover:bg-gray-50/50"}`}
+                      >
+                        <td className="px-4 py-2.5 align-top">
+                          <div className="min-w-0">
+                            <p className={`font-semibold truncate ${isCanceled ? "text-gray-500" : "text-gray-900"}`} style={{ fontSize: "13px" }}>
+                              {subject}
+                            </p>
+                            <p className={`text-[12px] mt-0.5 ${isCanceled ? "text-gray-400" : "text-gray-500"}`}>
+                              {metaLine}
+                            </p>
+                          </div>
                         </td>
-                        <td className={`px-4 py-2 whitespace-nowrap ${isCanceled ? "text-gray-400" : "text-gray-600"}`}>{d.clientName || "—"}</td>
-                        <td className={`px-4 py-2 whitespace-nowrap ${isCanceled ? "text-gray-400" : "text-gray-600"}`}>{docDateIso(d)}</td>
-                        <td className={`px-4 py-2 text-right font-medium tabular-nums whitespace-nowrap ${isCanceled ? "text-gray-400" : "text-gray-900"}`}>{formatMoney(d.total || 0)}</td>
-                        <td className="px-4 py-2 whitespace-nowrap"><StatusBadge status={uiStatus} locale={locale} /></td>
-                        <td className="px-4 py-2 text-right whitespace-nowrap">
+                        <td className={`px-4 py-2.5 align-top hidden sm:table-cell text-[13px] ${isCanceled ? "text-gray-400" : "text-gray-600"}`}>
+                          {d.clientName || "—"}
+                        </td>
+                        <td className={`px-4 py-2.5 align-top text-[13px] whitespace-nowrap ${isCanceled ? "text-gray-400" : "text-gray-600"}`}>
+                          {docDateIso(d)}
+                        </td>
+                        <td className={`px-4 py-2.5 align-top text-right font-medium tabular-nums text-[13px] ${isCanceled ? "text-gray-400" : "text-gray-900"}`}>
+                          {formatMoney(d.total || 0)}
+                        </td>
+                        <td className="px-4 py-2.5 align-top">
+                          <StatusBadge status={uiStatus} locale={locale} />
+                        </td>
+                        <td className="px-2 py-2.5 align-top text-right">
                           <div className="relative inline-flex">
                             <button
                               type="button"
                               onClick={() => setOpenMenuDocId((prev) => (prev === d.id ? null : d.id))}
-                              className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:bg-gray-200/80 hover:text-gray-900 transition-all duration-150"
+                              className="inline-flex items-center justify-center min-w-[40px] min-h-[40px] text-gray-500 hover:bg-gray-200 hover:text-gray-900 transition-colors touch-manipulation"
                               aria-haspopup="menu"
                               aria-expanded={openMenuDocId === d.id}
                               aria-label="More actions"
@@ -2298,8 +2337,7 @@ export default function DocumentsPage() {
                                   animate={{ opacity: 1, y: 0, scale: 1 }}
                                   exit={{ opacity: 0, y: -6, scale: 0.98 }}
                                   transition={{ duration: 0.15, ease: "easeOut" }}
-                                  className="absolute right-0 top-[calc(100%+0.5rem)] z-[220] w-56 rounded-none border border-gray-100 bg-white p-1 min-w-[12rem]"
-                                  style={{ boxShadow: "0 4px 24px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04)" }}
+                                  className="absolute right-0 top-full mt-1 z-[220] w-56 border border-gray-200 bg-white p-1 min-w-[12rem] shadow-lg"
                                   role="menu"
                                 >
                                   <button
@@ -2421,16 +2459,15 @@ export default function DocumentsPage() {
                             </AnimatePresence>
                           </div>
                         </td>
-                        </tr>
-                      </React.Fragment>
+                      </tr>
                     );
                   })
                 )}
               </tbody>
             </table>
-          </div>
+          </motion.div>
         ) : (
-          <div className="space-y-3">
+          <motion.div key="expenses" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="space-y-3">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="flex items-center gap-2">
                 <button
@@ -2584,8 +2621,9 @@ export default function DocumentsPage() {
                 </tbody>
               </table>
             </div>
-          </div>
+          </motion.div>
         )}
+        </AnimatePresence>
       </main>
 
       {/* Create document slide-over (Quote / Invoice / Delivery Note) */}
@@ -2633,7 +2671,7 @@ export default function DocumentsPage() {
         return (
           <div className="fixed inset-0 z-[200] flex flex-col bg-black/50" onClick={() => setPreviewDocId(null)}>
             <div className="flex-1 overflow-y-auto overflow-x-auto p-6 flex justify-center min-h-0" onClick={(e) => e.stopPropagation()}>
-              <div className="flex-shrink-0 w-full bg-white shadow-xl rounded-none" style={{ width: 595, minHeight: 842, maxWidth: "100%" }}>
+              <div className="flex-shrink-0 bg-white border border-gray-200 shadow-lg" style={{ width: 595, height: 842, maxWidth: "100%" }}>
                 <UnifiedDocumentPreview
                   company={{
                     name: businessProfile?.legalName ?? "",
