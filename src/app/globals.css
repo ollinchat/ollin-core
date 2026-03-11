@@ -169,9 +169,14 @@ nav a,
 
 /* Visibility tracker: pulse dot when < 5 min left */
 @keyframes visibility-dot-pulse {
-  0%, 100% { opacity: 1; transform: translate(50%, -50%) scale(1); }
-  50% { opacity: 0.85; transform: translate(50%, -50%) scale(1.12); }
+  0%, 100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 0.85; transform: translate(-50%, -50%) scale(1.12); }
 }
 .visibility-dot-pulse {
   animation: visibility-dot-pulse 1.5s ease-in-out infinite;
+}
+
+/* Live visibility bar: subtle Ollin Green glow when timer is active */
+.visibility-bar-live {
+  box-shadow: 0 0 12px rgba(0, 128, 128, 0.2);
 }

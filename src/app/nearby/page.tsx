@@ -34,6 +34,12 @@ function formatVisibleDuration(minutes: number): string {
   return hours === 1 ? "1 hour" : `${hours} hours`;
 }
 
+function formatVisibleDurationShort(minutes: number): string {
+  if (minutes < 60) return `${minutes}m`;
+  const hours = minutes / 60;
+  return `${hours}h`;
+}
+
 function formatTimeLeft(seconds: number): string {
   if (seconds <= 0) return "0m left";
   const m = Math.floor(seconds / 60);
@@ -67,12 +73,18 @@ export default function NearbyPage() {
   const [starredSearch, setStarredSearch] = useState("");
   const [starredSort, setStarredSort] = useState<StarredSort>("newest");
   const [starredFilterOpen, setStarredFilterOpen] = useState(false);
+  const [showSliderTooltip, setShowSliderTooltip] = useState(false);
 
   const startVisibility = useCallback((minutes: number) => {
     const total = minutes * 60;
     setTotalDurationSeconds(total);
     setVisibilityEndTime(Date.now() + total * 1000);
     setRemainingSeconds(total);
+  }, []);
+
+  const stopVisibility = useCallback(() => {
+    setVisibilityEndTime(0);
+    setRemainingSeconds(0);
   }, []);
 
   useEffect(() => {
@@ -85,12 +97,6 @@ export default function NearbyPage() {
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [visibilityEndTime]);
-
-  useEffect(() => {
-    if (remainingSeconds === 0 && visibilityEndTime > 0 && totalDurationSeconds > 0) {
-      setVisibilityEndTime(0);
-    }
-  }, [remainingSeconds, visibilityEndTime, totalDurationSeconds]);
 
   const allFiltered = MOCK_PEOPLE.filter((p) => p.distanceMeters <= distanceMeters);
   const starredBase = MOCK_PEOPLE.filter((p) => starredIds.has(p.id));
@@ -129,11 +135,10 @@ export default function NearbyPage() {
     });
   };
 
-  useEffect(() => {
-    startVisibility(visibleMinutes);
-  }, []);
-
-  const isVisible = remainingSeconds > 0 || visibilityEndTime > 0;
+  const isRunning = remainingSeconds > 0 && visibilityEndTime > 0;
+  const timeBarPercent = isRunning
+    ? (remainingSeconds / totalDurationSeconds) * 100
+    : ((visibleMinutes - VISIBLE_DURATION_MIN) / (VISIBLE_DURATION_MAX - VISIBLE_DURATION_MIN)) * 100;
 
   return (
     <div className="min-h-screen bg-white flex flex-col" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
@@ -151,41 +156,103 @@ export default function NearbyPage() {
         <div className="w-10" />
       </header>
 
-      {/* Animated Live Visibility Tracker */}
-      <section className="flex-shrink-0 px-4 py-4 border-b border-gray-200 bg-white">
-        {isVisible && remainingSeconds > 0 ? (
+      {/* Modern visibility: time bar + status + Stop Sharing */}
+      <section className="flex-shrink-0 px-4 py-5 border-b border-gray-200 bg-white">
+        {isRunning ? (
           <>
-            <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1">
-              {locale === "he" ? "זמן נותר לחשיפה" : "Time remaining for visibility"}
-            </p>
-            <p className="text-2xl font-semibold tabular-nums text-gray-900 mb-3" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
-              {formatDigitalCountdown(remainingSeconds)}
-            </p>
-            <div className="relative h-2 w-full bg-gray-200 rounded-none overflow-visible">
-              <div
-                className="absolute inset-y-0 left-0 bg-[#008080] rounded-none transition-[width] duration-1000 ease-linear"
-                style={{ width: `${Math.max(0, Math.min(100, (remainingSeconds / totalDurationSeconds) * 100))}%` }}
-              >
-                <span
-                  className={`absolute right-0 top-1/2 w-4 h-4 rounded-full bg-white border-2 border-[#008080] shadow-sm ${remainingSeconds > 0 && remainingSeconds < 300 ? "visibility-dot-pulse" : ""}`}
-                  style={{ transform: "translate(50%, -50%)" }}
-                />
-              </div>
+            <div className="flex flex-wrap items-baseline justify-between gap-3 mb-3">
+              <p className="text-sm font-medium text-gray-900 tabular-nums" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+                {locale === "he" ? "זמן נותר:" : "Time remaining:"} {formatDigitalCountdown(remainingSeconds)}
+              </p>
+              <p className="text-sm font-medium text-gray-600" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+                {locale === "he" ? "הגדרה:" : "Setting:"} {formatVisibleDuration(Math.round(totalDurationSeconds / 60))}
+              </p>
             </div>
+            <div className="relative w-full rounded-none overflow-visible py-3 visibility-bar-live">
+              <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-gray-200 rounded-none" aria-hidden />
+              <div
+                className="absolute left-0 top-1/2 -translate-y-1/2 h-px bg-[#008080] rounded-none transition-[width] duration-1000 ease-linear"
+                style={{ width: `${Math.max(0, Math.min(100, timeBarPercent))}%` }}
+              />
+              <span
+                className={`absolute top-1/2 w-5 h-5 rounded-none bg-white border-2 border-[#008080] shadow-sm -translate-y-1/2 ${remainingSeconds > 0 && remainingSeconds < 300 ? "visibility-dot-pulse" : ""}`}
+                style={{ left: `${Math.max(0, Math.min(100, timeBarPercent))}%`, transform: "translate(-50%, -50%)" }}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={stopVisibility}
+              className="w-full mt-3 py-2.5 rounded-none bg-white border-2 border-red-400 text-red-600 text-sm font-semibold hover:bg-red-50 hover:border-red-500 transition-colors"
+              style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
+            >
+              {locale === "he" ? "הפסק שיתוף" : "Stop Sharing"}
+            </button>
           </>
-        ) : (
-          <div className="flex flex-col gap-2">
-            <p className="text-xs font-medium text-gray-500">
+        ) : visibilityEndTime > 0 && remainingSeconds === 0 ? (
+          <div className="flex flex-col gap-3">
+            <p className="text-sm font-medium text-gray-500" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
               {locale === "he" ? "הנראות פגה" : "Visibility Expired"}
             </p>
             <button
               type="button"
               onClick={() => startVisibility(visibleMinutes)}
-              className="w-full py-2 rounded-none bg-[#008080] text-white text-sm font-semibold hover:bg-[#006666] transition-colors"
+              className="w-full py-2.5 rounded-none bg-[#008080] text-white text-sm font-semibold hover:bg-[#006666] transition-colors"
             >
               {locale === "he" ? "הפעל שוב" : "Re-activate"}
             </button>
           </div>
+        ) : (
+          <>
+            <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-2" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+              {locale === "he" ? "נראה עבור" : "Visible for"} {formatVisibleDuration(visibleMinutes)}
+            </p>
+            <div className="relative w-full flex items-center rounded-none min-h-[44px] py-2">
+              <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-gray-200 rounded-none" aria-hidden />
+              <div
+                className="absolute left-0 top-1/2 -translate-y-1/2 h-px bg-[#008080] rounded-none pointer-events-none transition-[width] duration-150"
+                style={{ width: `${timeBarPercent}%` }}
+              />
+              {showSliderTooltip && (
+                <span
+                  className="absolute z-10 px-2 py-1 rounded-none bg-gray-900 text-white text-xs font-medium whitespace-nowrap -translate-x-1/2 pointer-events-none"
+                  style={{
+                    left: `${timeBarPercent}%`,
+                    bottom: "100%",
+                    marginBottom: 8,
+                    fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif",
+                  }}
+                >
+                  {formatVisibleDurationShort(visibleMinutes)}
+                </span>
+              )}
+              <span
+                className="absolute top-1/2 w-5 h-5 rounded-none bg-white border-2 border-[#008080] shadow-sm -translate-y-1/2 pointer-events-none"
+                style={{ left: `${timeBarPercent}%`, transform: "translate(-50%, -50%)" }}
+              />
+              <input
+                type="range"
+                min={VISIBLE_DURATION_MIN}
+                max={VISIBLE_DURATION_MAX}
+                step={15}
+                value={visibleMinutes}
+                onChange={(e) => setVisibleMinutes(Number(e.target.value))}
+                onPointerDown={() => setShowSliderTooltip(true)}
+                onPointerUp={() => setShowSliderTooltip(false)}
+                onPointerLeave={() => setShowSliderTooltip(false)}
+                onPointerCancel={() => setShowSliderTooltip(false)}
+                className="absolute inset-0 w-full h-full min-h-[44px] opacity-0 cursor-pointer touch-manipulation"
+                style={{ touchAction: "none" }}
+                aria-label={locale === "he" ? "קביעת משך נראות" : "Set visibility duration"}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => startVisibility(visibleMinutes)}
+              className="w-full mt-4 py-2.5 rounded-none bg-[#008080] text-white text-sm font-semibold hover:bg-[#006666] transition-colors"
+            >
+              {locale === "he" ? "הפעל" : "Activate"}
+            </button>
+          </>
         )}
       </section>
 
@@ -268,39 +335,23 @@ export default function NearbyPage() {
           </section>
         )}
 
-        {/* Distance filter — only for All Discovered */}
+        {/* Distance filter — only for All Discovered (single bar for distance) */}
         {tab === "all" && (
-          <section className="px-4 py-4 border-b border-gray-200 space-y-4">
-            <div>
-              <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1.5">Distance</p>
-              <div className="flex gap-2">
-                {RADIUS_OPTIONS.map((r) => (
-                  <button
-                    key={r}
-                    type="button"
-                    onClick={() => setDistanceMeters(r)}
-                    className={`flex-1 py-2 rounded-none text-xs font-semibold border transition-colors ${
-                      distanceMeters === r ? "bg-[#008080] text-white border-[#008080]" : "bg-white text-gray-600 border-gray-300 hover:border-gray-400"
-                    }`}
-                  >
-                    {r === 100 ? "100m" : `${r}m`}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1.5">
-                Visible for {formatVisibleDuration(visibleMinutes)}
-              </p>
-              <input
-                type="range"
-                min={VISIBLE_DURATION_MIN}
-                max={VISIBLE_DURATION_MAX}
-                step={15}
-                value={visibleMinutes}
-                onChange={(e) => setVisibleMinutes(Number(e.target.value))}
-                className="w-full h-1.5 rounded-none appearance-none bg-gray-200 accent-[#008080] cursor-pointer"
-              />
+          <section className="px-4 py-4 border-b border-gray-200">
+            <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1.5">Distance</p>
+            <div className="flex gap-2">
+              {RADIUS_OPTIONS.map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setDistanceMeters(r)}
+                  className={`flex-1 py-2 rounded-none text-xs font-semibold border transition-colors ${
+                    distanceMeters === r ? "bg-[#008080] text-white border-[#008080]" : "bg-white text-gray-600 border-gray-300 hover:border-gray-400"
+                  }`}
+                >
+                  {r === 100 ? "100m" : `${r}m`}
+                </button>
+              ))}
             </div>
           </section>
         )}
