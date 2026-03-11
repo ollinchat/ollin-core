@@ -109,13 +109,24 @@ export async function generateDocumentPdf(
             ? "Delivery Note"
             : doc.type === "credit_note"
               ? "Credit Note"
-              : "Draft";
+              : doc.type === "negative_receipt"
+                ? "Negative Receipt"
+                : "Draft";
   pdf.setFontSize(16).setTextColor(0, 102, 102);
   pdf.text(`${typeLabel} ${doc.number}`, PAGE_W - MARGIN, MARGIN, { align: "right" });
   y = Math.max(y, MARGIN + 10);
   pdf.setFontSize(9).setTextColor(100, 100, 100);
   pdf.text(`Date: ${doc.date}`, PAGE_W - MARGIN, y, { align: "right" });
-  y += 12;
+  y += 5;
+  if (doc.type === "credit_note" && doc.creditForInvoiceNumber) {
+    pdf.text(`For Invoice #${doc.creditForInvoiceNumber}`, PAGE_W - MARGIN, y, { align: "right" });
+    y += 5;
+  }
+  if (doc.type === "negative_receipt" && doc.originalReceiptNumber) {
+    pdf.text(`For Receipt #${doc.originalReceiptNumber}`, PAGE_W - MARGIN, y, { align: "right" });
+    y += 5;
+  }
+  y += 7;
 
   // To (client)
   pdf.setFontSize(11).setTextColor(0, 0, 0);
@@ -150,21 +161,22 @@ export async function generateDocumentPdf(
     y += 6;
   });
 
+  const formatPdfAmount = (n: number) => (n < 0 ? `-${(-n).toFixed(2)}` : n.toFixed(2));
   y += 6;
   pdf.setFontSize(9);
   pdf.text("Subtotal", tableX + 92, y + 4);
-  pdf.text(doc.subtotal.toFixed(2), tableX + 126, y + 4);
+  pdf.text(formatPdfAmount(doc.subtotal), tableX + 126, y + 4);
   y += 6;
   pdf.text(`VAT (${doc.vatRate}%)`, tableX + 92, y + 4);
-  pdf.text(doc.vatAmount.toFixed(2), tableX + 126, y + 4);
+  pdf.text(formatPdfAmount(doc.vatAmount), tableX + 126, y + 4);
   y += 6;
   pdf.setFontSize(10).setFont(undefined, "bold");
   pdf.text("Total", tableX + 92, y + 4);
-  pdf.text(doc.total.toFixed(2), tableX + 126, y + 4);
+  pdf.text(formatPdfAmount(doc.total), tableX + 126, y + 4);
   y += 10;
 
-  // Bank details: only on tax invoices (not on receipts)
-  const showBankDetails = doc.type === "invoice" && from.bankDetails && (from.bankDetails.iban || from.bankDetails.bankName || from.bankDetails.accountNumber);
+  // Bank details: on invoices, credit notes, and negative receipts (every A4 issued doc)
+  const showBankDetails = (doc.type === "invoice" || doc.type === "credit_note" || doc.type === "negative_receipt") && from.bankDetails && (from.bankDetails.iban || from.bankDetails.bankName || from.bankDetails.accountNumber);
   if (showBankDetails) {
     pdf.setDrawColor(220, 220, 220);
     pdf.line(MARGIN, y, PAGE_W - MARGIN, y);
