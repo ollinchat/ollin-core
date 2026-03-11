@@ -77,7 +77,13 @@ function companyDisplayName(profile: { name?: string; nameEn?: string; nameHe?: 
 const TEAL = "#008080";
 
 type TabId = "quotes" | "invoices" | "receipts" | "delivery_notes" | "cancellations" | "expenses";
-type CreateModalType = "quote" | "invoice" | "receipt" | "delivery_note" | "credit_note" | "expense";
+type CreateModalType = "quote" | "invoice" | "receipt" | "receipt_from_invoice" | "invoice_from_source" | "delivery_note" | "credit_note" | "negative_receipt" | "expense";
+type ConfirmCancelTarget = { type: "invoice"; id: string } | { type: "receipt"; id: string };
+type GenerateConfirmPayload =
+  | { type: "receipt_from_invoice"; invoiceId: string; data: import("@/modules/billing/services/documentService").ReceiptFromInvoiceData; nextNumber: string; clientName: string; total: number; markPaidFirst?: boolean }
+  | { type: "invoice_from_source"; sourceId: string; sourceType: "quote" | "delivery_note"; data: import("@/modules/billing/services/documentService").InvoiceFromSourceData; nextNumber: string; clientName: string; total: number }
+  | { type: "credit_note"; invoiceId: string; nextNumber: string; invoiceNumber: string; total: number }
+  | { type: "negative_receipt"; receiptId: string; nextNumber: string; receiptNumber: string; total: number };
 type UiStatus = "draft" | "pending" | "paid" | "canceled" | "overdue";
 
 function docTypeLabel(t: BillingDocument["type"]): string {
@@ -108,19 +114,25 @@ function numberToWordsEn(n: number): string {
   return numberToWordsEn(Math.floor(n / 1000)) + " Thousand" + (n % 1000 ? " " + numberToWordsEn(n % 1000) : "");
 }
 
-function StatusBadge({ status }: { status: UiStatus }) {
+function StatusBadge({ status, locale = "en" }: { status: UiStatus; locale?: "en" | "he" }) {
   const cls =
     status === "paid"
-      ? "bg-green-100/70 text-green-700 font-semibold"
+      ? "bg-emerald-100/80 text-emerald-700 font-semibold"
       : status === "overdue"
         ? "bg-red-100/60 text-red-700 font-semibold"
         : status === "pending"
           ? "bg-amber-100/60 text-amber-700 font-semibold"
           : status === "canceled"
-            ? "bg-gray-100/80 text-gray-600 font-medium"
-            : "bg-gray-100/70 text-gray-700 font-medium";
-  const label = status === "overdue" ? "Overdue" : status.charAt(0).toUpperCase() + status.slice(1);
-  return <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] ${cls}`}>{label}</span>;
+            ? "bg-gray-100/80 text-gray-500 font-medium"
+            : "bg-sky-100/70 text-sky-700 font-medium";
+  const label =
+    status === "overdue" ? (locale === "he" ? "באיחור" : "Overdue")
+    : status === "paid" ? (locale === "he" ? "שולם" : "Paid")
+    : status === "canceled" ? (locale === "he" ? "מבוטל" : "Canceled")
+    : status === "pending" ? (locale === "he" ? "ממתין" : "Pending")
+    : status === "draft" ? (locale === "he" ? "אקטיבי" : "Active")
+    : (locale === "he" ? "אקטיבי" : "Active");
+  return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium ${cls}`}>{label}</span>;
 }
 
 function docDateIso(doc: BillingDocument): string {
@@ -220,67 +232,74 @@ function UnifiedDocumentPreview({
     : docType === "negative_receipt" ? (lang === "he" ? "קבלה שלילית" : "Negative Receipt")
     : docType ?? "";
   const scale = compact ? "scale-90 origin-top" : "";
-  const textSize = compact ? "text-xs" : "text-sm";
-  const textSizeSmall = compact ? "text-[10px]" : "text-xs";
+  const textSize = compact ? "text-[10px]" : "text-[11px]";
+  const textSizeSmall = compact ? "text-[9px]" : "text-[10px]";
   const hasBank = bankDetails && (bankDetails.bankName || bankDetails.branchNumber || bankDetails.accountNumber || bankDetails.iban || bankDetails.swift || bankDetails.bitLink);
   const formatAmount = (n: number) => (n < 0 ? `-${currencySymbol}${formatMoney(-n)}` : `${currencySymbol}${formatMoney(n)}`);
   return (
     <div
-      className={`relative bg-white rounded-none border border-gray-200 overflow-hidden ${compact ? "shadow-md max-w-[420px]" : "shadow-xl max-w-[595px]"} ${scale}`}
-      style={{ fontFamily: "Inter, var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
+      className={`relative bg-white rounded-none border border-gray-200 overflow-hidden ${compact ? "shadow-md max-w-[420px]" : "shadow-xl"} ${scale}`}
+      style={{ fontFamily: "Inter, var(--font-sans), ui-sans-serif, system-ui, sans-serif", width: compact ? undefined : 595, minHeight: compact ? undefined : 842 }}
     >
       {isCanceled && (
         <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none" aria-hidden>
-          <span className="text-red-600 font-black text-4xl md:text-5xl uppercase tracking-widest opacity-90 rotate-[-12deg]" style={{ textShadow: "0 0 2px rgba(255,255,255,0.9), 0 2px 8px rgba(0,0,0,0.2)", border: "4px solid rgb(220 38 38)", padding: "0.5rem 1.5rem" }}>
+          <div
+            className="flex items-center justify-center font-black text-3xl md:text-4xl uppercase tracking-[0.2em] text-red-600 rotate-[-25deg]"
+            style={{
+              border: "3px solid rgb(185 28 28)",
+              borderRadius: 4,
+              padding: "0.6rem 1.8rem",
+              background: "rgba(254 226 226 / 0.85)",
+              boxShadow: "0 2px 12px rgba(185 28 28 / 0.35), inset 0 0 0 1px rgba(185 28 28 / 0.2)",
+              textShadow: "0 1px 2px rgba(255,255,255,0.8)",
+              minWidth: 180,
+            }}
+          >
             {lang === "he" ? "מבוטל" : "CANCELLED"}
-          </span>
+          </div>
         </div>
       )}
-      <div className={compact ? "p-3" : "p-8"}>
-        {/* Single row: From (Sender) | To (Recipient) – Israeli standard */}
-        <div className={`grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10 mb-8 border-b border-gray-200 pb-6 ${compact ? "mb-5 pb-4" : ""}`}>
-          <div>
+      <div className={compact ? "p-3" : "p-4"}>
+        {/* Single high-density row: From | To – 10–11pt, minimum vertical space */}
+        <div className={`grid grid-cols-2 gap-4 md:gap-6 border-b border-gray-200 pb-2 mb-2 ${compact ? "pb-1.5 mb-1.5" : ""}`}>
+          <div className="min-w-0">
             {company.logoUrl && (
-              <div className="mb-3">
+              <div className="mb-1">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={company.logoUrl} alt="" className={`${compact ? "h-10" : "h-12"} w-auto object-contain`} />
+                <img src={company.logoUrl} alt="" className={`${compact ? "h-8" : "h-9"} w-auto object-contain`} />
               </div>
             )}
-            <p className={`text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1`}>{L.from}</p>
-            <p className={`font-semibold text-gray-900 ${compact ? "text-sm" : "text-base"}`}>{company.name}</p>
-            {company.address && <p className={`text-gray-600 ${textSize} mt-0.5 leading-snug`}>{company.address}</p>}
-            {company.taxId && <p className={`text-gray-500 ${textSize} mt-0.5`}>{L.taxId}: {company.taxId}</p>}
+            <p className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">{L.from}</p>
+            <p className={`font-semibold text-gray-900 truncate ${textSize}`} style={{ fontSize: "10pt" }}>{company.name}</p>
+            {(company.address || company.taxId) && <p className={`text-gray-500 ${textSizeSmall} leading-tight truncate`}>{[company.address, company.taxId ? `${L.taxId}: ${company.taxId}` : ""].filter(Boolean).join(" · ")}</p>}
           </div>
-          <div>
-            <p className={`text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1`}>{L.to}</p>
-            <p className={`font-semibold text-gray-900 ${compact ? "text-sm" : "text-base"}`}>{client.name}</p>
-            {client.email && <p className={`text-gray-600 ${textSize}`}>{client.email}</p>}
-            {client.phone && <p className={`text-gray-600 ${textSize}`}>{client.phone}</p>}
-            {client.address && <p className={`text-gray-600 ${textSize}`}>{client.address}</p>}
-            {client.taxId && <p className={`text-gray-500 ${textSize}`}>{L.taxId}: {client.taxId}</p>}
+          <div className="min-w-0">
+            <p className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">{L.to}</p>
+            <p className={`font-semibold text-gray-900 truncate ${textSize}`} style={{ fontSize: "10pt" }}>{client.name}</p>
+            <p className={`text-gray-500 ${textSizeSmall} leading-tight truncate`}>{[client.email, client.phone, client.address, client.taxId ? `${L.taxId}: ${client.taxId}` : ""].filter(Boolean).join(" · ")}</p>
           </div>
         </div>
 
-        {/* Doc type, number, date, title – minimal header */}
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-4">
-          {docType && <span className={`font-semibold ${compact ? "text-sm" : "text-base"}`} style={{ color: TEAL }}>{docTypeLabel}</span>}
+        {/* Doc type, number, date – one line */}
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 mb-2">
+          {docType && <span className={`font-semibold ${textSize}`} style={{ color: TEAL }}>{docTypeLabel}</span>}
           {docNumber && <span className={`text-gray-600 ${textSizeSmall}`}>#{docNumber}</span>}
-          {creditForInvoiceNumber && <span className={`text-gray-600 ${textSizeSmall}`}>{lang === "he" ? `עבור חשבונית #${creditForInvoiceNumber}` : `For Invoice #${creditForInvoiceNumber}`}</span>}
-          {originalReceiptNumber && <span className={`text-gray-600 ${textSizeSmall}`}>{lang === "he" ? `עבור קבלה #${originalReceiptNumber}` : `For Receipt #${originalReceiptNumber}`}</span>}
+          {creditForInvoiceNumber && <span className={`text-gray-600 ${textSizeSmall}`}>{lang === "he" ? `זיכוי עבור חשבונית #${creditForInvoiceNumber}` : `Credit for Invoice #${creditForInvoiceNumber}`}</span>}
+          {originalReceiptNumber && <span className={`text-gray-600 ${textSizeSmall}`}>{docType === "negative_receipt" ? (lang === "he" ? `ביטול קבלה #${originalReceiptNumber}` : `Cancellation of Receipt #${originalReceiptNumber}`) : (lang === "he" ? `עבור קבלה #${originalReceiptNumber}` : `For Receipt #${originalReceiptNumber}`)}</span>}
           {date && <span className={`text-gray-500 ${textSizeSmall}`}>{L.docDate}: {date}</span>}
           {dueDate && <span className={`text-gray-500 ${textSizeSmall}`}>{L.dueDateLabel}: {dueDate}</span>}
           {title && title.trim() && <span className={`font-medium text-gray-900 ${textSizeSmall}`}>{title}</span>}
         </div>
 
-        {/* Items table */}
-        <table className={`w-full ${textSize} border-collapse`} style={{ tableLayout: "fixed" }}>
+        {/* Items table – dense for 15+ rows on one A4 */}
+        <table className={`w-full ${textSize} border-collapse`} style={{ tableLayout: "fixed", fontSize: "10pt" }}>
           <thead>
-            <tr className="border-b-2 border-gray-200">
-              <th className="text-left py-3 font-semibold text-gray-700 w-[40%]">{L.description}</th>
-              <th className="text-right py-3 font-semibold text-gray-700 w-[15%]">{L.price}</th>
-              <th className="text-right py-3 font-semibold text-gray-700 w-[10%]">{L.qty}</th>
-              <th className="text-right py-3 font-semibold text-gray-700 w-[15%]">{L.vat}</th>
-              <th className="text-right py-3 font-semibold text-gray-700 w-[20%]">{L.lineTotal}</th>
+            <tr className="border-b border-gray-200 bg-gray-50/80">
+              <th className="text-left py-1.5 font-semibold text-gray-700 w-[40%]">{L.description}</th>
+              <th className="text-right py-1.5 font-semibold text-gray-700 w-[15%]">{L.price}</th>
+              <th className="text-right py-1.5 font-semibold text-gray-700 w-[10%]">{L.qty}</th>
+              <th className="text-right py-1.5 font-semibold text-gray-700 w-[15%]">{L.vat}</th>
+              <th className="text-right py-1.5 font-semibold text-gray-700 w-[20%]">{L.lineTotal}</th>
             </tr>
           </thead>
           <tbody>
@@ -289,27 +308,27 @@ function UnifiedDocumentPreview({
               const lineVat = Math.round(lineTotal * (vatRate / 100) * 100) / 100;
               return (
                 <tr key={idx} className="border-b border-gray-100">
-                  <td className="py-3 text-gray-900 align-top">{i.description || "—"}</td>
-                  <td className="py-3 text-right tabular-nums text-gray-700 align-top">{currencySymbol}{formatMoney(i.unitPrice)}</td>
-                  <td className="py-3 text-right tabular-nums text-gray-700 align-top">{i.quantity}</td>
-                  <td className="py-3 text-right tabular-nums text-gray-600 align-top">{currencySymbol}{formatMoney(lineVat)}</td>
-                  <td className="py-3 text-right tabular-nums text-gray-900 font-medium align-top">{currencySymbol}{formatMoney(lineTotal)}</td>
+                  <td className="py-1 text-gray-900 align-top">{i.description || "—"}</td>
+                  <td className="py-1 text-right tabular-nums text-gray-700 align-top">{currencySymbol}{formatMoney(i.unitPrice)}</td>
+                  <td className="py-1 text-right tabular-nums text-gray-700 align-top">{i.quantity}</td>
+                  <td className="py-1 text-right tabular-nums text-gray-600 align-top">{currencySymbol}{formatMoney(lineVat)}</td>
+                  <td className="py-1 text-right tabular-nums text-gray-900 font-medium align-top">{currencySymbol}{formatMoney(lineTotal)}</td>
                 </tr>
               );
             })}
           </tbody>
         </table>
 
-        {/* Notes – before totals */}
+        {/* Notes – compact */}
         {notes && notes.trim() && (
-          <div className="mt-6 pt-4 border-t border-gray-100">
-            <p className={`text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1`}>{L.notesLabel}</p>
-            <p className={`text-gray-700 ${textSize} leading-relaxed whitespace-pre-wrap`}>{notes.trim()}</p>
+          <div className="mt-2 pt-2 border-t border-gray-100">
+            <p className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">{L.notesLabel}</p>
+            <p className={`text-gray-700 ${textSizeSmall} leading-snug whitespace-pre-wrap`}>{notes.trim()}</p>
           </div>
         )}
 
-        {/* Totals */}
-        <div className={`mt-6 pt-4 border-t-2 border-gray-200 space-y-2 ${textSize}`}>
+        {/* Totals – compact */}
+        <div className={`mt-2 pt-2 border-t border-gray-200 space-y-0.5 ${textSize}`}>
           <div className="flex justify-between text-gray-600">
             <span>{L.subtotal}</span>
             <span className="tabular-nums">{formatAmount(subtotal)}</span>
@@ -322,38 +341,38 @@ function UnifiedDocumentPreview({
             <span>{L.vatRateLabel(vatRate)}</span>
             <span className="tabular-nums">{formatAmount(vatAmount)}</span>
           </div>
-          <div className="flex justify-between font-bold pt-2 text-gray-900" style={{ color: TEAL }}>
+          <div className="flex justify-between font-bold pt-1 text-gray-900" style={{ color: TEAL }}>
             <span>{L.grandTotal}</span>
             <span className="tabular-nums">{formatAmount(total)}</span>
           </div>
           {totalInWords && totalInWords.trim() && (
-            <p className={`pt-2 text-gray-600 italic ${textSizeSmall}`}>{L.totalInWordsLabel}: {totalInWords}</p>
+            <p className={`pt-1 text-gray-600 italic ${textSizeSmall}`}>{L.totalInWordsLabel}: {totalInWords}</p>
           )}
         </div>
 
-        {/* Footer: Bank details (from company profile) + Signature bottom right */}
-        <div className={`mt-10 pt-6 border-t border-gray-200 flex flex-col md:flex-row md:items-end md:justify-between gap-6 ${compact ? "mt-6 pt-4" : ""}`}>
+        {/* Footer: Bank + Signature – compact */}
+        <div className={`mt-4 pt-3 border-t border-gray-200 flex flex-col md:flex-row md:items-end md:justify-between gap-3 ${compact ? "mt-3 pt-2" : ""}`}>
           {hasBank && !compact && (
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-2">{L.bankInfo}</p>
-              {bankDetails!.bankName && <p className={`text-gray-700 ${textSize}`}>{L.bankName}: {bankDetails!.bankName}</p>}
+              <p className="text-[9px] font-semibold uppercase tracking-wider text-gray-400 mb-1">{L.bankInfo}</p>
+              {bankDetails!.bankName && <p className={`text-gray-700 ${textSizeSmall}`}>{L.bankName}: {bankDetails!.bankName}</p>}
               {(bankDetails!.branchNumber || bankDetails!.accountNumber) && (
-                <p className={`text-gray-700 ${textSize}`}>
+                <p className={`text-gray-700 ${textSizeSmall}`}>
                   {bankDetails!.branchNumber && <span>{L.branch}: {bankDetails!.branchNumber}</span>}
                   {bankDetails!.branchNumber && bankDetails!.accountNumber && " · "}
                   {bankDetails!.accountNumber && <span>{L.account}: {bankDetails!.accountNumber}</span>}
                 </p>
               )}
-              {bankDetails!.iban && <p className={`text-gray-700 ${textSize}`}>IBAN: {bankDetails!.iban}</p>}
-              {bankDetails!.swift && <p className={`text-gray-700 ${textSize}`}>SWIFT: {bankDetails!.swift}</p>}
-              {bankDetails!.bitLink && <p className={`text-gray-700 ${textSize}`}>Payment: {bankDetails!.bitLink}</p>}
+              {bankDetails!.iban && <p className={`text-gray-700 ${textSizeSmall}`}>IBAN: {bankDetails!.iban}</p>}
+              {bankDetails!.swift && <p className={`text-gray-700 ${textSizeSmall}`}>SWIFT: {bankDetails!.swift}</p>}
+              {bankDetails!.bitLink && <p className={`text-gray-700 ${textSizeSmall}`}>Payment: {bankDetails!.bitLink}</p>}
             </div>
           )}
           {company.signatureUrl && !compact && (
             <div className="md:ml-auto md:text-right">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">{L.signature}</p>
+              <p className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">{L.signature}</p>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={company.signatureUrl} alt="" className="inline-block max-w-[180px] max-h-16 object-contain" />
+              <img src={company.signatureUrl} alt="" className="inline-block max-w-[140px] max-h-12 object-contain" />
             </div>
           )}
         </div>
@@ -1335,9 +1354,12 @@ export default function DocumentsPage() {
     createDraft,
     convertToQuote,
     convertQuoteToInvoice,
+    createInvoiceFromQuoteWithData,
+    createInvoiceFromDeliveryNoteWithData,
     createDeliveryNote,
     convertDeliveryNoteToInvoice,
     createReceipt,
+    createReceiptFromInvoiceWithData,
     markPaid,
     issueCreditNote,
     issueNegativeReceipt,
@@ -1362,12 +1384,97 @@ export default function DocumentsPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [previewExpense, setPreviewExpense] = useState<BillingExpense | null>(null);
   const [createModal, setCreateModal] = useState<CreateModalType | null>(null);
+  const [creditNotePreselectedInvoiceId, setCreditNotePreselectedInvoiceId] = useState<string | null>(null);
+  const [negativeReceiptPreselectedId, setNegativeReceiptPreselectedId] = useState<string | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState<ConfirmCancelTarget | null>(null);
+  const [receiptFromInvoicePreselectedId, setReceiptFromInvoicePreselectedId] = useState<string | null>(null);
+  const [generateConfirm, setGenerateConfirm] = useState<GenerateConfirmPayload | null>(null);
+  const [invoiceFromSourcePreselected, setInvoiceFromSourcePreselected] = useState<{ type: "quote" | "delivery_note"; id: string } | null>(null);
+  const [justIssuedDocId, setJustIssuedDocId] = useState<string | null>(null);
+  const [receiptForm, setReceiptForm] = useState<{
+    clientName: string;
+    clientEmail: string;
+    clientPhone: string;
+    clientAddress: string;
+    clientTaxId: string;
+    items: { id: string; description: string; quantity: number; unitPrice: number }[];
+    notes: string;
+    title: string;
+  } | null>(null);
+  const [invoiceFromSourceForm, setInvoiceFromSourceForm] = useState<{
+    clientName: string;
+    clientEmail: string;
+    clientPhone: string;
+    clientAddress: string;
+    clientTaxId: string;
+    items: { id: string; description: string; quantity: number; unitPrice: number }[];
+    notes: string;
+    title: string;
+    dueDate: string;
+  } | null>(null);
 
   const showSuccessToast = useCallback((message: string) => {
     setToastMessage(message);
     const t = setTimeout(() => setToastMessage(null), 3000);
     return () => clearTimeout(t);
   }, []);
+
+  useEffect(() => {
+    if (createModal === "receipt_from_invoice" && receiptFromInvoicePreselectedId) {
+      const inv = documents.find((d) => d.id === receiptFromInvoicePreselectedId && d.type === "invoice");
+      if (inv) {
+        setReceiptForm({
+          clientName: inv.clientName ?? "",
+          clientEmail: inv.clientEmail ?? "",
+          clientPhone: inv.clientPhone ?? "",
+          clientAddress: inv.clientAddress ?? "",
+          clientTaxId: inv.clientTaxId ?? "",
+          items: inv.items.map((i) => ({ id: i.id, description: i.description, quantity: i.quantity, unitPrice: i.unitPrice })),
+          notes: inv.notes ?? "",
+          title: inv.title ?? "",
+        });
+      } else {
+        setReceiptForm(null);
+      }
+    } else {
+      setReceiptForm(null);
+    }
+  }, [createModal, receiptFromInvoicePreselectedId, documents]);
+
+  useEffect(() => {
+    if (createModal === "invoice_from_source" && invoiceFromSourcePreselected) {
+      const doc = documents.find((d) => d.id === invoiceFromSourcePreselected.id);
+      if (doc) {
+        setInvoiceFromSourceForm({
+          clientName: doc.clientName ?? "",
+          clientEmail: doc.clientEmail ?? "",
+          clientPhone: doc.clientPhone ?? "",
+          clientAddress: doc.clientAddress ?? "",
+          clientTaxId: doc.clientTaxId ?? "",
+          items: doc.items.map((i) => ({ id: i.id, description: i.description, quantity: i.quantity, unitPrice: i.unitPrice })),
+          notes: doc.notes ?? "",
+          title: doc.title ?? "",
+          dueDate: doc.dueDate ?? "",
+        });
+      } else {
+        setInvoiceFromSourceForm(null);
+      }
+    } else {
+      setInvoiceFromSourceForm(null);
+    }
+  }, [createModal, invoiceFromSourcePreselected, documents]);
+
+  // After issuing Credit Note or Negative Receipt: if client has email, trigger share flow (same as primary invoice) for "automatic email delivery"
+  useEffect(() => {
+    if (!justIssuedDocId) return;
+    const doc = documents.find((d) => d.id === justIssuedDocId);
+    if (!doc?.clientEmail?.trim()) return;
+    const t = setTimeout(() => {
+      handleShare(justIssuedDocId);
+    }, 500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run only when justIssuedDocId is set to avoid double share
+  }, [justIssuedDocId]);
 
   useEffect(() => {
     if (!openMenuDocId) return;
@@ -1496,20 +1603,6 @@ export default function DocumentsPage() {
       handleIssueReceipt(invoice.id);
     },
     [createReceipt, handleIssueReceipt, markPaid, showSuccessToast]
-  );
-
-  const handleCreateCreditNote = useCallback(
-    (invoiceId: string) => {
-      setLoadingDocId(invoiceId);
-      setTimeout(() => {
-        if (issueCreditNote(invoiceId)) {
-          setActiveTab("cancellations");
-          showSuccessToast("Credit note created");
-        }
-        setLoadingDocId(null);
-      }, 400);
-    },
-    [issueCreditNote, showSuccessToast]
   );
 
   const handleScanReceipt = useCallback(() => {
@@ -2132,25 +2225,27 @@ export default function DocumentsPage() {
                     const isCanceled = (d.status as string) === "canceled";
                     const notCanceled = !isCanceled;
                     const canConvertToInvoice = (d.type === "quote" || d.type === "delivery_note") && notCanceled;
-                    const canIssueReceipt = d.type === "invoice" && notCanceled;
+                    const canIssueReceipt = d.type === "invoice" && notCanceled && (d.status as string) !== "paid";
                     const canCreateCreditNote = d.type === "invoice" && notCanceled;
                     const canCancelQuote = d.type === "quote" && notCanceled;
                     const canCancelDeliveryNote = d.type === "delivery_note" && notCanceled;
                     const canCancelReceipt = d.type === "receipt" && notCanceled;
                     return (
                       <React.Fragment key={d.id}>
-                        <tr className={isCanceled ? "bg-gray-50/50" : ""}>
-                          <td colSpan={6} className={`px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider ${isCanceled ? "text-gray-400 line-through" : "text-gray-500"}`}>
-                            {d.title && d.title.trim() ? d.title : (locale === "he" ? "ללא כותרת" : "No title")}
+                        <tr className={isCanceled ? "bg-gray-50/50" : "bg-gray-50/30"}>
+                          <td colSpan={6} className={`px-4 py-1.5 border-b border-gray-100 ${isCanceled ? "text-gray-400" : "text-gray-800"}`}>
+                            <span className={`font-bold ${isCanceled ? "line-through text-gray-500" : "text-gray-900"}`} style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif", fontSize: "13px" }}>
+                              {d.title && d.title.trim() ? d.title : (locale === "he" ? "ללא כותרת" : "No title")}
+                            </span>
                           </td>
                         </tr>
                         <tr className={`border-b border-gray-50 hover:bg-gray-50/50 transition-colors ${isCanceled ? "bg-gray-50/50" : ""}`}>
-                        <td className={`px-4 py-2 font-medium whitespace-nowrap ${isCanceled ? "text-gray-500 line-through" : "text-gray-900"}`}>{docTypeLabel(d.type)} #{d.number}</td>
-                        <td className={`px-4 py-2 whitespace-nowrap ${isCanceled ? "text-gray-400 line-through" : "text-gray-600"}`}>{d.clientName || "—"}</td>
-                        <td className={`px-4 py-2 whitespace-nowrap ${isCanceled ? "text-gray-400 line-through" : "text-gray-600"}`}>{docDateIso(d)}</td>
-                        <td className={`px-4 py-2 text-right font-medium tabular-nums whitespace-nowrap ${isCanceled ? "text-gray-400 line-through" : "text-gray-900"}`}>{formatMoney(d.total || 0)}</td>
-                        <td className="px-4 py-2 whitespace-nowrap"><StatusBadge status={uiStatus} /></td>
-                        <td className="px-4 py-2 text-right whitespace-nowrap">
+                        <td className={`px-4 py-1.5 font-medium whitespace-nowrap ${isCanceled ? "text-gray-500 line-through" : "text-gray-900"}`}>{docTypeLabel(d.type)} #{d.number}</td>
+                        <td className={`px-4 py-1.5 whitespace-nowrap ${isCanceled ? "text-gray-400 line-through" : "text-gray-600"}`}>{d.clientName || "—"}</td>
+                        <td className={`px-4 py-1.5 whitespace-nowrap ${isCanceled ? "text-gray-400 line-through" : "text-gray-600"}`}>{docDateIso(d)}</td>
+                        <td className={`px-4 py-1.5 text-right font-medium tabular-nums whitespace-nowrap ${isCanceled ? "text-gray-400 line-through" : "text-gray-900"}`}>{formatMoney(d.total || 0)}</td>
+                        <td className="px-4 py-1.5 whitespace-nowrap"><StatusBadge status={uiStatus} locale={locale} /></td>
+                        <td className="px-4 py-1.5 text-right whitespace-nowrap">
                           <div className="relative inline-flex">
                             <button
                               type="button"
@@ -2198,33 +2293,28 @@ export default function DocumentsPage() {
                                   <button
                                     type="button"
                                     onClick={() => { setOpenMenuDocId(null); handleShare(d.id); }}
-                                    className="w-full flex items-center gap-2 px-3 py-2 rounded-none text-gray-700 hover:bg-gray-50 text-[12px] font-medium"
-                                    style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
+                                    className="w-full flex items-center gap-2 px-3 py-2 rounded-none text-[12px] font-medium hover:opacity-90"
+                                    style={{ color: TEAL, fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
                                     role="menuitem"
                                   >
-                                    <Share2 className="w-4 h-4 text-gray-500" />
-                                    {locale === "he" ? "שלח ללקוח" : "Send to Client"}
+                                    <Share2 className="w-4 h-4" />
+                                    {locale === "he" ? "שלח ללקוח (PDF)" : "Share (PDF)"}
                                   </button>
                                   {/* Context-specific actions */}
                                   {canConvertToInvoice && (
                                     <button
                                       type="button"
-                                      disabled={loadingDocId === d.id}
                                       onClick={() => {
                                         setOpenMenuDocId(null);
-                                        if (d.type === "quote") handleConvertToInvoice(d.id);
-                                        if (d.type === "delivery_note") handleConvertDeliveryNoteToInvoice(d.id);
+                                        setInvoiceFromSourcePreselected({ type: d.type as "quote" | "delivery_note", id: d.id });
+                                        setCreateModal("invoice_from_source");
                                       }}
-                                      className="w-full flex items-center gap-2 px-3 py-2 rounded-none text-[12px] font-medium disabled:opacity-60 text-white hover:opacity-90 transition-opacity"
+                                      className="w-full flex items-center gap-2 px-3 py-2 rounded-none text-[12px] font-medium text-white hover:opacity-90 transition-opacity"
                                       style={{ backgroundColor: TEAL, fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
                                       role="menuitem"
                                     >
-                                      {loadingDocId === d.id ? (
-                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                      ) : (
-                                        <FileText className="w-4 h-4" />
-                                      )}
-                                      Convert to Invoice
+                                      <FileText className="w-4 h-4" />
+                                      {locale === "he" ? "צור חשבונית מס" : "Create Tax Invoice"}
                                     </button>
                                   )}
                                   {(canCancelQuote || canCancelDeliveryNote) && (
@@ -2249,62 +2339,49 @@ export default function DocumentsPage() {
                                   {canIssueReceipt && (
                                     <button
                                       type="button"
-                                      disabled={loadingDocId === d.id}
                                       onClick={() => {
                                         setOpenMenuDocId(null);
-                                        handleIssueReceiptFromInvoice(d);
+                                        setReceiptFromInvoicePreselectedId(d.id);
+                                        setCreateModal("receipt_from_invoice");
                                       }}
-                                      className="w-full flex items-center gap-2 px-3 py-2 rounded-none text-gray-700 hover:bg-gray-50 text-[12px] font-medium disabled:opacity-60"
+                                      className="w-full flex items-center gap-2 px-3 py-2 rounded-none text-gray-700 hover:bg-gray-50 text-[12px] font-medium"
                                       style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
                                       role="menuitem"
                                     >
-                                      {loadingDocId === d.id ? (
-                                        <Loader2 className="w-4 h-4 text-gray-500 animate-spin" />
-                                      ) : (
-                                        <Receipt className="w-4 h-4 text-gray-500" />
-                                      )}
-                                      Issue Receipt
+                                      <Receipt className="w-4 h-4 text-gray-500" />
+                                      {locale === "he" ? "הפק קבלה" : "Issue Receipt"}
                                     </button>
                                   )}
 
                                   {canCreateCreditNote && (
                                     <button
                                       type="button"
-                                      disabled={loadingDocId === d.id}
                                       onClick={() => {
                                         setOpenMenuDocId(null);
-                                        handleCreateCreditNote(d.id);
-                                      }}
-                                      className="w-full flex items-center gap-2 px-3 py-2 rounded-none text-gray-700 hover:bg-gray-50 text-[12px] font-medium disabled:opacity-60"
-                                      style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
-                                      role="menuitem"
-                                    >
-                                      {loadingDocId === d.id ? (
-                                        <Loader2 className="w-4 h-4 text-gray-500 animate-spin" />
-                                      ) : (
-                                        <X className="w-4 h-4 text-gray-500" />
-                                      )}
-                                      Create Credit Note
-                                    </button>
-                                  )}
-
-                                  {canCancelReceipt && (
-                                    <button
-                                      type="button"
-                                      disabled={loadingDocId === d.id}
-                                      onClick={() => {
-                                        setOpenMenuDocId(null);
-                                        if (issueNegativeReceipt(d.id)) {
-                                          setActiveTab("cancellations");
-                                          showSuccessToast(locale === "he" ? "קבלה שלילית נוצרה" : "Negative receipt issued");
-                                        }
+                                        setConfirmCancel({ type: "invoice", id: d.id });
                                       }}
                                       className="w-full flex items-center gap-2 px-3 py-2 rounded-none text-amber-700 hover:bg-amber-50 text-[12px] font-medium"
                                       style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
                                       role="menuitem"
                                     >
                                       <X className="w-4 h-4" />
-                                      {locale === "he" ? "ביטול (קבלה שלילית)" : "Cancel (Negative Receipt)"}
+                                      {locale === "he" ? "ביטול" : "Cancel"}
+                                    </button>
+                                  )}
+
+                                  {canCancelReceipt && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setOpenMenuDocId(null);
+                                        setConfirmCancel({ type: "receipt", id: d.id });
+                                      }}
+                                      className="w-full flex items-center gap-2 px-3 py-2 rounded-none text-amber-700 hover:bg-amber-50 text-[12px] font-medium"
+                                      style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
+                                      role="menuitem"
+                                    >
+                                      <X className="w-4 h-4" />
+                                      {locale === "he" ? "ביטול" : "Cancel"}
                                     </button>
                                   )}
                                 </motion.div>
@@ -2573,6 +2650,361 @@ export default function DocumentsPage() {
         );
       })()}
 
+      {/* Success screen after issuing Credit Note or Negative Receipt: Preview + Download + Share */}
+      {justIssuedDocId && (() => {
+        const issuedDoc = documents.find((d) => d.id === justIssuedDocId);
+        if (!issuedDoc) return null;
+        const docLang = (businessProfile as { documentLanguage?: string } | undefined)?.documentLanguage === "he" ? "he" : (businessProfile as { documentLanguage?: string } | undefined)?.documentLanguage === "en" ? "en" : "both";
+        const bp = businessProfile as { bankDetails?: { bankName?: string; iban?: string; branchNumber?: string; accountNumber?: string; swift?: string; bitLink?: string } } | undefined;
+        return (
+          <div className="fixed inset-0 z-[210] flex flex-col bg-black/50" onClick={() => setJustIssuedDocId(null)}>
+            <div className="flex-1 overflow-y-auto p-6 flex justify-center min-h-0" onClick={(e) => e.stopPropagation()}>
+              <div className="bg-white rounded-none border border-gray-200 shadow-xl" style={{ width: 595, minHeight: 842, maxWidth: "100%" }}>
+                <div className="p-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+                  <h3 className="font-semibold text-gray-900">{locale === "he" ? "המסמך נוצר בהצלחה" : "Document created successfully"}</h3>
+                  <button type="button" onClick={() => setJustIssuedDocId(null)} className="p-2 rounded-none text-gray-500 hover:bg-gray-100"><X className="w-5 h-5" /></button>
+                </div>
+                <div className="p-4 overflow-auto">
+                  <UnifiedDocumentPreview
+                    company={{ name: businessProfile?.legalName ?? "", address: businessProfile?.address, taxId: businessProfile?.taxId, logoUrl: businessProfile?.businessLogo, signatureUrl: (businessProfile as { signature?: string })?.signature }}
+                    client={{ name: issuedDoc.clientName ?? "", email: issuedDoc.clientEmail, phone: issuedDoc.clientPhone, address: issuedDoc.clientAddress, taxId: issuedDoc.clientTaxId }}
+                    items={issuedDoc.items.map((i) => ({ description: i.description, quantity: i.quantity, unitPrice: i.unitPrice }))}
+                    subtotal={issuedDoc.subtotal}
+                    vatAmount={issuedDoc.vatAmount}
+                    total={issuedDoc.total}
+                    currencySymbol={CURRENCY_SYMBOLS["ILS"] ?? "₪"}
+                    docNumber={issuedDoc.number}
+                    docType={issuedDoc.type}
+                    language={docLang}
+                    date={issuedDoc.date}
+                    dueDate={issuedDoc.dueDate}
+                    vatRate={issuedDoc.vatRate ?? 17}
+                    title={issuedDoc.title}
+                    notes={issuedDoc.notes}
+                    bankDetails={(issuedDoc.type === "credit_note" || issuedDoc.type === "negative_receipt") ? bp?.bankDetails : undefined}
+                    creditForInvoiceNumber={issuedDoc.creditForInvoiceNumber}
+                    originalReceiptNumber={issuedDoc.originalReceiptNumber}
+                  />
+                </div>
+                <div className="p-4 border-t border-gray-200 flex gap-3 flex-shrink-0">
+                  <button type="button" onClick={() => downloadPdf(justIssuedDocId)} className="flex-1 py-2.5 rounded-none border border-gray-200 bg-white text-gray-700 font-medium text-[13px]">
+                    {locale === "he" ? "הורד PDF" : "Download"}
+                  </button>
+                  <button type="button" onClick={() => handleShare(justIssuedDocId)} className="flex-1 py-2.5 rounded-none text-white font-semibold text-[13px]" style={{ backgroundColor: TEAL }}>
+                    {locale === "he" ? "שלח ללקוח" : "Share"}
+                  </button>
+                  <button type="button" onClick={() => setJustIssuedDocId(null)} className="flex-1 py-2.5 rounded-none border border-gray-200 bg-gray-50 text-gray-700 font-medium text-[13px]">
+                    {locale === "he" ? "סגור" : "Close"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Cancel confirmation: Invoice → Credit Note flow / Receipt → Negative Receipt flow */}
+      {confirmCancel && (
+        <div className="fixed inset-0 z-[180] flex items-center justify-center p-4 bg-black/50" onClick={() => setConfirmCancel(null)}>
+          <div className="bg-white rounded-none border border-gray-200 shadow-xl max-w-sm w-full p-6" onClick={(e) => e.stopPropagation()} style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+            <h3 className="text-base font-semibold text-gray-900 mb-2">
+              {confirmCancel.type === "invoice" ? (locale === "he" ? "ביטול חשבונית?" : "Cancel invoice?") : (locale === "he" ? "ביטול קבלה?" : "Cancel receipt?")}
+            </h3>
+            <p className="text-sm text-gray-600 mb-6">
+              {confirmCancel.type === "invoice"
+                ? (locale === "he" ? "חשבונית זו תבוטל ויופעל מסמך זיכוי מקושר. להמשיך?" : "A Credit Note will be created and linked to this invoice. Continue?")
+                : (locale === "he" ? "קבלה זו תבוטל ותיווצר קבלה שלילית. להמשיך?" : "A Negative Receipt will be created to offset this receipt. Continue?")}
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmCancel(null)}
+                className="flex-1 py-2.5 rounded-none border border-gray-200 bg-white text-gray-700 font-medium text-[13px]"
+              >
+                {locale === "he" ? "ביטול" : "Cancel"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirmCancel.type === "invoice") {
+                    setCreditNotePreselectedInvoiceId(confirmCancel.id);
+                    setCreateModal("credit_note");
+                  } else {
+                    setNegativeReceiptPreselectedId(confirmCancel.id);
+                    setCreateModal("negative_receipt");
+                  }
+                  setConfirmCancel(null);
+                }}
+                className="flex-1 py-2.5 rounded-none text-white font-semibold text-[13px]"
+                style={{ backgroundColor: TEAL }}
+              >
+                {locale === "he" ? "אישור" : "Confirm"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Generate/Save confirmation: summary before creating document */}
+      {generateConfirm && (
+        <div className="fixed inset-0 z-[190] flex items-center justify-center p-4 bg-black/50" onClick={() => setGenerateConfirm(null)}>
+          <div className="bg-white rounded-none border border-gray-200 shadow-xl max-w-sm w-full p-6" onClick={(e) => e.stopPropagation()} style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+            <h3 className="text-base font-semibold text-gray-900 mb-2">
+              {generateConfirm.type === "receipt_from_invoice"
+                ? (locale === "he" ? "אישור הפקת קבלה" : "Confirm Create Receipt")
+                : generateConfirm.type === "invoice_from_source"
+                  ? (locale === "he" ? "אישור יצירת חשבונית מס" : "Confirm Create Tax Invoice")
+                  : generateConfirm.type === "credit_note"
+                    ? (locale === "he" ? "אישור הנפקת מסמך זיכוי" : "Confirm Issue Credit Note")
+                    : (locale === "he" ? "אישור הנפקת קבלה שלילית" : "Confirm Issue Negative Receipt")}
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              {generateConfirm.type === "receipt_from_invoice" && (
+                <>Receipt #{generateConfirm.nextNumber} · {generateConfirm.clientName} · {locale === "he" ? "סה\"כ" : "Total"}: {formatMoney(generateConfirm.total)}</>
+              )}
+              {generateConfirm.type === "invoice_from_source" && (
+                <>{locale === "he" ? "חשבונית מס" : "Tax Invoice"} #{generateConfirm.nextNumber} · {generateConfirm.clientName} · {locale === "he" ? "סה\"כ" : "Total"}: {formatMoney(generateConfirm.total)}</>
+              )}
+              {generateConfirm.type === "credit_note" && (
+                <>{locale === "he" ? "מסמך זיכוי" : "Credit Note"} #{generateConfirm.nextNumber} · {locale === "he" ? "עבור חשבונית" : "For Invoice"} #{generateConfirm.invoiceNumber} · {locale === "he" ? "סה\"כ" : "Total"}: {formatMoney(generateConfirm.total)}</>
+              )}
+              {generateConfirm.type === "negative_receipt" && (
+                <>{locale === "he" ? "קבלה שלילית" : "Negative Receipt"} #{generateConfirm.nextNumber} · {locale === "he" ? "ביטול קבלה" : "Cancellation of Receipt"} #{generateConfirm.receiptNumber} · {locale === "he" ? "סה\"כ" : "Total"}: {formatMoney(generateConfirm.total)}</>
+              )}
+            </p>
+            <div className="flex gap-3">
+              <button type="button" onClick={() => setGenerateConfirm(null)} className="flex-1 py-2.5 rounded-none border border-gray-200 bg-white text-gray-700 font-medium text-[13px]">
+                {locale === "he" ? "ביטול" : "Cancel"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (generateConfirm.type === "receipt_from_invoice") {
+                    const r = createReceiptFromInvoiceWithData(generateConfirm.invoiceId, generateConfirm.data, { markPaidFirst: generateConfirm.markPaidFirst });
+                    if (r) {
+                      setGenerateConfirm(null);
+                      setCreateModal(null);
+                      setReceiptFromInvoicePreselectedId(null);
+                      setActiveTab("receipts");
+                      showSuccessToast(locale === "he" ? "קבלה נוצרה" : "Receipt created");
+                    }
+                  } else if (generateConfirm.type === "invoice_from_source") {
+                    const inv = generateConfirm.sourceType === "quote"
+                      ? createInvoiceFromQuoteWithData(generateConfirm.sourceId, generateConfirm.data)
+                      : createInvoiceFromDeliveryNoteWithData(generateConfirm.sourceId, generateConfirm.data);
+                    if (inv) {
+                      setGenerateConfirm(null);
+                      setCreateModal(null);
+                      setInvoiceFromSourcePreselected(null);
+                      setActiveTab("invoices");
+                      showSuccessToast(locale === "he" ? "חשבונית נוצרה" : "Invoice created");
+                    }
+                  } else if (generateConfirm.type === "credit_note") {
+                    const cn = issueCreditNote(generateConfirm.invoiceId);
+                    if (cn) {
+                      setGenerateConfirm(null);
+                      setCreateModal(null);
+                      setCreditNotePreselectedInvoiceId(null);
+                      setJustIssuedDocId(cn.id);
+                      setActiveTab("cancellations");
+                      showSuccessToast(locale === "he" ? "מסמך זיכוי נוצר" : "Credit note issued");
+                    }
+                  } else if (generateConfirm.type === "negative_receipt") {
+                    const nr = issueNegativeReceipt(generateConfirm.receiptId);
+                    if (nr) {
+                      setGenerateConfirm(null);
+                      setCreateModal(null);
+                      setNegativeReceiptPreselectedId(null);
+                      setJustIssuedDocId(nr.id);
+                      setActiveTab("cancellations");
+                      showSuccessToast(locale === "he" ? "קבלה שלילית נוצרה" : "Negative receipt issued");
+                    }
+                  }
+                }}
+                className="flex-1 py-2.5 rounded-none text-white font-semibold text-[13px]"
+                style={{ backgroundColor: TEAL }}
+              >
+                {locale === "he" ? "אישור" : "Confirm"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Receipt from Invoice: editable creation page (pre-filled from invoice) */}
+      {createModal === "receipt_from_invoice" && receiptFromInvoicePreselectedId && (() => {
+        const invoice = documents.find((d) => d.id === receiptFromInvoicePreselectedId && d.type === "invoice");
+        const nextReceiptNum = getNextNumberPreview("receipt");
+        if (!invoice || !receiptForm) return null;
+        const vatRate = invoice.vatRate ?? 17;
+        const { subtotal, vatAmount, total } = (() => {
+          const st = receiptForm.items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
+          const stR = Math.round(st * 100) / 100;
+          const vat = Math.round((stR * vatRate) / 100 * 100) / 100;
+          return { subtotal: stR, vatAmount: vat, total: stR + vat };
+        })();
+        const buildData = (): import("@/modules/billing/services/documentService").ReceiptFromInvoiceData => ({
+          clientId: invoice.clientId,
+          clientName: receiptForm.clientName.trim() || invoice.clientName,
+          clientEmail: receiptForm.clientEmail.trim() || undefined,
+          clientPhone: receiptForm.clientPhone.trim() || undefined,
+          clientAddress: receiptForm.clientAddress.trim() || undefined,
+          clientTaxId: receiptForm.clientTaxId.trim() || undefined,
+          items: receiptForm.items.map((i) => ({ id: i.id, description: i.description.trim() || "Item", quantity: Math.max(0, i.quantity), unitPrice: Math.round(i.unitPrice * 100) / 100 })),
+          notes: receiptForm.notes.trim() || undefined,
+          title: receiptForm.title.trim() || undefined,
+        });
+        return (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50" onClick={() => { setCreateModal(null); setReceiptFromInvoicePreselectedId(null); }}>
+            <div className="bg-white rounded-none border border-gray-200 shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()} style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 flex-shrink-0">
+                <h2 className="font-semibold text-gray-900">{locale === "he" ? "הפק קבלה — עריכה" : "Issue Receipt — Edit"}</h2>
+                <button type="button" onClick={() => { setCreateModal(null); setReceiptFromInvoicePreselectedId(null); }} className="p-2 rounded-none text-gray-500 hover:bg-gray-100">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                <p className="text-sm text-gray-600">
+                  {locale === "he" ? "מס׳ קבלה" : "Receipt number"}: <strong>{nextReceiptNum}</strong> · {locale === "he" ? "מחשבונית" : "From invoice"} #{invoice.number}
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">{locale === "he" ? "שם לקוח" : "Client name"}</label>
+                    <input type="text" value={receiptForm.clientName} onChange={(e) => setReceiptForm((f) => f && { ...f, clientName: e.target.value })} className="w-full rounded-none border border-gray-200 px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">{locale === "he" ? "אימייל" : "Email"}</label>
+                    <input type="text" value={receiptForm.clientEmail} onChange={(e) => setReceiptForm((f) => f && { ...f, clientEmail: e.target.value })} className="w-full rounded-none border border-gray-200 px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">{locale === "he" ? "טלפון" : "Phone"}</label>
+                    <input type="text" value={receiptForm.clientPhone} onChange={(e) => setReceiptForm((f) => f && { ...f, clientPhone: e.target.value })} className="w-full rounded-none border border-gray-200 px-3 py-2 text-sm" />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-medium text-gray-500 mb-1">{locale === "he" ? "כתובת" : "Address"}</label>
+                    <input type="text" value={receiptForm.clientAddress} onChange={(e) => setReceiptForm((f) => f && { ...f, clientAddress: e.target.value })} className="w-full rounded-none border border-gray-200 px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">{locale === "he" ? "ח.פ / ע.מ" : "Tax ID"}</label>
+                    <input type="text" value={receiptForm.clientTaxId} onChange={(e) => setReceiptForm((f) => f && { ...f, clientTaxId: e.target.value })} className="w-full rounded-none border border-gray-200 px-3 py-2 text-sm" />
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-medium text-gray-500">{locale === "he" ? "פריטים" : "Line items"}</span>
+                    <button type="button" onClick={() => setReceiptForm((f) => f && { ...f, items: [...f.items, { id: generateUUID(), description: "", quantity: 1, unitPrice: 0 }] })} className="text-xs font-medium" style={{ color: TEAL }}>{locale === "he" ? "+ שורה" : "+ Add row"}</button>
+                  </div>
+                  <div className="border border-gray-200 rounded-none overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50"><tr><th className="text-left p-2">{locale === "he" ? "תיאור" : "Description"}</th><th className="w-16 p-2">{locale === "he" ? "כמות" : "Qty"}</th><th className="w-24 p-2">{locale === "he" ? "מחיר" : "Price"}</th><th className="w-8 p-2" /></tr></thead>
+                      <tbody>
+                        {receiptForm.items.map((row, idx) => (
+                          <tr key={row.id} className="border-t border-gray-100">
+                            <td className="p-2"><input type="text" value={row.description} onChange={(e) => setReceiptForm((f) => f && { ...f, items: f.items.map((it, i) => i === idx ? { ...it, description: e.target.value } : it) })} className="w-full rounded-none border border-gray-100 px-2 py-1 text-xs" placeholder="Item" /></td>
+                            <td className="p-2"><input type="number" min={0} step={1} value={row.quantity} onChange={(e) => setReceiptForm((f) => f && { ...f, items: f.items.map((it, i) => i === idx ? { ...it, quantity: Number(e.target.value) || 0 } : it) })} className="w-full rounded-none border border-gray-100 px-2 py-1 text-xs" /></td>
+                            <td className="p-2"><input type="number" min={0} step={0.01} value={row.unitPrice} onChange={(e) => setReceiptForm((f) => f && { ...f, items: f.items.map((it, i) => i === idx ? { ...it, unitPrice: Number(e.target.value) || 0 } : it) })} className="w-full rounded-none border border-gray-100 px-2 py-1 text-xs" /></td>
+                            <td className="p-2"><button type="button" onClick={() => setReceiptForm((f) => f && f.items.length > 1 ? { ...f, items: f.items.filter((_, i) => i !== idx) } : f)} className="text-gray-400 hover:text-red-600"><X className="w-4 h-4" /></button></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">{locale === "he" ? "כותרת" : "Title"}</label>
+                  <input type="text" value={receiptForm.title} onChange={(e) => setReceiptForm((f) => f && { ...f, title: e.target.value })} className="w-full rounded-none border border-gray-200 px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">{locale === "he" ? "הערות" : "Notes"}</label>
+                  <textarea value={receiptForm.notes} onChange={(e) => setReceiptForm((f) => f && { ...f, notes: e.target.value })} rows={2} className="w-full rounded-none border border-gray-200 px-3 py-2 text-sm" />
+                </div>
+                <p className="text-sm font-medium text-gray-700">{locale === "he" ? "סה\"כ" : "Total"}: {formatMoney(total)}</p>
+                <button
+                  type="button"
+                  onClick={() => setGenerateConfirm({ type: "receipt_from_invoice", invoiceId: invoice.id, data: buildData(), nextNumber: nextReceiptNum, clientName: receiptForm.clientName.trim() || invoice.clientName, total, markPaidFirst: (invoice.status as string) !== "paid" })}
+                  className="w-full py-2.5 rounded-none text-white font-semibold text-[13px]"
+                  style={{ backgroundColor: TEAL }}
+                >
+                  {locale === "he" ? "הפק קבלה" : "Generate Receipt"}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Create Tax Invoice from Quote or Delivery Note – editable, pre-filled */}
+      {createModal === "invoice_from_source" && invoiceFromSourcePreselected && invoiceFromSourceForm && (() => {
+        const sourceDoc = documents.find((d) => d.id === invoiceFromSourcePreselected.id);
+        const nextInvNum = getNextNumberPreview("invoice");
+        if (!sourceDoc) return null;
+        const vatRate = sourceDoc.vatRate ?? 17;
+        const { subtotal, vatAmount, total } = (() => {
+          const st = invoiceFromSourceForm.items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
+          const stR = Math.round(st * 100) / 100;
+          const vat = Math.round((stR * vatRate) / 100 * 100) / 100;
+          return { subtotal: stR, vatAmount: vat, total: stR + vat };
+        })();
+        const buildInvoiceData = (): import("@/modules/billing/services/documentService").InvoiceFromSourceData => ({
+          clientId: sourceDoc.clientId,
+          clientName: invoiceFromSourceForm.clientName.trim() || sourceDoc.clientName,
+          clientEmail: invoiceFromSourceForm.clientEmail.trim() || undefined,
+          clientPhone: invoiceFromSourceForm.clientPhone.trim() || undefined,
+          clientAddress: invoiceFromSourceForm.clientAddress.trim() || undefined,
+          clientTaxId: invoiceFromSourceForm.clientTaxId.trim() || undefined,
+          items: invoiceFromSourceForm.items.map((i) => ({ id: i.id, description: i.description.trim() || "Item", quantity: Math.max(0, i.quantity), unitPrice: Math.round(i.unitPrice * 100) / 100 })),
+          notes: invoiceFromSourceForm.notes.trim() || undefined,
+          title: invoiceFromSourceForm.title.trim() || undefined,
+          dueDate: invoiceFromSourceForm.dueDate.trim() || undefined,
+        });
+        return (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50" onClick={() => { setCreateModal(null); setInvoiceFromSourcePreselected(null); }}>
+            <div className="bg-white rounded-none border border-gray-200 shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()} style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 flex-shrink-0">
+                <h2 className="font-semibold text-gray-900">{locale === "he" ? "חשבונית מס — עריכה" : "Create Tax Invoice — Edit"}</h2>
+                <button type="button" onClick={() => { setCreateModal(null); setInvoiceFromSourcePreselected(null); }} className="p-2 rounded-none text-gray-500 hover:bg-gray-100">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                <p className="text-sm text-gray-600">
+                  {locale === "he" ? "מס׳ חשבונית" : "Invoice number"}: <strong>{nextInvNum}</strong> · {invoiceFromSourcePreselected.type === "quote" ? (locale === "he" ? "מהצעת מחיר" : "From quote") : (locale === "he" ? "מתעודת משלוח" : "From delivery note")} #{sourceDoc.number}
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div><label className="block text-xs font-medium text-gray-500 mb-1">{locale === "he" ? "שם לקוח" : "Client name"}</label><input type="text" value={invoiceFromSourceForm.clientName} onChange={(e) => setInvoiceFromSourceForm((f) => f && { ...f, clientName: e.target.value })} className="w-full rounded-none border border-gray-200 px-3 py-2 text-sm" /></div>
+                  <div><label className="block text-xs font-medium text-gray-500 mb-1">{locale === "he" ? "אימייל" : "Email"}</label><input type="text" value={invoiceFromSourceForm.clientEmail} onChange={(e) => setInvoiceFromSourceForm((f) => f && { ...f, clientEmail: e.target.value })} className="w-full rounded-none border border-gray-200 px-3 py-2 text-sm" /></div>
+                  <div><label className="block text-xs font-medium text-gray-500 mb-1">{locale === "he" ? "טלפון" : "Phone"}</label><input type="text" value={invoiceFromSourceForm.clientPhone} onChange={(e) => setInvoiceFromSourceForm((f) => f && { ...f, clientPhone: e.target.value })} className="w-full rounded-none border border-gray-200 px-3 py-2 text-sm" /></div>
+                  <div className="sm:col-span-2"><label className="block text-xs font-medium text-gray-500 mb-1">{locale === "he" ? "כתובת" : "Address"}</label><input type="text" value={invoiceFromSourceForm.clientAddress} onChange={(e) => setInvoiceFromSourceForm((f) => f && { ...f, clientAddress: e.target.value })} className="w-full rounded-none border border-gray-200 px-3 py-2 text-sm" /></div>
+                  <div><label className="block text-xs font-medium text-gray-500 mb-1">{locale === "he" ? "ח.פ / ע.מ" : "Tax ID"}</label><input type="text" value={invoiceFromSourceForm.clientTaxId} onChange={(e) => setInvoiceFromSourceForm((f) => f && { ...f, clientTaxId: e.target.value })} className="w-full rounded-none border border-gray-200 px-3 py-2 text-sm" /></div>
+                  <div><label className="block text-xs font-medium text-gray-500 mb-1">{locale === "he" ? "תאריך פירעון" : "Due date"}</label><input type="date" value={invoiceFromSourceForm.dueDate} onChange={(e) => setInvoiceFromSourceForm((f) => f && { ...f, dueDate: e.target.value })} className="w-full rounded-none border border-gray-200 px-3 py-2 text-sm" /></div>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-2"><span className="text-xs font-medium text-gray-500">{locale === "he" ? "פריטים" : "Line items"}</span><button type="button" onClick={() => setInvoiceFromSourceForm((f) => f && { ...f, items: [...f.items, { id: generateUUID(), description: "", quantity: 1, unitPrice: 0 }] })} className="text-xs font-medium" style={{ color: TEAL }}>{locale === "he" ? "+ שורה" : "+ Add row"}</button></div>
+                  <div className="border border-gray-200 rounded-none overflow-hidden">
+                    <table className="w-full text-sm"><thead className="bg-gray-50"><tr><th className="text-left p-2">{locale === "he" ? "תיאור" : "Description"}</th><th className="w-16 p-2">{locale === "he" ? "כמות" : "Qty"}</th><th className="w-24 p-2">{locale === "he" ? "מחיר" : "Price"}</th><th className="w-8 p-2" /></tr></thead><tbody>
+                      {invoiceFromSourceForm.items.map((row, idx) => (
+                        <tr key={row.id} className="border-t border-gray-100">
+                          <td className="p-2"><input type="text" value={row.description} onChange={(e) => setInvoiceFromSourceForm((f) => f && { ...f, items: f.items.map((it, i) => i === idx ? { ...it, description: e.target.value } : it) })} className="w-full rounded-none border border-gray-100 px-2 py-1 text-xs" /></td>
+                          <td className="p-2"><input type="number" min={0} step={1} value={row.quantity} onChange={(e) => setInvoiceFromSourceForm((f) => f && { ...f, items: f.items.map((it, i) => i === idx ? { ...it, quantity: Number(e.target.value) || 0 } : it) })} className="w-full rounded-none border border-gray-100 px-2 py-1 text-xs" /></td>
+                          <td className="p-2"><input type="number" min={0} step={0.01} value={row.unitPrice} onChange={(e) => setInvoiceFromSourceForm((f) => f && { ...f, items: f.items.map((it, i) => i === idx ? { ...it, unitPrice: Number(e.target.value) || 0 } : it) })} className="w-full rounded-none border border-gray-100 px-2 py-1 text-xs" /></td>
+                          <td className="p-2"><button type="button" onClick={() => setInvoiceFromSourceForm((f) => f && f.items.length > 1 ? { ...f, items: f.items.filter((_, i) => i !== idx) } : f)} className="text-gray-400 hover:text-red-600"><X className="w-4 h-4" /></button></td>
+                        </tr>
+                      ))}
+                    </tbody></table>
+                  </div>
+                </div>
+                <div><label className="block text-xs font-medium text-gray-500 mb-1">{locale === "he" ? "כותרת" : "Title"}</label><input type="text" value={invoiceFromSourceForm.title} onChange={(e) => setInvoiceFromSourceForm((f) => f && { ...f, title: e.target.value })} className="w-full rounded-none border border-gray-200 px-3 py-2 text-sm" /></div>
+                <div><label className="block text-xs font-medium text-gray-500 mb-1">{locale === "he" ? "הערות" : "Notes"}</label><textarea value={invoiceFromSourceForm.notes} onChange={(e) => setInvoiceFromSourceForm((f) => f && { ...f, notes: e.target.value })} rows={2} className="w-full rounded-none border border-gray-200 px-3 py-2 text-sm" /></div>
+                <p className="text-sm font-medium text-gray-700">{locale === "he" ? "סה\"כ" : "Total"}: {formatMoney(total)}</p>
+                <button type="button" onClick={() => setGenerateConfirm({ type: "invoice_from_source", sourceId: invoiceFromSourcePreselected.id, sourceType: invoiceFromSourcePreselected.type, data: buildInvoiceData(), nextNumber: nextInvNum, clientName: invoiceFromSourceForm.clientName.trim() || sourceDoc.clientName, total })} className="w-full py-2.5 rounded-none text-white font-semibold text-[13px]" style={{ backgroundColor: TEAL }}>
+                  {locale === "he" ? "הנפק חשבונית" : "Generate Invoice"}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Create Receipt: select paid invoice */}
       {createModal === "receipt" && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50" onClick={() => setCreateModal(null)}>
@@ -2614,46 +3046,184 @@ export default function DocumentsPage() {
         </div>
       )}
 
-      {/* Create Credit Note: select invoice */}
-      {createModal === "credit_note" && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50" onClick={() => setCreateModal(null)}>
-          <div className="bg-white rounded-sm border border-gray-100 shadow-xl max-w-md w-full max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-              <h2 className="font-semibold text-gray-900">New Credit Note — Select invoice to cancel</h2>
-              <button type="button" onClick={() => setCreateModal(null)} className="p-2 rounded-sm text-gray-500 hover:bg-gray-100">
+      {/* Create Credit Note: list → creation page (pre-filled, linked) */}
+      {createModal === "credit_note" && (() => {
+        const docLang = (businessProfile as { documentLanguage?: string } | undefined)?.documentLanguage === "he" ? "he" : (businessProfile as { documentLanguage?: string } | undefined)?.documentLanguage === "en" ? "en" : "both";
+        const bp = businessProfile as { bankDetails?: { bankName?: string; iban?: string; branchNumber?: string; accountNumber?: string; swift?: string; bitLink?: string } } | undefined;
+        const preselectedInvoice = creditNotePreselectedInvoiceId ? documents.find((d) => d.id === creditNotePreselectedInvoiceId && d.type === "invoice" && (d.status as string) !== "canceled") : null;
+        const showCreationView = preselectedInvoice != null;
+        return (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50" onClick={() => { setCreateModal(null); setCreditNotePreselectedInvoiceId(null); }}>
+            <div className={`bg-white rounded-none border border-gray-200 shadow-xl flex flex-col ${showCreationView ? "max-w-[640px] w-full max-h-[90vh]" : "max-w-md w-full max-h-[80vh]"}`} onClick={(e) => e.stopPropagation()} style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 flex-shrink-0">
+              <h2 className="font-semibold text-gray-900">
+                {showCreationView ? (locale === "he" ? "מסמך זיכוי — אישור" : "Credit Note — Confirm") : (locale === "he" ? "מסמך זיכוי — בחר חשבונית" : "Credit Note — Select invoice")}
+              </h2>
+              <button type="button" onClick={() => { setCreateModal(null); setCreditNotePreselectedInvoiceId(null); }} className="p-2 rounded-none text-gray-500 hover:bg-gray-100">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-4">
-              {documents.filter((d) => d.type === "invoice" && (d.status as string) !== "canceled").length === 0 ? (
-                <p className="text-sm text-gray-500">No invoices to cancel.</p>
+            <div className="flex-1 overflow-y-auto min-h-0">
+              {showCreationView && preselectedInvoice ? (
+                <div className="p-4">
+                  <div className="mb-4 text-sm text-gray-600">
+                    {locale === "he" ? `עבור חשבונית #${preselectedInvoice.number}` : `For Invoice #${preselectedInvoice.number}`}
+                  </div>
+                  <div className="bg-gray-50 border border-gray-100 rounded-none overflow-hidden" style={{ width: 595, minHeight: 842, maxWidth: "100%", transform: "scale(0.65)", transformOrigin: "top left" }}>
+                    <div style={{ width: 595, minHeight: 842 }}>
+                      <UnifiedDocumentPreview
+                        company={{ name: businessProfile?.legalName ?? "", address: businessProfile?.address, taxId: businessProfile?.taxId, logoUrl: businessProfile?.businessLogo, signatureUrl: (businessProfile as { signature?: string })?.signature }}
+                        client={{ name: preselectedInvoice.clientName ?? "", email: preselectedInvoice.clientEmail, phone: preselectedInvoice.clientPhone, address: preselectedInvoice.clientAddress, taxId: preselectedInvoice.clientTaxId }}
+                        items={preselectedInvoice.items.map((i) => ({ description: i.description, quantity: i.quantity, unitPrice: i.unitPrice }))}
+                        subtotal={-preselectedInvoice.subtotal}
+                        vatAmount={-preselectedInvoice.vatAmount}
+                        total={-preselectedInvoice.total}
+                        currencySymbol={CURRENCY_SYMBOLS["ILS"] ?? "₪"}
+                        docNumber={`CN-?`}
+                        docType="credit_note"
+                        language={docLang}
+                        date={preselectedInvoice.date}
+                        dueDate={preselectedInvoice.dueDate}
+                        vatRate={preselectedInvoice.vatRate ?? 17}
+                        title={preselectedInvoice.title}
+                        notes={preselectedInvoice.notes}
+                        bankDetails={bp?.bankDetails}
+                        creditForInvoiceNumber={preselectedInvoice.number}
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-4 flex gap-3">
+                    <button type="button" onClick={() => setCreditNotePreselectedInvoiceId(null)} className="flex-1 py-2.5 rounded-none border border-gray-200 bg-white text-gray-700 font-medium text-[13px]">
+                      {locale === "he" ? "חזרה" : "Back"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextCn = (() => {
+                          const list = documents.filter((d) => d.type === "credit_note");
+                          const used = new Set(list.map((d) => d.number));
+                          let n = 1;
+                          while (used.has(`CN-${n}`)) n++;
+                          return `CN-${n}`;
+                        })();
+                        setGenerateConfirm({
+                          type: "credit_note",
+                          invoiceId: preselectedInvoice.id,
+                          nextNumber: nextCn,
+                          invoiceNumber: preselectedInvoice.number,
+                          total: -preselectedInvoice.total,
+                        });
+                      }}
+                      className="flex-1 py-2.5 rounded-none text-white font-semibold text-[13px] inline-flex items-center justify-center gap-2"
+                      style={{ backgroundColor: TEAL }}
+                    >
+                      {locale === "he" ? "הנפק מסמך זיכוי" : "Issue Credit Note"}
+                    </button>
+                  </div>
+                </div>
               ) : (
-                <ul className="space-y-1">
-                  {documents
-                    .filter((d) => d.type === "invoice" && (d.status as string) !== "canceled")
-                    .map((inv) => (
-                      <li key={inv.id}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (issueCreditNote(inv.id)) {
-                              setCreateModal(null);
-                              setActiveTab("cancellations");
-                              showSuccessToast("Credit note issued");
-                            }
-                          }}
-                          className="w-full text-left px-3 py-2 rounded-sm border border-gray-100 hover:bg-gray-50 text-sm font-medium text-gray-900"
-                        >
-                          Invoice #{inv.number} · {inv.clientName} · {formatMoney(inv.total || 0)}
-                        </button>
-                      </li>
-                    ))}
-                </ul>
+                <div className="p-4">
+                  {documents.filter((d) => d.type === "invoice" && (d.status as string) !== "canceled").length === 0 ? (
+                    <p className="text-sm text-gray-500">{locale === "he" ? "אין חשבוניות לביטול." : "No invoices to cancel."}</p>
+                  ) : (
+                    <ul className="space-y-1">
+                      {documents
+                        .filter((d) => d.type === "invoice" && (d.status as string) !== "canceled")
+                        .map((inv) => (
+                          <li key={inv.id}>
+                            <button
+                              type="button"
+                              onClick={() => setCreditNotePreselectedInvoiceId(inv.id)}
+                              className="w-full text-left px-3 py-2 rounded-none border border-gray-100 hover:bg-gray-50 text-sm font-medium text-gray-900"
+                            >
+                              Invoice #{inv.number} · {inv.clientName} · {formatMoney(inv.total || 0)}
+                            </button>
+                          </li>
+                        ))}
+                    </ul>
+                  )}
+                </div>
               )}
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
+
+      {/* Negative Receipt creation page: pre-filled with negative amounts */}
+      {createModal === "negative_receipt" && negativeReceiptPreselectedId && (() => {
+        const docLang = (businessProfile as { documentLanguage?: string } | undefined)?.documentLanguage === "he" ? "he" : (businessProfile as { documentLanguage?: string } | undefined)?.documentLanguage === "en" ? "en" : "both";
+        const bp = businessProfile as { bankDetails?: { bankName?: string; iban?: string; branchNumber?: string; accountNumber?: string; swift?: string; bitLink?: string } } | undefined;
+        const receipt = documents.find((d) => d.id === negativeReceiptPreselectedId && d.type === "receipt" && (d.status as string) !== "canceled");
+        if (!receipt) return null;
+        return (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50" onClick={() => { setCreateModal(null); setNegativeReceiptPreselectedId(null); }}>
+            <div className="bg-white rounded-none border border-gray-200 shadow-xl flex flex-col max-w-[640px] w-full max-h-[90vh]" onClick={(e) => e.stopPropagation()} style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 flex-shrink-0">
+                <h2 className="font-semibold text-gray-900">{locale === "he" ? "קבלה שלילית — אישור" : "Negative Receipt — Confirm"}</h2>
+                <button type="button" onClick={() => { setCreateModal(null); setNegativeReceiptPreselectedId(null); }} className="p-2 rounded-none text-gray-500 hover:bg-gray-100">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 min-h-0">
+                <div className="mb-4 text-sm text-gray-600">
+                  {locale === "he" ? `עבור קבלה #${receipt.number}` : `For Receipt #${receipt.number}`}
+                </div>
+                <div className="bg-gray-50 border border-gray-100 rounded-none overflow-hidden" style={{ width: 595, minHeight: 842, maxWidth: "100%", transform: "scale(0.65)", transformOrigin: "top left" }}>
+                  <div style={{ width: 595, minHeight: 842 }}>
+                    <UnifiedDocumentPreview
+                      company={{ name: businessProfile?.legalName ?? "", address: businessProfile?.address, taxId: businessProfile?.taxId, logoUrl: businessProfile?.businessLogo, signatureUrl: (businessProfile as { signature?: string })?.signature }}
+                      client={{ name: receipt.clientName ?? "", email: receipt.clientEmail, phone: receipt.clientPhone, address: receipt.clientAddress, taxId: receipt.clientTaxId }}
+                      items={receipt.items.map((i) => ({ description: i.description, quantity: i.quantity, unitPrice: i.unitPrice }))}
+                      subtotal={-receipt.subtotal}
+                      vatAmount={-receipt.vatAmount}
+                      total={-receipt.total}
+                      currencySymbol={CURRENCY_SYMBOLS["ILS"] ?? "₪"}
+                      docNumber="NR-?"
+                      docType="negative_receipt"
+                      language={docLang}
+                      date={receipt.date}
+                      vatRate={receipt.vatRate ?? 17}
+                      title={receipt.title}
+                      notes={receipt.notes}
+                      bankDetails={bp?.bankDetails}
+                      originalReceiptNumber={receipt.number}
+                    />
+                  </div>
+                </div>
+                <div className="mt-4 flex gap-3">
+                  <button type="button" onClick={() => { setCreateModal(null); setNegativeReceiptPreselectedId(null); }} className="flex-1 py-2.5 rounded-none border border-gray-200 bg-white text-gray-700 font-medium text-[13px]">
+                    {locale === "he" ? "ביטול" : "Cancel"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextNr = (() => {
+                        const list = documents.filter((d) => d.type === "negative_receipt");
+                        const used = new Set(list.map((d) => d.number));
+                        let n = 1;
+                        while (used.has(`NR-${n}`)) n++;
+                        return `NR-${n}`;
+                      })();
+                      setGenerateConfirm({
+                        type: "negative_receipt",
+                        receiptId: receipt.id,
+                        nextNumber: nextNr,
+                        receiptNumber: receipt.number,
+                        total: -receipt.total,
+                      });
+                    }}
+                    className="flex-1 py-2.5 rounded-none text-white font-semibold text-[13px] inline-flex items-center justify-center gap-2"
+                    style={{ backgroundColor: TEAL }}
+                  >
+                    {locale === "he" ? "הנפק קבלה שלילית" : "Issue Negative Receipt"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Expense modal */}
       <ExpenseModal

@@ -125,6 +125,87 @@ export function convertQuoteToInvoice(userId: string, quoteId: string): BillingI
   return invoice;
 }
 
+/** Payload for creating an invoice from a quote or delivery note (editable creation page). */
+export interface InvoiceFromSourceData {
+  clientId: string;
+  clientName: string;
+  clientEmail?: string;
+  clientPhone?: string;
+  clientAddress?: string;
+  clientTaxId?: string;
+  items: BillingLineItem[];
+  title?: string;
+  notes?: string;
+  dueDate?: string;
+}
+
+export function createInvoiceFromQuoteWithData(userId: string, quoteId: string, data: InvoiceFromSourceData): BillingInvoice | null {
+  const quote = vault.getDocumentById(userId, quoteId) as BillingQuote | null;
+  if (!quote || quote.type !== "quote") return null;
+  const number = getNextInvoiceNumber();
+  const { subtotal, vatAmount, total } = baseFromItems(data.items, quote.vatRate ?? BILLING_VAT_RATE);
+  const now = Date.now();
+  const invoice: BillingInvoice = {
+    ...quote,
+    id: generateUUID(),
+    number,
+    type: "invoice",
+    status: "pending",
+    quoteId: quote.id,
+    clientId: data.clientId,
+    clientName: data.clientName,
+    clientEmail: data.clientEmail,
+    clientPhone: data.clientPhone,
+    clientAddress: data.clientAddress,
+    clientTaxId: data.clientTaxId,
+    items: data.items,
+    subtotal,
+    vatAmount,
+    total,
+    title: data.title,
+    notes: data.notes,
+    dueDate: data.dueDate,
+    date: nowIso(),
+    auditTrail: [...quote.auditTrail, { action: "issued", at: now }],
+    updatedAt: now,
+  };
+  vault.createDocument(userId, invoice);
+  return invoice;
+}
+
+export function createInvoiceFromDeliveryNoteWithData(userId: string, deliveryNoteId: string, data: InvoiceFromSourceData): BillingInvoice | null {
+  const dn = vault.getDocumentById(userId, deliveryNoteId) as BillingDeliveryNote | null;
+  if (!dn || dn.type !== "delivery_note" || dn.status === "canceled") return null;
+  const number = getNextInvoiceNumber();
+  const { subtotal, vatAmount, total } = baseFromItems(data.items, dn.vatRate ?? BILLING_VAT_RATE);
+  const now = Date.now();
+  const invoice: BillingInvoice = {
+    ...dn,
+    id: generateUUID(),
+    number,
+    type: "invoice",
+    status: "pending",
+    clientId: data.clientId,
+    clientName: data.clientName,
+    clientEmail: data.clientEmail,
+    clientPhone: data.clientPhone,
+    clientAddress: data.clientAddress,
+    clientTaxId: data.clientTaxId,
+    items: data.items,
+    subtotal,
+    vatAmount,
+    total,
+    title: data.title,
+    notes: data.notes,
+    dueDate: data.dueDate,
+    date: nowIso(),
+    auditTrail: [...dn.auditTrail, { action: "issued", at: now, note: "From delivery note" }],
+    updatedAt: now,
+  };
+  vault.createDocument(userId, invoice);
+  return invoice;
+}
+
 export function convertDeliveryNoteToInvoice(userId: string, deliveryNoteId: string): BillingInvoice | null {
   const dn = vault.getDocumentById(userId, deliveryNoteId) as BillingDeliveryNote | null;
   if (!dn || dn.type !== "delivery_note") return null;
@@ -170,6 +251,71 @@ export function createReceiptForInvoice(userId: string, invoiceId: string): Bill
     invoiceId,
     auditTrail: [...invoice.auditTrail, { action: "created", at: Date.now(), note: "Receipt issued" }],
     updatedAt: Date.now(),
+  };
+  vault.createDocument(userId, receipt);
+  return receipt;
+}
+
+/** Data override when creating a receipt from an invoice (editable creation page). */
+export interface ReceiptFromInvoiceData {
+  clientId: string;
+  clientName: string;
+  clientEmail?: string;
+  clientPhone?: string;
+  clientAddress?: string;
+  clientTaxId?: string;
+  items: BillingLineItem[];
+  title?: string;
+  notes?: string;
+}
+
+/**
+ * Create a receipt from an invoice with user-edited data. Uses next sequential receipt number.
+ * If markPaidFirst is true, the invoice is set to paid before creating the receipt.
+ */
+export function createReceiptForInvoiceWithData(
+  userId: string,
+  invoiceId: string,
+  data: ReceiptFromInvoiceData,
+  options?: { markPaidFirst?: boolean }
+): BillingReceipt | null {
+  const invoice = vault.getDocumentById(userId, invoiceId) as BillingInvoice | null;
+  if (!invoice || invoice.type !== "invoice" || invoice.status === "canceled") return null;
+  if (options?.markPaidFirst && invoice.status !== "paid") {
+    const updatedInvoice: BillingInvoice = {
+      ...invoice,
+      status: "paid",
+      auditTrail: [...invoice.auditTrail, { action: "paid", at: Date.now() }],
+      updatedAt: Date.now(),
+    };
+    vault.replaceDocument(userId, updatedInvoice);
+  }
+  const invoiceForSpread = vault.getDocumentById(userId, invoiceId) as BillingInvoice;
+  const { subtotal, vatAmount, total } = baseFromItems(data.items, invoiceForSpread.vatRate);
+  const number = getNextReceiptNumber();
+  const now = Date.now();
+  const receipt: BillingReceipt = {
+    ...invoiceForSpread,
+    id: generateUUID(),
+    number,
+    type: "receipt",
+    status: "paid",
+    invoiceId,
+    clientId: data.clientId,
+    clientName: data.clientName,
+    clientEmail: data.clientEmail,
+    clientPhone: data.clientPhone,
+    clientAddress: data.clientAddress,
+    clientTaxId: data.clientTaxId,
+    items: data.items,
+    subtotal,
+    vatAmount,
+    total,
+    title: data.title,
+    notes: data.notes,
+    date: nowIso(),
+    auditTrail: [...invoiceForSpread.auditTrail, { action: "created", at: now, note: "Receipt issued from invoice" }],
+    updatedAt: now,
   };
   vault.createDocument(userId, receipt);
   return receipt;

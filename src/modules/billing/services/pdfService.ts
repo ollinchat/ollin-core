@@ -87,15 +87,29 @@ export async function generateDocumentPdf(
 
   let y = MARGIN;
 
-  // From (issuer)
-  y = drawLogo(pdf, from.businessLogo || undefined, MARGIN, y, 28, 28);
-  pdf.setFontSize(12).setTextColor(0, 0, 0);
+  // Compact header: From | To in single row (10–11pt), minimal vertical space
+  const headerY = y;
+  const logoH = 18;
+  const logoW = 18;
+  y = drawLogo(pdf, from.businessLogo || undefined, MARGIN, headerY, logoW, logoH);
+  pdf.setFontSize(10).setTextColor(0, 0, 0);
+  pdf.text("From", MARGIN, y);
+  y += 4;
+  pdf.setFontSize(9).setTextColor(60, 60, 60);
   pdf.text(from.legalName || "—", MARGIN, y);
-  y += 6;
-  pdf.setFontSize(9).setTextColor(80, 80, 80);
-  if (from.taxId) pdf.text(`Tax ID: ${from.taxId}`, MARGIN, y), (y += 5);
-  if (from.address) pdf.text(from.address, MARGIN, y), (y += 5);
-  y += 8;
+  y += 4;
+  const fromLine2 = [from.taxId ? `Tax ID: ${from.taxId}` : "", from.address || ""].filter(Boolean).join(" · ");
+  if (fromLine2) pdf.text(fromLine2.slice(0, 55), MARGIN, y), (y += 4);
+  y += 2;
+
+  const toStartY = headerY;
+  pdf.setFontSize(10).setTextColor(0, 0, 0);
+  pdf.text("To", PAGE_W / 2 + 5, toStartY + 4);
+  pdf.setFontSize(9).setTextColor(60, 60, 60);
+  pdf.text(doc.clientName || "—", PAGE_W / 2 + 5, toStartY + 8);
+  const toLine2 = [doc.clientEmail || "", doc.clientAddress || ""].filter(Boolean).join(" · ");
+  if (toLine2) pdf.text(toLine2.slice(0, 50), PAGE_W / 2 + 5, toStartY + 12);
+  y = Math.max(y, toStartY + 16);
 
   // Doc type & number
   const typeLabel =
@@ -114,66 +128,55 @@ export async function generateDocumentPdf(
                 : "Draft";
   pdf.setFontSize(16).setTextColor(0, 102, 102);
   pdf.text(`${typeLabel} ${doc.number}`, PAGE_W - MARGIN, MARGIN, { align: "right" });
-  y = Math.max(y, MARGIN + 10);
-  pdf.setFontSize(9).setTextColor(100, 100, 100);
+  y = Math.max(y, MARGIN + 6);
+  pdf.setFontSize(8).setTextColor(100, 100, 100);
   pdf.text(`Date: ${doc.date}`, PAGE_W - MARGIN, y, { align: "right" });
-  y += 5;
+  y += 4;
   if (doc.type === "credit_note" && doc.creditForInvoiceNumber) {
-    pdf.text(`For Invoice #${doc.creditForInvoiceNumber}`, PAGE_W - MARGIN, y, { align: "right" });
-    y += 5;
+    pdf.text(`Credit for Invoice #${doc.creditForInvoiceNumber}`, PAGE_W - MARGIN, y, { align: "right" });
+    y += 4;
   }
   if (doc.type === "negative_receipt" && doc.originalReceiptNumber) {
-    pdf.text(`For Receipt #${doc.originalReceiptNumber}`, PAGE_W - MARGIN, y, { align: "right" });
-    y += 5;
+    pdf.text(`Cancellation of Receipt #${doc.originalReceiptNumber}`, PAGE_W - MARGIN, y, { align: "right" });
+    y += 4;
   }
-  y += 7;
-
-  // To (client)
-  pdf.setFontSize(11).setTextColor(0, 0, 0);
-  pdf.text("Bill To", MARGIN, y);
-  y += 6;
-  pdf.setFontSize(9);
-  pdf.text(doc.clientName || "—", MARGIN, y);
   y += 5;
-  if (doc.clientEmail) pdf.text(doc.clientEmail, MARGIN, y), (y += 5);
-  if (doc.clientAddress) pdf.text(doc.clientAddress, MARGIN, y), (y += 5);
-  y += 10;
 
-  // Table header
+  // Table header – compact
   const colW = [90, 20, 30, 30];
   const tableX = MARGIN;
   pdf.setFillColor(248, 248, 248);
-  pdf.rect(tableX, y, colW.reduce((a, b) => a + b, 0), 8);
-  pdf.setFontSize(9).setTextColor(0, 0, 0);
-  pdf.text("Description", tableX + 2, y + 5.5);
-  pdf.text("Qty", tableX + 92, y + 5.5);
-  pdf.text("Unit Price", tableX + 114, y + 5.5);
-  pdf.text("Amount", tableX + 126, y + 5.5);
-  y += 10;
+  pdf.rect(tableX, y, colW.reduce((a, b) => a + b, 0), 6);
+  pdf.setFontSize(8).setTextColor(0, 0, 0);
+  pdf.text("Description", tableX + 2, y + 4);
+  pdf.text("Qty", tableX + 92, y + 4);
+  pdf.text("Unit Price", tableX + 114, y + 4);
+  pdf.text("Amount", tableX + 126, y + 4);
+  y += 6;
 
   doc.items.forEach((item) => {
     const amount = item.quantity * item.unitPrice;
-    pdf.setFontSize(9);
-    pdf.text(item.description.slice(0, 50), tableX + 2, y + 4);
-    pdf.text(String(item.quantity), tableX + 92, y + 4);
-    pdf.text(item.unitPrice.toFixed(2), tableX + 114, y + 4);
-    pdf.text(amount.toFixed(2), tableX + 126, y + 4);
-    y += 6;
+    pdf.setFontSize(8);
+    pdf.text(item.description.slice(0, 50), tableX + 2, y + 3);
+    pdf.text(String(item.quantity), tableX + 92, y + 3);
+    pdf.text(item.unitPrice.toFixed(2), tableX + 114, y + 3);
+    pdf.text(amount.toFixed(2), tableX + 126, y + 3);
+    y += 4;
   });
 
   const formatPdfAmount = (n: number) => (n < 0 ? `-${(-n).toFixed(2)}` : n.toFixed(2));
+  y += 4;
+  pdf.setFontSize(8);
+  pdf.text("Subtotal", tableX + 92, y + 3);
+  pdf.text(formatPdfAmount(doc.subtotal), tableX + 126, y + 3);
+  y += 4;
+  pdf.text(`VAT (${doc.vatRate}%)`, tableX + 92, y + 3);
+  pdf.text(formatPdfAmount(doc.vatAmount), tableX + 126, y + 3);
+  y += 4;
+  pdf.setFontSize(9).setFont(undefined, "bold");
+  pdf.text("Total", tableX + 92, y + 3);
+  pdf.text(formatPdfAmount(doc.total), tableX + 126, y + 3);
   y += 6;
-  pdf.setFontSize(9);
-  pdf.text("Subtotal", tableX + 92, y + 4);
-  pdf.text(formatPdfAmount(doc.subtotal), tableX + 126, y + 4);
-  y += 6;
-  pdf.text(`VAT (${doc.vatRate}%)`, tableX + 92, y + 4);
-  pdf.text(formatPdfAmount(doc.vatAmount), tableX + 126, y + 4);
-  y += 6;
-  pdf.setFontSize(10).setFont(undefined, "bold");
-  pdf.text("Total", tableX + 92, y + 4);
-  pdf.text(formatPdfAmount(doc.total), tableX + 126, y + 4);
-  y += 10;
 
   // Bank details: on invoices, credit notes, and negative receipts (every A4 issued doc)
   const showBankDetails = (doc.type === "invoice" || doc.type === "credit_note" || doc.type === "negative_receipt") && from.bankDetails && (from.bankDetails.iban || from.bankDetails.bankName || from.bankDetails.accountNumber);

@@ -48,10 +48,13 @@ type BillingContextType = {
   createDraft: (client: BillingClient, items?: BillingLineItem[], notes?: string, title?: string) => BillingDocument | null;
   convertToQuote: (draftId: string) => BillingDocument | null;
   convertQuoteToInvoice: (quoteId: string) => BillingDocument | null;
+  createInvoiceFromQuoteWithData: (quoteId: string, data: documentService.InvoiceFromSourceData) => BillingDocument | null;
+  createInvoiceFromDeliveryNoteWithData: (deliveryNoteId: string, data: documentService.InvoiceFromSourceData) => BillingDocument | null;
   createDeliveryNote: (client: BillingClient, items?: BillingLineItem[], notes?: string, title?: string) => BillingDocument | null;
   convertDeliveryNoteToInvoice: (deliveryNoteId: string) => BillingDocument | null;
   markPaid: (invoiceId: string) => BillingDocument | null;
   createReceipt: (invoiceId: string) => BillingDocument | null;
+  createReceiptFromInvoiceWithData: (invoiceId: string, data: import("@/modules/billing/services/documentService").ReceiptFromInvoiceData, options?: { markPaidFirst?: boolean }) => BillingDocument | null;
   issueCreditNote: (invoiceId: string) => BillingDocument | null;
   issueNegativeReceipt: (receiptId: string) => BillingDocument | null;
   cancelQuote: (quoteId: string) => BillingDocument | null;
@@ -381,6 +384,26 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
     [userId, refreshDocuments]
   );
 
+  const createInvoiceFromQuoteWithData = useCallback(
+    (quoteId: string, data: documentService.InvoiceFromSourceData) => {
+      if (!userId) return null;
+      const inv = documentService.createInvoiceFromQuoteWithData(userId, quoteId, data);
+      refreshDocuments();
+      return inv;
+    },
+    [userId, refreshDocuments]
+  );
+
+  const createInvoiceFromDeliveryNoteWithData = useCallback(
+    (deliveryNoteId: string, data: documentService.InvoiceFromSourceData) => {
+      if (!userId) return null;
+      const inv = documentService.createInvoiceFromDeliveryNoteWithData(userId, deliveryNoteId, data);
+      refreshDocuments();
+      return inv;
+    },
+    [userId, refreshDocuments]
+  );
+
   const createDeliveryNote = useCallback(
     (client: BillingClient, items?: BillingLineItem[], notes?: string, title?: string) => {
       if (!userId) return null;
@@ -426,6 +449,16 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
     (invoiceId: string) => {
       if (!userId) return null;
       const doc = documentService.createReceiptForInvoice(userId, invoiceId);
+      refreshDocuments();
+      return doc;
+    },
+    [userId, refreshDocuments]
+  );
+
+  const createReceiptFromInvoiceWithData = useCallback(
+    (invoiceId: string, data: documentService.ReceiptFromInvoiceData, options?: { markPaidFirst?: boolean }) => {
+      if (!userId) return null;
+      const doc = documentService.createReceiptForInvoiceWithData(userId, invoiceId, data, options);
       refreshDocuments();
       return doc;
     },
@@ -573,10 +606,13 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
       createDraft,
       convertToQuote,
       convertQuoteToInvoice,
+      createInvoiceFromQuoteWithData,
+      createInvoiceFromDeliveryNoteWithData,
       createDeliveryNote,
       convertDeliveryNoteToInvoice,
       markPaid,
       createReceipt,
+      createReceiptFromInvoiceWithData,
       issueCreditNote,
       issueNegativeReceipt,
       cancelQuote,
@@ -604,10 +640,13 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
       createDraft,
       convertToQuote,
       convertQuoteToInvoice,
+      createInvoiceFromQuoteWithData,
+      createInvoiceFromDeliveryNoteWithData,
       createDeliveryNote,
       convertDeliveryNoteToInvoice,
       markPaid,
       createReceipt,
+      createReceiptFromInvoiceWithData,
       issueCreditNote,
       issueNegativeReceipt,
       cancelQuote,
