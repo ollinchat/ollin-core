@@ -84,7 +84,7 @@ type GenerateConfirmPayload =
   | { type: "invoice_from_source"; sourceId: string; sourceType: "quote" | "delivery_note"; data: import("@/modules/billing/services/documentService").InvoiceFromSourceData; nextNumber: string; clientName: string; total: number }
   | { type: "credit_note"; invoiceId: string; nextNumber: string; invoiceNumber: string; total: number }
   | { type: "negative_receipt"; receiptId: string; nextNumber: string; receiptNumber: string; total: number };
-type UiStatus = "draft" | "pending" | "paid" | "canceled" | "overdue";
+type UiStatus = "draft" | "pending" | "paid" | "canceled" | "overdue" | "invoiced";
 
 function docTypeLabel(t: BillingDocument["type"]): string {
   if (t === "invoice") return "Invoice";
@@ -124,12 +124,15 @@ function StatusBadge({ status, locale = "en" }: { status: UiStatus; locale?: "en
           ? "bg-amber-100/60 text-amber-700 font-semibold"
           : status === "canceled"
             ? "bg-gray-100/80 text-gray-500 font-medium"
-            : "bg-sky-100/70 text-sky-700 font-medium";
+            : status === "invoiced"
+              ? "bg-violet-100/80 text-violet-700 font-medium"
+              : "bg-sky-100/70 text-sky-700 font-medium";
   const label =
     status === "overdue" ? (locale === "he" ? "באיחור" : "Overdue")
     : status === "paid" ? (locale === "he" ? "שולם" : "Paid")
     : status === "canceled" ? (locale === "he" ? "מבוטל" : "Canceled")
     : status === "pending" ? (locale === "he" ? "ממתין" : "Pending")
+    : status === "invoiced" ? (locale === "he" ? "הופקה חשבונית" : "Invoiced")
     : status === "draft" ? (locale === "he" ? "אקטיבי" : "Active")
     : (locale === "he" ? "אקטיבי" : "Active");
   return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium ${cls}`}>{label}</span>;
@@ -146,9 +149,10 @@ function expenseDateIso(e: BillingExpense): string {
 }
 
 function getInvoiceUiStatus(doc: BillingDocument, todayIso: string): UiStatus {
-  const s = doc.status as UiStatus;
-  if (doc.type !== "invoice") return s;
-  if (s === "paid" || s === "canceled" || s === "draft") return s;
+  const s = doc.status as string;
+  if (doc.type === "quote" && s === "invoiced") return "invoiced";
+  if (doc.type !== "invoice") return s as UiStatus;
+  if (s === "paid" || s === "canceled" || s === "draft") return s as UiStatus;
   if (s === "pending" && doc.dueDate && doc.dueDate < todayIso) return "overdue";
   return "pending";
 }
@@ -1435,9 +1439,10 @@ export default function DocumentsPage() {
     clientPhone: string;
     clientAddress: string;
     clientTaxId: string;
-    items: { id: string; description: string; quantity: number; unitPrice: number }[];
+    items: { id: string; description: string; quantity: number; unitPrice: number; discountPct?: number }[];
     notes: string;
     title: string;
+    documentLanguage?: "he" | "en" | "bilingual";
   } | null>(null);
   const [invoiceFromSourceForm, setInvoiceFromSourceForm] = useState<{
     clientName: string;
@@ -1449,6 +1454,7 @@ export default function DocumentsPage() {
     notes: string;
     title: string;
     dueDate: string;
+    documentLanguage?: "he" | "en" | "bilingual";
   } | null>(null);
 
   const showSuccessToast = useCallback((message: string) => {
@@ -1457,6 +1463,7 @@ export default function DocumentsPage() {
     return () => clearTimeout(t);
   }, []);
 
+  const defaultDocLang = (businessProfile as { documentLanguage?: "he" | "en" | "bilingual" } | undefined)?.documentLanguage ?? "en";
   useEffect(() => {
     if (createModal === "receipt_from_invoice" && receiptFromInvoicePreselectedId) {
       const inv = documents.find((d) => d.id === receiptFromInvoicePreselectedId && d.type === "invoice");
@@ -1470,6 +1477,7 @@ export default function DocumentsPage() {
           items: inv.items.map((i) => ({ id: i.id, description: i.description, quantity: i.quantity, unitPrice: i.unitPrice, discountPct: (i as { discountPct?: number }).discountPct })),
           notes: inv.notes ?? "",
           title: inv.title ?? "",
+          documentLanguage: (inv as { documentLanguage?: "he" | "en" | "bilingual" }).documentLanguage ?? defaultDocLang,
         });
       } else {
         setReceiptForm(null);
@@ -1477,7 +1485,7 @@ export default function DocumentsPage() {
     } else {
       setReceiptForm(null);
     }
-  }, [createModal, receiptFromInvoicePreselectedId, documents]);
+  }, [createModal, receiptFromInvoicePreselectedId, documents, defaultDocLang]);
 
   useEffect(() => {
     if (createModal === "invoice_from_source" && invoiceFromSourcePreselected) {
@@ -1493,6 +1501,7 @@ export default function DocumentsPage() {
           notes: doc.notes ?? "",
           title: doc.title ?? "",
           dueDate: doc.dueDate ?? "",
+          documentLanguage: (doc as { documentLanguage?: "he" | "en" | "bilingual" }).documentLanguage ?? defaultDocLang,
         });
       } else {
         setInvoiceFromSourceForm(null);
@@ -1500,7 +1509,7 @@ export default function DocumentsPage() {
     } else {
       setInvoiceFromSourceForm(null);
     }
-  }, [createModal, invoiceFromSourcePreselected, documents]);
+  }, [createModal, invoiceFromSourcePreselected, documents, defaultDocLang]);
 
   // After issuing Credit Note or Negative Receipt: if client has email, trigger share flow (same as primary invoice) for "automatic email delivery"
   useEffect(() => {
@@ -2281,7 +2290,7 @@ export default function DocumentsPage() {
                     const uiStatus = getInvoiceUiStatus(d, todayIso);
                     const isCanceled = (d.status as string) === "canceled";
                     const notCanceled = !isCanceled;
-                    const canConvertToInvoice = (d.type === "quote" || d.type === "delivery_note") && notCanceled;
+                    const canConvertToInvoice = (d.type === "quote" && (d.status as string) !== "invoiced") || (d.type === "delivery_note" && notCanceled);
                     const canIssueReceipt = d.type === "invoice" && notCanceled && (d.status as string) !== "paid";
                     const canCreateCreditNote = d.type === "invoice" && notCanceled;
                     const canCancelQuote = d.type === "quote" && notCanceled;
@@ -2923,6 +2932,7 @@ export default function DocumentsPage() {
           items: receiptForm.items.map((i) => ({ id: i.id, description: i.description.trim() || "Item", quantity: Math.max(0, i.quantity), unitPrice: Math.round(i.unitPrice * 100) / 100, discountPct: Math.min(100, Math.max(0, (i as { discountPct?: number }).discountPct ?? 0)) })),
           notes: receiptForm.notes.trim() || undefined,
           title: receiptForm.title.trim() || undefined,
+          documentLanguage: receiptForm.documentLanguage ?? defaultDocLang,
         });
         return (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50" onClick={() => { setCreateModal(null); setReceiptFromInvoicePreselectedId(null); }}>
@@ -2958,24 +2968,40 @@ export default function DocumentsPage() {
                     <label className="block text-xs font-medium text-gray-500 mb-1">{locale === "he" ? "ח.פ / ע.מ" : "Tax ID"}</label>
                     <input type="text" value={receiptForm.clientTaxId} onChange={(e) => setReceiptForm((f) => f && { ...f, clientTaxId: e.target.value })} className="w-full rounded-none border border-gray-200 px-3 py-2 text-sm" />
                   </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">{locale === "he" ? "שפת המסמך" : "Document language"}</label>
+                    <select value={receiptForm.documentLanguage ?? defaultDocLang} onChange={(e) => setReceiptForm((f) => f && { ...f, documentLanguage: e.target.value as "he" | "en" | "bilingual" })} className="w-full rounded-none border border-gray-200 px-3 py-2 text-sm">
+                      <option value="he">{locale === "he" ? "עברית" : "Hebrew"}</option>
+                      <option value="en">{locale === "he" ? "אנגלית" : "English"}</option>
+                      <option value="bilingual">{locale === "he" ? "שתי שפות" : "Both"}</option>
+                    </select>
+                  </div>
                 </div>
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-medium text-gray-500">{locale === "he" ? "פריטים" : "Line items"}</span>
-                    <button type="button" onClick={() => setReceiptForm((f) => f && { ...f, items: [...f.items, { id: generateUUID(), description: "", quantity: 1, unitPrice: 0 }] })} className="text-xs font-medium" style={{ color: TEAL }}>{locale === "he" ? "+ שורה" : "+ Add row"}</button>
+                    <button type="button" onClick={() => setReceiptForm((f) => f && { ...f, items: [...f.items, { id: generateUUID(), description: "", quantity: 1, unitPrice: 0, discountPct: 0 }] })} className="text-xs font-medium" style={{ color: TEAL }}>{locale === "he" ? "+ שורה" : "+ Add row"}</button>
                   </div>
-                  <div className="border border-gray-200 rounded-none overflow-hidden">
-                    <table className="w-full text-sm">
-                      <thead className="bg-gray-50"><tr><th className="text-left p-2">{locale === "he" ? "תיאור" : "Description"}</th><th className="w-16 p-2">{locale === "he" ? "כמות" : "Qty"}</th><th className="w-24 p-2">{locale === "he" ? "מחיר" : "Price"}</th><th className="w-8 p-2" /></tr></thead>
+                  <div className="border border-gray-200 overflow-x-auto">
+                    <table className="w-full text-sm min-w-[640px]">
+                      <thead className="bg-gray-50"><tr><th className="text-left p-2">{locale === "he" ? "תיאור" : "Description"}</th><th className="w-14 p-2">{locale === "he" ? "כמות" : "Qty"}</th><th className="w-22 p-2">{locale === "he" ? "מחיר (ללא מע\"מ)" : "Price (excl. VAT)"}</th><th className="w-16 p-2">{locale === "he" ? "הנחה %" : "Disc. %"}</th><th className="w-20 p-2 text-right">{locale === "he" ? "מע\"מ" : "VAT"}</th><th className="w-22 p-2 text-right">{locale === "he" ? "סה\"כ כולל" : "Line total (incl.)"}</th><th className="w-8 p-2" /></tr></thead>
                       <tbody>
-                        {receiptForm.items.map((row, idx) => (
-                          <tr key={row.id} className="border-t border-gray-100">
-                            <td className="p-2"><input type="text" value={row.description} onChange={(e) => setReceiptForm((f) => f && { ...f, items: f.items.map((it, i) => i === idx ? { ...it, description: e.target.value } : it) })} className="w-full rounded-none border border-gray-100 px-2 py-1 text-xs" placeholder="Item" /></td>
-                            <td className="p-2"><input type="number" min={0} step={1} value={row.quantity} onChange={(e) => setReceiptForm((f) => f && { ...f, items: f.items.map((it, i) => i === idx ? { ...it, quantity: Number(e.target.value) || 0 } : it) })} className="w-full rounded-none border border-gray-100 px-2 py-1 text-xs" /></td>
-                            <td className="p-2"><input type="number" min={0} step={0.01} value={row.unitPrice} onChange={(e) => setReceiptForm((f) => f && { ...f, items: f.items.map((it, i) => i === idx ? { ...it, unitPrice: Number(e.target.value) || 0 } : it) })} className="w-full rounded-none border border-gray-100 px-2 py-1 text-xs" /></td>
-                            <td className="p-2"><button type="button" onClick={() => setReceiptForm((f) => f && f.items.length > 1 ? { ...f, items: f.items.filter((_, i) => i !== idx) } : f)} className="text-gray-400 hover:text-red-600"><X className="w-4 h-4" /></button></td>
-                          </tr>
-                        ))}
+                        {receiptForm.items.map((row, idx) => {
+                          const lineExcl = row.quantity * row.unitPrice * (1 - ((row as { discountPct?: number }).discountPct ?? 0) / 100);
+                          const lineVat = Math.round((lineExcl * vatRate) / 100 * 100) / 100;
+                          const lineIncl = Math.round((lineExcl + lineVat) * 100) / 100;
+                          return (
+                            <tr key={row.id} className="border-t border-gray-100">
+                              <td className="p-2"><input type="text" value={row.description} onChange={(e) => setReceiptForm((f) => f && { ...f, items: f.items.map((it, i) => i === idx ? { ...it, description: e.target.value } : it) })} className="w-full border border-gray-100 px-2 py-1 text-xs" placeholder="Item" /></td>
+                              <td className="p-2"><input type="number" min={0} step={1} value={row.quantity} onChange={(e) => setReceiptForm((f) => f && { ...f, items: f.items.map((it, i) => i === idx ? { ...it, quantity: Number(e.target.value) || 0 } : it) })} className="w-full border border-gray-100 px-2 py-1 text-xs" /></td>
+                              <td className="p-2"><input type="number" min={0} step={0.01} value={row.unitPrice} onChange={(e) => setReceiptForm((f) => f && { ...f, items: f.items.map((it, i) => i === idx ? { ...it, unitPrice: Number(e.target.value) || 0 } : it) })} className="w-full border border-gray-100 px-2 py-1 text-xs" /></td>
+                              <td className="p-2"><input type="number" min={0} max={100} step={0.5} value={(row as { discountPct?: number }).discountPct ?? ""} onChange={(e) => setReceiptForm((f) => f && { ...f, items: f.items.map((it, i) => i === idx ? { ...it, discountPct: Math.min(100, Math.max(0, Number(e.target.value) || 0)) } : it) })} className="w-full border border-gray-100 px-2 py-1 text-xs" placeholder="0" /></td>
+                              <td className="p-2 text-right text-gray-600 tabular-nums">{formatMoney(lineVat)}</td>
+                              <td className="p-2 text-right font-medium tabular-nums">{formatMoney(lineIncl)}</td>
+                              <td className="p-2"><button type="button" onClick={() => setReceiptForm((f) => f && f.items.length > 1 ? { ...f, items: f.items.filter((_, i) => i !== idx) } : f)} className="text-gray-400 hover:text-red-600"><X className="w-4 h-4" /></button></td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -2991,7 +3017,7 @@ export default function DocumentsPage() {
                 <p className="text-sm font-medium text-gray-700">{locale === "he" ? "סה\"כ" : "Total"}: {formatMoney(total)}</p>
                 <button
                   type="button"
-                  onClick={() => setGenerateConfirm({ type: "receipt_from_invoice", invoiceId: invoice.id, data: buildData(), nextNumber: nextReceiptNum, clientName: receiptForm.clientName.trim() || invoice.clientName, total, markPaidFirst: (invoice.status as string) !== "paid" })}
+                  onClick={() => setGenerateConfirm({ type: "receipt_from_invoice", invoiceId: invoice.id, data: buildData(), nextNumber: nextReceiptNum, clientName: receiptForm.clientName.trim() || invoice.clientName, total })}
                   className="w-full py-2.5 rounded-none text-white font-semibold text-[13px]"
                   style={{ backgroundColor: TEAL }}
                 >
@@ -3026,6 +3052,7 @@ export default function DocumentsPage() {
           notes: invoiceFromSourceForm.notes.trim() || undefined,
           title: invoiceFromSourceForm.title.trim() || undefined,
           dueDate: invoiceFromSourceForm.dueDate.trim() || undefined,
+          documentLanguage: invoiceFromSourceForm.documentLanguage ?? defaultDocLang,
         });
         return (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50" onClick={() => { setCreateModal(null); setInvoiceFromSourcePreselected(null); }}>
@@ -3047,19 +3074,35 @@ export default function DocumentsPage() {
                   <div className="sm:col-span-2"><label className="block text-xs font-medium text-gray-500 mb-1">{locale === "he" ? "כתובת" : "Address"}</label><input type="text" value={invoiceFromSourceForm.clientAddress} onChange={(e) => setInvoiceFromSourceForm((f) => f && { ...f, clientAddress: e.target.value })} className="w-full rounded-none border border-gray-200 px-3 py-2 text-sm" /></div>
                   <div><label className="block text-xs font-medium text-gray-500 mb-1">{locale === "he" ? "ח.פ / ע.מ" : "Tax ID"}</label><input type="text" value={invoiceFromSourceForm.clientTaxId} onChange={(e) => setInvoiceFromSourceForm((f) => f && { ...f, clientTaxId: e.target.value })} className="w-full rounded-none border border-gray-200 px-3 py-2 text-sm" /></div>
                   <div><label className="block text-xs font-medium text-gray-500 mb-1">{locale === "he" ? "תאריך פירעון" : "Due date"}</label><input type="date" value={invoiceFromSourceForm.dueDate} onChange={(e) => setInvoiceFromSourceForm((f) => f && { ...f, dueDate: e.target.value })} className="w-full rounded-none border border-gray-200 px-3 py-2 text-sm" /></div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-medium text-gray-500 mb-1">{locale === "he" ? "שפת המסמך" : "Document language"}</label>
+                    <select value={invoiceFromSourceForm.documentLanguage ?? defaultDocLang} onChange={(e) => setInvoiceFromSourceForm((f) => f && { ...f, documentLanguage: e.target.value as "he" | "en" | "bilingual" })} className="w-full rounded-none border border-gray-200 px-3 py-2 text-sm">
+                      <option value="he">{locale === "he" ? "עברית" : "Hebrew"}</option>
+                      <option value="en">{locale === "he" ? "אנגלית" : "English"}</option>
+                      <option value="bilingual">{locale === "he" ? "שתי שפות" : "Both"}</option>
+                    </select>
+                  </div>
                 </div>
                 <div>
                   <div className="flex items-center justify-between mb-2"><span className="text-xs font-medium text-gray-500">{locale === "he" ? "פריטים" : "Line items"}</span><button type="button" onClick={() => setInvoiceFromSourceForm((f) => f && { ...f, items: [...f.items, { id: generateUUID(), description: "", quantity: 1, unitPrice: 0, discountPct: 0 }] })} className="text-xs font-medium" style={{ color: TEAL }}>{locale === "he" ? "+ שורה" : "+ Add row"}</button></div>
-                  <div className="border border-gray-200 rounded-none overflow-hidden">
-                    <table className="w-full text-sm"><thead className="bg-gray-50"><tr><th className="text-left p-2">{locale === "he" ? "תיאור" : "Description"}</th><th className="w-16 p-2">{locale === "he" ? "כמות" : "Qty"}</th><th className="w-24 p-2">{locale === "he" ? "מחיר" : "Price"}</th><th className="w-8 p-2" /></tr></thead><tbody>
-                      {invoiceFromSourceForm.items.map((row, idx) => (
-                        <tr key={row.id} className="border-t border-gray-100">
-                          <td className="p-2"><input type="text" value={row.description} onChange={(e) => setInvoiceFromSourceForm((f) => f && { ...f, items: f.items.map((it, i) => i === idx ? { ...it, description: e.target.value } : it) })} className="w-full rounded-none border border-gray-100 px-2 py-1 text-xs" /></td>
-                          <td className="p-2"><input type="number" min={0} step={1} value={row.quantity} onChange={(e) => setInvoiceFromSourceForm((f) => f && { ...f, items: f.items.map((it, i) => i === idx ? { ...it, quantity: Number(e.target.value) || 0 } : it) })} className="w-full rounded-none border border-gray-100 px-2 py-1 text-xs" /></td>
-                          <td className="p-2"><input type="number" min={0} step={0.01} value={row.unitPrice} onChange={(e) => setInvoiceFromSourceForm((f) => f && { ...f, items: f.items.map((it, i) => i === idx ? { ...it, unitPrice: Number(e.target.value) || 0 } : it) })} className="w-full rounded-none border border-gray-100 px-2 py-1 text-xs" /></td>
-                          <td className="p-2"><button type="button" onClick={() => setInvoiceFromSourceForm((f) => f && f.items.length > 1 ? { ...f, items: f.items.filter((_, i) => i !== idx) } : f)} className="text-gray-400 hover:text-red-600"><X className="w-4 h-4" /></button></td>
-                        </tr>
-                      ))}
+                  <div className="border border-gray-200 overflow-x-auto">
+                    <table className="w-full text-sm min-w-[640px]"><thead className="bg-gray-50"><tr><th className="text-left p-2">{locale === "he" ? "תיאור" : "Description"}</th><th className="w-14 p-2">{locale === "he" ? "כמות" : "Qty"}</th><th className="w-22 p-2">{locale === "he" ? "מחיר (ללא מע\"מ)" : "Price (excl. VAT)"}</th><th className="w-16 p-2">{locale === "he" ? "הנחה %" : "Disc. %"}</th><th className="w-20 p-2 text-right">{locale === "he" ? "מע\"מ" : "VAT"}</th><th className="w-22 p-2 text-right">{locale === "he" ? "סה\"כ כולל" : "Line total (incl.)"}</th><th className="w-8 p-2" /></tr></thead><tbody>
+                      {invoiceFromSourceForm.items.map((row, idx) => {
+                        const lineExcl = row.quantity * row.unitPrice * (1 - (row.discountPct ?? 0) / 100);
+                        const lineVat = Math.round((lineExcl * vatRate) / 100 * 100) / 100;
+                        const lineIncl = Math.round((lineExcl + lineVat) * 100) / 100;
+                        return (
+                          <tr key={row.id} className="border-t border-gray-100">
+                            <td className="p-2"><input type="text" value={row.description} onChange={(e) => setInvoiceFromSourceForm((f) => f && { ...f, items: f.items.map((it, i) => i === idx ? { ...it, description: e.target.value } : it) })} className="w-full border border-gray-100 px-2 py-1 text-xs" /></td>
+                            <td className="p-2"><input type="number" min={0} step={1} value={row.quantity} onChange={(e) => setInvoiceFromSourceForm((f) => f && { ...f, items: f.items.map((it, i) => i === idx ? { ...it, quantity: Number(e.target.value) || 0 } : it) })} className="w-full border border-gray-100 px-2 py-1 text-xs" /></td>
+                            <td className="p-2"><input type="number" min={0} step={0.01} value={row.unitPrice} onChange={(e) => setInvoiceFromSourceForm((f) => f && { ...f, items: f.items.map((it, i) => i === idx ? { ...it, unitPrice: Number(e.target.value) || 0 } : it) })} className="w-full border border-gray-100 px-2 py-1 text-xs" /></td>
+                            <td className="p-2"><input type="number" min={0} max={100} step={0.5} value={row.discountPct ?? ""} onChange={(e) => setInvoiceFromSourceForm((f) => f && { ...f, items: f.items.map((it, i) => i === idx ? { ...it, discountPct: Math.min(100, Math.max(0, Number(e.target.value) || 0)) } : it) })} className="w-full border border-gray-100 px-2 py-1 text-xs" placeholder="0" /></td>
+                            <td className="p-2 text-right text-gray-600 tabular-nums">{formatMoney(lineVat)}</td>
+                            <td className="p-2 text-right font-medium tabular-nums">{formatMoney(lineIncl)}</td>
+                            <td className="p-2"><button type="button" onClick={() => setInvoiceFromSourceForm((f) => f && f.items.length > 1 ? { ...f, items: f.items.filter((_, i) => i !== idx) } : f)} className="text-gray-400 hover:text-red-600"><X className="w-4 h-4" /></button></td>
+                          </tr>
+                        );
+                      })}
                     </tbody></table>
                   </div>
                 </div>

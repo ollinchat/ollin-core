@@ -549,6 +549,7 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
       const { blob, contentHash } = await generateDocumentPdf(doc, fromProfile, {
         password: options?.password,
         qrDataUrl: options?.qrDataUrl,
+        documentLanguage: doc.documentLanguage ?? (fromProfile as { documentLanguage?: "he" | "en" | "bilingual" })?.documentLanguage,
       });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -566,7 +567,9 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
       const doc = vault.getDocumentById(userId, docId);
       if (!doc) return null;
       try {
-        const { blob } = await generateDocumentPdf(doc, fromProfile, {});
+        const { blob } = await generateDocumentPdf(doc, fromProfile, {
+          documentLanguage: doc.documentLanguage ?? (fromProfile as { documentLanguage?: "he" | "en" | "bilingual" })?.documentLanguage,
+        });
         return blob;
       } catch {
         return null;

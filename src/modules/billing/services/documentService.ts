@@ -111,6 +111,7 @@ export function convertQuoteToInvoice(userId: string, quoteId: string): BillingI
   const quote = vault.getDocumentById(userId, quoteId) as BillingQuote | null;
   if (!quote || quote.type !== "quote") return null;
   const number = getNextInvoiceNumber();
+  const now = Date.now();
   const invoice: BillingInvoice = {
     ...quote,
     id: generateUUID(),
@@ -118,10 +119,17 @@ export function convertQuoteToInvoice(userId: string, quoteId: string): BillingI
     type: "invoice",
     status: "pending",
     quoteId: quote.id,
-    auditTrail: [...quote.auditTrail, { action: "issued", at: Date.now() }],
-    updatedAt: Date.now(),
+    auditTrail: [...quote.auditTrail, { action: "issued", at: now }],
+    updatedAt: now,
   };
   vault.createDocument(userId, invoice);
+  const updatedQuote: BillingQuote = {
+    ...quote,
+    status: "invoiced",
+    updatedAt: now,
+    auditTrail: [...quote.auditTrail, { action: "invoiced", at: now, note: `Invoice #${number} issued` }],
+  };
+  vault.replaceDocument(userId, updatedQuote);
   return invoice;
 }
 
@@ -137,6 +145,7 @@ export interface InvoiceFromSourceData {
   title?: string;
   notes?: string;
   dueDate?: string;
+  documentLanguage?: "he" | "en" | "bilingual";
 }
 
 export function createInvoiceFromQuoteWithData(userId: string, quoteId: string, data: InvoiceFromSourceData): BillingInvoice | null {
@@ -165,11 +174,19 @@ export function createInvoiceFromQuoteWithData(userId: string, quoteId: string, 
     title: data.title,
     notes: data.notes,
     dueDate: data.dueDate,
+    documentLanguage: data.documentLanguage,
     date: nowIso(),
     auditTrail: [...quote.auditTrail, { action: "issued", at: now }],
     updatedAt: now,
   };
   vault.createDocument(userId, invoice);
+  const updatedQuote: BillingQuote = {
+    ...quote,
+    status: "invoiced",
+    updatedAt: now,
+    auditTrail: [...quote.auditTrail, { action: "invoiced", at: now, note: `Invoice #${number} issued` }],
+  };
+  vault.replaceDocument(userId, updatedQuote);
   return invoice;
 }
 
@@ -267,35 +284,26 @@ export interface ReceiptFromInvoiceData {
   items: BillingLineItem[];
   title?: string;
   notes?: string;
+  documentLanguage?: "he" | "en" | "bilingual";
 }
 
 /**
  * Create a receipt from an invoice with user-edited data. Uses next sequential receipt number.
- * If markPaidFirst is true, the invoice is set to paid before creating the receipt.
+ * Invoice status is set to 'paid' only after the receipt is created (payment trigger).
  */
 export function createReceiptForInvoiceWithData(
   userId: string,
   invoiceId: string,
   data: ReceiptFromInvoiceData,
-  options?: { markPaidFirst?: boolean }
+  _options?: { markPaidFirst?: boolean }
 ): BillingReceipt | null {
   const invoice = vault.getDocumentById(userId, invoiceId) as BillingInvoice | null;
   if (!invoice || invoice.type !== "invoice" || invoice.status === "canceled") return null;
-  if (options?.markPaidFirst && invoice.status !== "paid") {
-    const updatedInvoice: BillingInvoice = {
-      ...invoice,
-      status: "paid",
-      auditTrail: [...invoice.auditTrail, { action: "paid", at: Date.now() }],
-      updatedAt: Date.now(),
-    };
-    vault.replaceDocument(userId, updatedInvoice);
-  }
-  const invoiceForSpread = vault.getDocumentById(userId, invoiceId) as BillingInvoice;
-  const { subtotal, vatAmount, total } = baseFromItems(data.items, invoiceForSpread.vatRate);
+  const { subtotal, vatAmount, total } = baseFromItems(data.items, invoice.vatRate);
   const number = getNextReceiptNumber();
   const now = Date.now();
   const receipt: BillingReceipt = {
-    ...invoiceForSpread,
+    ...invoice,
     id: generateUUID(),
     number,
     type: "receipt",
@@ -313,11 +321,21 @@ export function createReceiptForInvoiceWithData(
     total,
     title: data.title,
     notes: data.notes,
+    documentLanguage: data.documentLanguage,
     date: nowIso(),
-    auditTrail: [...invoiceForSpread.auditTrail, { action: "created", at: now, note: "Receipt issued from invoice" }],
+    auditTrail: [...invoice.auditTrail, { action: "created", at: now, note: "Receipt issued from invoice" }],
     updatedAt: now,
   };
   vault.createDocument(userId, receipt);
+  if (invoice.status !== "paid") {
+    const updatedInvoice: BillingInvoice = {
+      ...invoice,
+      status: "paid",
+      auditTrail: [...invoice.auditTrail, { action: "paid", at: now, note: `Receipt #${number} issued` }],
+      updatedAt: now,
+    };
+    vault.replaceDocument(userId, updatedInvoice);
+  }
   return receipt;
 }
 

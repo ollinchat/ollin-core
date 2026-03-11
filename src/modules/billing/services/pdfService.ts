@@ -77,6 +77,98 @@ export interface PdfOptions {
   password?: string;
   /** Optional: QR code image data URL for payment/profile link */
   qrDataUrl?: string | null;
+  /** Document language for labels: he, en, or bilingual (default from doc.documentLanguage or "en") */
+  documentLanguage?: "he" | "en" | "bilingual";
+}
+
+type PdfLang = "he" | "en";
+
+function pdfLabels(lang: PdfLang): {
+  from: string;
+  to: string;
+  subject: string;
+  taxId: string;
+  description: string;
+  qty: string;
+  unitPrice: string;
+  discount: string;
+  amount: string;
+  subtotalBefore: string;
+  discountLabel: string;
+  subtotal: string;
+  vat: string;
+  total: string;
+  notes: string;
+  bankDetails: string;
+  date: string;
+  creditFor: string;
+  cancelReceipt: string;
+  typeInvoice: string;
+  typeQuote: string;
+  typeReceipt: string;
+  typeDeliveryNote: string;
+  typeCreditNote: string;
+  typeNegativeReceipt: string;
+  typeDraft: string;
+} {
+  if (lang === "he") {
+    return {
+      from: "מהחברה",
+      to: "אל",
+      subject: "נושא המסמך",
+      taxId: "ח.פ",
+      description: "תיאור",
+      qty: "כמות",
+      unitPrice: "מחיר",
+      discount: "הנחה",
+      amount: "סה\"כ",
+      subtotalBefore: "סיכום לפני הנחה",
+      discountLabel: "הנחה",
+      subtotal: "סיכום ביניים (ללא מע\"מ)",
+      vat: "מע\"מ",
+      total: "סה\"כ כולל",
+      notes: "הערות",
+      bankDetails: "פרטי בנק",
+      date: "תאריך",
+      creditFor: "זיכוי עבור חשבונית",
+      cancelReceipt: "ביטול קבלה",
+      typeInvoice: "חשבונית",
+      typeQuote: "הצעת מחיר",
+      typeReceipt: "קבלה",
+      typeDeliveryNote: "תעודת משלוח",
+      typeCreditNote: "מסמך זיכוי",
+      typeNegativeReceipt: "קבלה שלילית",
+      typeDraft: "טיוטה",
+    };
+  }
+  return {
+    from: "From",
+    to: "To",
+    subject: "Subject",
+    taxId: "Tax ID",
+    description: "Description",
+    qty: "Qty",
+    unitPrice: "Unit Price",
+    discount: "Disc.%",
+    amount: "Amount",
+    subtotalBefore: "Subtotal (before discount)",
+    discountLabel: "Discount",
+    subtotal: "Subtotal",
+    vat: "VAT",
+    total: "Total",
+    notes: "Notes",
+    bankDetails: "Bank details for payment",
+    date: "Date",
+    creditFor: "Credit for Invoice #",
+    cancelReceipt: "Cancellation of Receipt #",
+    typeInvoice: "Invoice",
+    typeQuote: "Quote",
+    typeReceipt: "Receipt",
+    typeDeliveryNote: "Delivery Note",
+    typeCreditNote: "Credit Note",
+    typeNegativeReceipt: "Negative Receipt",
+    typeDraft: "Draft",
+  };
 }
 
 /**
@@ -94,74 +186,81 @@ export async function generateDocumentPdf(
   const contentHash = await sha256Hex(canonical);
   const signedAt = Date.now();
 
+  const lang: PdfLang = (doc.documentLanguage ?? options.documentLanguage ?? "en") === "he" ? "he" : "en";
+  const L = pdfLabels(lang);
+
   let y = MARGIN;
 
-  // Document title (subject) at top when set
+  // Document title (subject) – same as preview
   if (doc.title && doc.title.trim()) {
     pdf.setFontSize(9).setTextColor(100, 100, 100);
-    pdf.text("Subject", MARGIN, y);
+    pdf.text(L.subject, MARGIN, y);
     y += 4;
     pdf.setFontSize(11).setTextColor(0, 0, 0);
     pdf.text(doc.title.trim().slice(0, 80), MARGIN, y);
     y += 6;
   }
 
-  // Compact header: From | To – minimal vertical space
+  // Header: From | To – Company ID (ח.פ) and address
   const headerY = y;
   const logoH = 16;
   const logoW = 16;
   y = drawLogo(pdf, from.businessLogo || undefined, MARGIN, headerY, logoW, logoH);
   pdf.setFontSize(10).setTextColor(0, 0, 0);
-  pdf.text("From", MARGIN, y);
+  pdf.text(L.from, MARGIN, y);
   y += 3.5;
   pdf.setFontSize(9).setTextColor(60, 60, 60);
   pdf.text(from.legalName || "—", MARGIN, y);
   y += 3.5;
-  const fromLine2 = [from.taxId ? `Tax ID: ${from.taxId}` : "", from.address || ""].filter(Boolean).join(" · ");
-  if (fromLine2) pdf.text(fromLine2.slice(0, 55), MARGIN, y), (y += 3.5);
+  if (from.taxId && from.taxId.trim()) {
+    pdf.text(`${L.taxId}: ${from.taxId.trim()}`, MARGIN, y);
+    y += 3.5;
+  }
+  if (from.address && from.address.trim()) {
+    pdf.text(from.address.trim().slice(0, 55), MARGIN, y);
+    y += 3.5;
+  }
   y += 1;
 
   const toStartY = headerY;
   pdf.setFontSize(9).setTextColor(0, 0, 0);
-  pdf.text("To", PAGE_W / 2 + 5, toStartY + 3.5);
+  pdf.text(L.to, PAGE_W / 2 + 5, toStartY + 3.5);
   pdf.setFontSize(9).setTextColor(60, 60, 60);
   pdf.text(doc.clientName || "—", PAGE_W / 2 + 5, toStartY + 7);
   const toLine2 = [doc.clientEmail || "", doc.clientAddress || ""].filter(Boolean).join(" · ");
   if (toLine2) pdf.text(toLine2.slice(0, 50), PAGE_W / 2 + 5, toStartY + 10.5);
   y = Math.max(y, toStartY + 14);
 
-  // Doc type & number
   const typeLabel =
     doc.type === "invoice"
-      ? "Invoice"
+      ? L.typeInvoice
       : doc.type === "quote"
-        ? "Quote"
+        ? L.typeQuote
         : doc.type === "receipt"
-          ? "Receipt"
+          ? L.typeReceipt
           : doc.type === "delivery_note"
-            ? "Delivery Note"
+            ? L.typeDeliveryNote
             : doc.type === "credit_note"
-              ? "Credit Note"
+              ? L.typeCreditNote
               : doc.type === "negative_receipt"
-                ? "Negative Receipt"
-                : "Draft";
+                ? L.typeNegativeReceipt
+                : L.typeDraft;
   pdf.setFontSize(16).setTextColor(0, 102, 102);
   pdf.text(`${typeLabel} ${doc.number}`, PAGE_W - MARGIN, MARGIN, { align: "right" });
   y = Math.max(y, MARGIN + 6);
   pdf.setFontSize(8).setTextColor(100, 100, 100);
-  pdf.text(`Date: ${doc.date}`, PAGE_W - MARGIN, y, { align: "right" });
+  pdf.text(`${L.date}: ${doc.date}`, PAGE_W - MARGIN, y, { align: "right" });
   y += 4;
   if (doc.type === "credit_note" && doc.creditForInvoiceNumber) {
-    pdf.text(`Credit for Invoice #${doc.creditForInvoiceNumber}`, PAGE_W - MARGIN, y, { align: "right" });
+    pdf.text(`${L.creditFor}${doc.creditForInvoiceNumber}`, PAGE_W - MARGIN, y, { align: "right" });
     y += 4;
   }
   if (doc.type === "negative_receipt" && doc.originalReceiptNumber) {
-    pdf.text(`Cancellation of Receipt #${doc.originalReceiptNumber}`, PAGE_W - MARGIN, y, { align: "right" });
+    pdf.text(`${L.cancelReceipt} #${doc.originalReceiptNumber}`, PAGE_W - MARGIN, y, { align: "right" });
     y += 4;
   }
   y += 4;
 
-  // Table: optional Discount column when any line has discount
   const hasDiscount = doc.items.some((i) => (i.discountPct ?? 0) > 0);
   const colW = hasDiscount ? [72, 16, 26, 14, 28] : [90, 20, 30, 30];
   const tableX = MARGIN;
@@ -170,17 +269,17 @@ export async function generateDocumentPdf(
   pdf.rect(tableX, y, tableW, 6);
   pdf.setFontSize(8).setTextColor(0, 0, 0);
   let cx = tableX + 2;
-  pdf.text("Description", cx, y + 4);
+  pdf.text(L.description, cx, y + 4);
   cx += colW[0];
-  pdf.text("Qty", cx, y + 4);
+  pdf.text(L.qty, cx, y + 4);
   cx += colW[1];
-  pdf.text("Unit Price", cx, y + 4);
+  pdf.text(L.unitPrice, cx, y + 4);
   if (hasDiscount) {
     cx += colW[2];
-    pdf.text("Disc.%", cx, y + 4);
+    pdf.text(L.discount, cx, y + 4);
     cx += colW[3];
   }
-  pdf.text("Amount", tableX + tableW - 22, y + 4);
+  pdf.text(L.amount, tableX + tableW - 22, y + 4);
   y += 6;
 
   doc.items.forEach((item) => {
@@ -217,25 +316,41 @@ export async function generateDocumentPdf(
   pdf.setFontSize(8).setTextColor(60, 60, 60);
   if (hasDiscount && totalDiscountAmount > 0) {
     const subtotalBefore = doc.subtotal + totalDiscountAmount;
-    pdf.text("Subtotal (before discount)", totalsLabelX, y + 3);
+    pdf.text(L.subtotalBefore, totalsLabelX, y + 3);
     pdf.text(formatPdfAmount(subtotalBefore), totalsValueX, y + 3);
     y += 4;
-    pdf.text("Discount", totalsLabelX, y + 3);
+    pdf.text(L.discountLabel, totalsLabelX, y + 3);
     pdf.setTextColor(0, 128, 0);
     pdf.text(`-${formatPdfAmount(totalDiscountAmount)}`, totalsValueX, y + 3);
     pdf.setTextColor(60, 60, 60);
     y += 4;
   }
-  pdf.text("Subtotal", totalsLabelX, y + 3);
+  pdf.text(L.subtotal, totalsLabelX, y + 3);
   pdf.text(formatPdfAmount(doc.subtotal), totalsValueX, y + 3);
   y += 4;
-  pdf.text(`VAT (${doc.vatRate}%)`, totalsLabelX, y + 3);
+  pdf.text(`${L.vat} (${doc.vatRate}%)`, totalsLabelX, y + 3);
   pdf.text(formatPdfAmount(doc.vatAmount), totalsValueX, y + 3);
   y += 4;
   pdf.setFontSize(9).setFont(undefined, "bold").setTextColor(0, 0, 0);
-  pdf.text("Total", totalsLabelX, y + 3);
+  pdf.text(L.total, totalsLabelX, y + 3);
   pdf.text(formatPdfAmount(doc.total), totalsValueX, y + 3);
   y += 6;
+
+  if (doc.notes && doc.notes.trim()) {
+    pdf.setDrawColor(220, 220, 220);
+    pdf.line(MARGIN, y, PAGE_W - MARGIN, y);
+    y += 5;
+    pdf.setFontSize(9).setTextColor(0, 0, 0);
+    pdf.text(L.notes, MARGIN, y);
+    y += 5;
+    pdf.setFontSize(8).setTextColor(60, 60, 60);
+    const notesLines = doc.notes.trim().split(/\r?\n/);
+    for (let i = 0; i < Math.min(notesLines.length, 8); i++) {
+      pdf.text(notesLines[i].slice(0, 85), MARGIN, y);
+      y += 4;
+    }
+    y += 4;
+  }
 
   // Bank details: on invoices, credit notes, and negative receipts (every A4 issued doc)
   const showBankDetails = (doc.type === "invoice" || doc.type === "credit_note" || doc.type === "negative_receipt") && from.bankDetails && (from.bankDetails.iban || from.bankDetails.bankName || from.bankDetails.accountNumber);
@@ -244,7 +359,7 @@ export async function generateDocumentPdf(
     pdf.line(MARGIN, y, PAGE_W - MARGIN, y);
     y += 6;
     pdf.setFontSize(9).setTextColor(60, 60, 60);
-    pdf.text("Bank details for payment", MARGIN, y);
+    pdf.text(L.bankDetails, MARGIN, y);
     y += 5;
     if (from.bankDetails.bankName) pdf.text(from.bankDetails.bankName, MARGIN, y), (y += 5);
     if (from.bankDetails.branchNumber || from.bankDetails.accountNumber) {

@@ -27,7 +27,7 @@ export const defaultBusinessProfile: BusinessProfile = {
 };
 
 /** Document workflow status */
-export type BillingDocStatus = "draft" | "pending" | "paid" | "canceled";
+export type BillingDocStatus = "draft" | "pending" | "paid" | "canceled" | "invoiced";
 
 /** Document type in the chain */
 export type BillingDocType = "draft" | "quote" | "invoice" | "receipt" | "delivery_note" | "credit_note" | "negative_receipt";
@@ -109,6 +109,8 @@ export interface BillingDocumentBase {
   originalReceiptNumber?: string;
   /** When receipt is offset by a negative receipt */
   canceledByNegativeReceiptId?: string;
+  /** Document language for PDF/preview labels: he | en | bilingual */
+  documentLanguage?: "he" | "en" | "bilingual";
 }
 
 export interface BillingDraft extends BillingDocumentBase {
@@ -153,7 +155,7 @@ export type BillingDocument =
   | BillingCreditNote
   | BillingNegativeReceipt;
 
-export type AuditAction = "created" | "viewed" | "signed" | "issued" | "paid" | "canceled" | "downloaded" | "shared";
+export type AuditAction = "created" | "viewed" | "signed" | "issued" | "paid" | "canceled" | "downloaded" | "shared" | "invoiced";
 
 export interface AuditEntry {
   action: AuditAction;
