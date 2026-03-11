@@ -63,6 +63,15 @@ function addFooter(
   jsPDF.text(`Page ${pageNumber} of ${totalPages}`, PAGE_W / 2 - 10, PAGE_H - 8, { align: "center" });
 }
 
+/** Draw a diagonal red "CANCELLED" stamp on the page (for canceled invoices/receipts). */
+function drawCanceledStamp(jsPDF: import("jspdf").jsPDF): void {
+  const cx = PAGE_W / 2;
+  const cy = PAGE_H / 2;
+  const label = "CANCELLED";
+  jsPDF.setFontSize(32).setFont(undefined, "bold").setTextColor(185, 28, 28);
+  jsPDF.text(label, cx, cy, { align: "center", angle: -25 });
+}
+
 export interface PdfOptions {
   /** Optional: lock PDF with password (e.g. last 4 digits of client phone) */
   password?: string;
@@ -87,29 +96,39 @@ export async function generateDocumentPdf(
 
   let y = MARGIN;
 
-  // Compact header: From | To in single row (10–11pt), minimal vertical space
+  // Document title (subject) at top when set
+  if (doc.title && doc.title.trim()) {
+    pdf.setFontSize(9).setTextColor(100, 100, 100);
+    pdf.text("Subject", MARGIN, y);
+    y += 4;
+    pdf.setFontSize(11).setTextColor(0, 0, 0);
+    pdf.text(doc.title.trim().slice(0, 80), MARGIN, y);
+    y += 6;
+  }
+
+  // Compact header: From | To – minimal vertical space
   const headerY = y;
-  const logoH = 18;
-  const logoW = 18;
+  const logoH = 16;
+  const logoW = 16;
   y = drawLogo(pdf, from.businessLogo || undefined, MARGIN, headerY, logoW, logoH);
   pdf.setFontSize(10).setTextColor(0, 0, 0);
   pdf.text("From", MARGIN, y);
-  y += 4;
+  y += 3.5;
   pdf.setFontSize(9).setTextColor(60, 60, 60);
   pdf.text(from.legalName || "—", MARGIN, y);
-  y += 4;
+  y += 3.5;
   const fromLine2 = [from.taxId ? `Tax ID: ${from.taxId}` : "", from.address || ""].filter(Boolean).join(" · ");
-  if (fromLine2) pdf.text(fromLine2.slice(0, 55), MARGIN, y), (y += 4);
-  y += 2;
+  if (fromLine2) pdf.text(fromLine2.slice(0, 55), MARGIN, y), (y += 3.5);
+  y += 1;
 
   const toStartY = headerY;
-  pdf.setFontSize(10).setTextColor(0, 0, 0);
-  pdf.text("To", PAGE_W / 2 + 5, toStartY + 4);
+  pdf.setFontSize(9).setTextColor(0, 0, 0);
+  pdf.text("To", PAGE_W / 2 + 5, toStartY + 3.5);
   pdf.setFontSize(9).setTextColor(60, 60, 60);
-  pdf.text(doc.clientName || "—", PAGE_W / 2 + 5, toStartY + 8);
+  pdf.text(doc.clientName || "—", PAGE_W / 2 + 5, toStartY + 7);
   const toLine2 = [doc.clientEmail || "", doc.clientAddress || ""].filter(Boolean).join(" · ");
-  if (toLine2) pdf.text(toLine2.slice(0, 50), PAGE_W / 2 + 5, toStartY + 12);
-  y = Math.max(y, toStartY + 16);
+  if (toLine2) pdf.text(toLine2.slice(0, 50), PAGE_W / 2 + 5, toStartY + 10.5);
+  y = Math.max(y, toStartY + 14);
 
   // Doc type & number
   const typeLabel =
@@ -140,42 +159,63 @@ export async function generateDocumentPdf(
     pdf.text(`Cancellation of Receipt #${doc.originalReceiptNumber}`, PAGE_W - MARGIN, y, { align: "right" });
     y += 4;
   }
-  y += 5;
+  y += 4;
 
-  // Table header – compact
-  const colW = [90, 20, 30, 30];
+  // Table: optional Discount column when any line has discount
+  const hasDiscount = doc.items.some((i) => (i.discountPct ?? 0) > 0);
+  const colW = hasDiscount ? [72, 16, 26, 14, 28] : [90, 20, 30, 30];
   const tableX = MARGIN;
+  const tableW = colW.reduce((a, b) => a + b, 0);
   pdf.setFillColor(248, 248, 248);
-  pdf.rect(tableX, y, colW.reduce((a, b) => a + b, 0), 6);
+  pdf.rect(tableX, y, tableW, 6);
   pdf.setFontSize(8).setTextColor(0, 0, 0);
-  pdf.text("Description", tableX + 2, y + 4);
-  pdf.text("Qty", tableX + 92, y + 4);
-  pdf.text("Unit Price", tableX + 114, y + 4);
-  pdf.text("Amount", tableX + 126, y + 4);
+  let cx = tableX + 2;
+  pdf.text("Description", cx, y + 4);
+  cx += colW[0];
+  pdf.text("Qty", cx, y + 4);
+  cx += colW[1];
+  pdf.text("Unit Price", cx, y + 4);
+  if (hasDiscount) {
+    cx += colW[2];
+    pdf.text("Disc.%", cx, y + 4);
+    cx += colW[3];
+  }
+  pdf.text("Amount", tableX + tableW - 22, y + 4);
   y += 6;
 
   doc.items.forEach((item) => {
-    const amount = item.quantity * item.unitPrice;
+    const pct = item.discountPct ?? 0;
+    const amount = Math.round(item.quantity * item.unitPrice * (1 - pct / 100) * 100) / 100;
     pdf.setFontSize(8);
-    pdf.text(item.description.slice(0, 50), tableX + 2, y + 3);
-    pdf.text(String(item.quantity), tableX + 92, y + 3);
-    pdf.text(item.unitPrice.toFixed(2), tableX + 114, y + 3);
-    pdf.text(amount.toFixed(2), tableX + 126, y + 3);
+    cx = tableX + 2;
+    pdf.text(item.description.slice(0, 40), cx, y + 3);
+    cx += colW[0];
+    pdf.text(String(item.quantity), cx, y + 3);
+    cx += colW[1];
+    pdf.text(item.unitPrice.toFixed(2), cx, y + 3);
+    if (hasDiscount) {
+      cx += colW[2];
+      pdf.text(pct > 0 ? `${pct}%` : "—", cx, y + 3);
+      cx += colW[3];
+    }
+    pdf.text(amount.toFixed(2), tableX + tableW - 22, y + 3);
     y += 4;
   });
 
   const formatPdfAmount = (n: number) => (n < 0 ? `-${(-n).toFixed(2)}` : n.toFixed(2));
+  const totalsLabelX = tableX + tableW - 44;
+  const totalsValueX = tableX + tableW - 22;
   y += 4;
   pdf.setFontSize(8);
-  pdf.text("Subtotal", tableX + 92, y + 3);
-  pdf.text(formatPdfAmount(doc.subtotal), tableX + 126, y + 3);
+  pdf.text("Subtotal", totalsLabelX, y + 3);
+  pdf.text(formatPdfAmount(doc.subtotal), totalsValueX, y + 3);
   y += 4;
-  pdf.text(`VAT (${doc.vatRate}%)`, tableX + 92, y + 3);
-  pdf.text(formatPdfAmount(doc.vatAmount), tableX + 126, y + 3);
+  pdf.text(`VAT (${doc.vatRate}%)`, totalsLabelX, y + 3);
+  pdf.text(formatPdfAmount(doc.vatAmount), totalsValueX, y + 3);
   y += 4;
   pdf.setFontSize(9).setFont(undefined, "bold");
-  pdf.text("Total", tableX + 92, y + 3);
-  pdf.text(formatPdfAmount(doc.total), tableX + 126, y + 3);
+  pdf.text("Total", totalsLabelX, y + 3);
+  pdf.text(formatPdfAmount(doc.total), totalsValueX, y + 3);
   y += 6;
 
   // Bank details: on invoices, credit notes, and negative receipts (every A4 issued doc)
@@ -198,6 +238,14 @@ export async function generateDocumentPdf(
 
   // Footer on first page
   addFooter(pdf, contentHash, signedAt, options.qrDataUrl ?? null, 1, 1);
+
+  // Canceled stamp: diagonal red "CANCELLED" for canceled invoices/receipts (not for credit note / negative receipt)
+  const isCanceledDoc =
+    (doc.status as string) === "canceled" &&
+    (doc.type === "invoice" || doc.type === "receipt");
+  if (isCanceledDoc) {
+    drawCanceledStamp(pdf);
+  }
 
   // Password protection: optional (e.g. last 4 of client phone). jsPDF encryption varies by build.
   if (options.password) {

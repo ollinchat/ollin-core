@@ -17,7 +17,7 @@ export function documentCanonicalString(doc: {
   type: string;
   clientId: string;
   clientName: string;
-  items: Array<{ description: string; quantity: number; unitPrice: number }>;
+  items: Array<{ description: string; quantity: number; unitPrice: number; discountPct?: number }>;
   subtotal: number;
   vatRate: number;
   vatAmount: number;
@@ -25,7 +25,7 @@ export function documentCanonicalString(doc: {
   date: string;
 }): string {
   const itemsStr = doc.items
-    .map((i) => `${i.description}|${i.quantity}|${i.unitPrice}`)
+    .map((i) => `${i.description}|${i.quantity}|${i.unitPrice}${(i.discountPct ?? 0) > 0 ? `|${i.discountPct}` : ""}`)
     .join(";");
   return [
     doc.id,

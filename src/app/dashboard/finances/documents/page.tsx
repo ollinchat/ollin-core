@@ -179,7 +179,7 @@ function UnifiedDocumentPreview({
 }: {
   company: { name: string; address?: string; taxId?: string; logoUrl?: string; signatureUrl?: string };
   client: { name: string; email?: string; phone?: string; address?: string; taxId?: string };
-  items: { description: string; quantity: number; unitPrice: number }[];
+  items: { description: string; quantity: number; unitPrice: number; discountPct?: number }[];
   subtotal: number;
   vatAmount: number;
   total: number;
@@ -223,6 +223,12 @@ function UnifiedDocumentPreview({
     bankName: lang === "he" ? "שם הבנק" : "Bank Name",
     branch: lang === "he" ? "סניף" : "Branch",
     account: lang === "he" ? "חשבון" : "Account",
+    discount: lang === "he" ? "הנחה" : "Discount",
+  };
+  const hasAnyDiscount = items.some((i) => (i.discountPct ?? 0) > 0);
+  const lineTotalWithDiscount = (i: { quantity: number; unitPrice: number; discountPct?: number }) => {
+    const pct = i.discountPct ?? 0;
+    return Math.round(i.quantity * i.unitPrice * (1 - pct / 100) * 100) / 100;
   };
   const docTypeLabel =
     docType === "invoice" ? (lang === "he" ? "חשבונית" : "Invoice")
@@ -260,8 +266,15 @@ function UnifiedDocumentPreview({
         </div>
       )}
       <div className={compact ? "p-3" : "p-4"}>
-        {/* Single high-density row: From | To – 10–11pt, minimum vertical space */}
-        <div className={`grid grid-cols-2 gap-4 md:gap-6 border-b border-gray-200 pb-2 mb-2 ${compact ? "pb-1.5 mb-1.5" : ""}`}>
+        {/* Document title (subject) – clearly at top */}
+        {title && title.trim() && (
+          <div className="border-b border-gray-200 pb-1.5 mb-1.5">
+            <p className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">{lang === "he" ? "נושא המסמך" : "Subject"}</p>
+            <p className={`font-semibold text-gray-900 ${textSize}`} style={{ fontSize: "11pt" }}>{title.trim()}</p>
+          </div>
+        )}
+        {/* Single high-density row: From | To – minimal vertical space */}
+        <div className={`grid grid-cols-2 gap-4 md:gap-6 border-b border-gray-200 pb-1.5 mb-1.5 ${compact ? "pb-1 mb-1" : ""}`}>
           <div className="min-w-0">
             {company.logoUrl && (
               <div className="mb-1">
@@ -281,22 +294,22 @@ function UnifiedDocumentPreview({
         </div>
 
         {/* Doc type, number, date – one line */}
-        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 mb-2">
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 mb-1.5">
           {docType && <span className={`font-semibold ${textSize}`} style={{ color: TEAL }}>{docTypeLabel}</span>}
           {docNumber && <span className={`text-gray-600 ${textSizeSmall}`}>#{docNumber}</span>}
           {creditForInvoiceNumber && <span className={`text-gray-600 ${textSizeSmall}`}>{lang === "he" ? `זיכוי עבור חשבונית #${creditForInvoiceNumber}` : `Credit for Invoice #${creditForInvoiceNumber}`}</span>}
           {originalReceiptNumber && <span className={`text-gray-600 ${textSizeSmall}`}>{docType === "negative_receipt" ? (lang === "he" ? `ביטול קבלה #${originalReceiptNumber}` : `Cancellation of Receipt #${originalReceiptNumber}`) : (lang === "he" ? `עבור קבלה #${originalReceiptNumber}` : `For Receipt #${originalReceiptNumber}`)}</span>}
           {date && <span className={`text-gray-500 ${textSizeSmall}`}>{L.docDate}: {date}</span>}
           {dueDate && <span className={`text-gray-500 ${textSizeSmall}`}>{L.dueDateLabel}: {dueDate}</span>}
-          {title && title.trim() && <span className={`font-medium text-gray-900 ${textSizeSmall}`}>{title}</span>}
         </div>
 
-        {/* Items table – dense for 15+ rows on one A4 */}
+        {/* Items table – dense; optional Discount column when any line has discount */}
         <table className={`w-full ${textSize} border-collapse`} style={{ tableLayout: "fixed", fontSize: "10pt" }}>
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50/80">
-              <th className="text-left py-1.5 font-semibold text-gray-700 w-[40%]">{L.description}</th>
+              <th className={`text-left py-1.5 font-semibold text-gray-700 ${hasAnyDiscount ? "w-[32%]" : "w-[40%]"}`}>{L.description}</th>
               <th className="text-right py-1.5 font-semibold text-gray-700 w-[15%]">{L.price}</th>
+              {hasAnyDiscount && <th className="text-right py-1.5 font-semibold text-gray-700 w-[8%]">{L.discount}</th>}
               <th className="text-right py-1.5 font-semibold text-gray-700 w-[10%]">{L.qty}</th>
               <th className="text-right py-1.5 font-semibold text-gray-700 w-[15%]">{L.vat}</th>
               <th className="text-right py-1.5 font-semibold text-gray-700 w-[20%]">{L.lineTotal}</th>
@@ -304,12 +317,14 @@ function UnifiedDocumentPreview({
           </thead>
           <tbody>
             {items.map((i, idx) => {
-              const lineTotal = i.quantity * i.unitPrice;
+              const lineTotal = lineTotalWithDiscount(i);
               const lineVat = Math.round(lineTotal * (vatRate / 100) * 100) / 100;
+              const pct = i.discountPct ?? 0;
               return (
                 <tr key={idx} className="border-b border-gray-100">
                   <td className="py-1 text-gray-900 align-top">{i.description || "—"}</td>
                   <td className="py-1 text-right tabular-nums text-gray-700 align-top">{currencySymbol}{formatMoney(i.unitPrice)}</td>
+                  {hasAnyDiscount && <td className="py-1 text-right tabular-nums text-gray-600 align-top">{pct > 0 ? `${pct}%` : "—"}</td>}
                   <td className="py-1 text-right tabular-nums text-gray-700 align-top">{i.quantity}</td>
                   <td className="py-1 text-right tabular-nums text-gray-600 align-top">{currencySymbol}{formatMoney(lineVat)}</td>
                   <td className="py-1 text-right tabular-nums text-gray-900 font-medium align-top">{currencySymbol}{formatMoney(lineTotal)}</td>
@@ -686,7 +701,7 @@ function SuccessWithPreview({
                 address: genDoc.clientAddress,
                 taxId: genDoc.clientTaxId,
               }}
-              items={genDoc.items.map((i) => ({ description: i.description, quantity: i.quantity, unitPrice: i.unitPrice }))}
+              items={genDoc.items.map((i) => ({ description: i.description, quantity: i.quantity, unitPrice: i.unitPrice, discountPct: (i as { discountPct?: number }).discountPct }))}
               subtotal={genDoc.subtotal}
               vatAmount={genDoc.vatAmount}
               total={genDoc.total}
@@ -857,7 +872,8 @@ function DocumentCreateSlideOver({
       id: i.id || generateUUID(),
       description: i.description.trim() || "Item",
       quantity: Math.max(0, Number(i.quantity)),
-      unitPrice: Math.round(i.unitPrice * (1 - i.discountPct / 100) * 100) / 100,
+      unitPrice: Math.round(i.unitPrice * 100) / 100,
+      discountPct: Math.min(100, Math.max(0, i.discountPct || 0)),
     }));
     return {
       client: effectiveClient,
@@ -1259,7 +1275,8 @@ function DocumentCreateSlideOver({
                         .map((i) => ({
                           description: i.description.trim() || "—",
                           quantity: i.quantity,
-                          unitPrice: Math.round(i.unitPrice * (1 - (i.discountPct || 0) / 100) * 100) / 100,
+                          unitPrice: i.unitPrice,
+                          discountPct: i.discountPct || 0,
                         }))}
                       subtotal={subtotal}
                       vatAmount={vatAmount}
@@ -1407,7 +1424,7 @@ export default function DocumentsPage() {
     clientPhone: string;
     clientAddress: string;
     clientTaxId: string;
-    items: { id: string; description: string; quantity: number; unitPrice: number }[];
+    items: { id: string; description: string; quantity: number; unitPrice: number; discountPct?: number }[];
     notes: string;
     title: string;
     dueDate: string;
@@ -1429,7 +1446,7 @@ export default function DocumentsPage() {
           clientPhone: inv.clientPhone ?? "",
           clientAddress: inv.clientAddress ?? "",
           clientTaxId: inv.clientTaxId ?? "",
-          items: inv.items.map((i) => ({ id: i.id, description: i.description, quantity: i.quantity, unitPrice: i.unitPrice })),
+          items: inv.items.map((i) => ({ id: i.id, description: i.description, quantity: i.quantity, unitPrice: i.unitPrice, discountPct: (i as { discountPct?: number }).discountPct })),
           notes: inv.notes ?? "",
           title: inv.title ?? "",
         });
@@ -1451,7 +1468,7 @@ export default function DocumentsPage() {
           clientPhone: doc.clientPhone ?? "",
           clientAddress: doc.clientAddress ?? "",
           clientTaxId: doc.clientTaxId ?? "",
-          items: doc.items.map((i) => ({ id: i.id, description: i.description, quantity: i.quantity, unitPrice: i.unitPrice })),
+          items: doc.items.map((i) => ({ id: i.id, description: i.description, quantity: i.quantity, unitPrice: i.unitPrice, discountPct: (i as { discountPct?: number }).discountPct })),
           notes: doc.notes ?? "",
           title: doc.title ?? "",
           dueDate: doc.dueDate ?? "",
@@ -1916,7 +1933,7 @@ export default function DocumentsPage() {
               key={t.id}
               type="button"
               onClick={() => setActiveTab(t.id)}
-              className={`flex-1 min-w-0 py-3 px-4 rounded-xl text-[13px] flex items-center justify-center gap-1.5 whitespace-nowrap transition-colors ${activeTab === t.id ? "bg-white shadow-sm text-gray-900 font-semibold border border-gray-100" : "text-gray-500 font-medium hover:text-gray-700 hover:bg-white/50"}`}
+              className={`flex-1 min-w-0 py-3 px-4 rounded-xl text-[13px] flex items-center justify-center gap-1.5 whitespace-nowrap transition-all duration-200 ${activeTab === t.id ? "bg-white shadow-sm text-gray-900 font-semibold border border-gray-100" : "text-gray-500 font-medium hover:text-gray-700 hover:bg-white/60"}`}
             >
               {t.icon}
               {t.label}
@@ -1928,7 +1945,7 @@ export default function DocumentsPage() {
       {/* Table */}
       <main className="flex-1 px-4 py-4">
         {activeTab !== "expenses" ? (
-          <div className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-visible">
+          <div className="rounded-2xl bg-white border border-gray-100 shadow-md overflow-visible">
             {/* Section header: title + Create New button */}
             <div className="px-4 py-2 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between gap-3">
               <h2 className="text-xs font-bold uppercase tracking-wider text-gray-600">
@@ -1952,7 +1969,7 @@ export default function DocumentsPage() {
                             : "delivery_note"
                     )
                   }
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[13px] font-semibold text-white shrink-0 transition-opacity hover:opacity-90"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[13px] font-semibold text-white shrink-0 transition-all duration-150 hover:opacity-90 hover:shadow-md"
                   style={{ backgroundColor: TEAL }}
                 >
                   <Plus className="w-4 h-4" />
@@ -1966,7 +1983,7 @@ export default function DocumentsPage() {
                 <button
                   type="button"
                   onClick={() => setCreateModal("credit_note")}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[13px] font-semibold text-white shrink-0 transition-opacity hover:opacity-90"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[13px] font-semibold text-white shrink-0 transition-all duration-150 hover:opacity-90 hover:shadow-md"
                   style={{ backgroundColor: TEAL }}
                 >
                   <Plus className="w-4 h-4" />
@@ -2203,20 +2220,30 @@ export default function DocumentsPage() {
               <tbody>
                 {filteredDocs.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-10 text-center">
-                      <p className="text-[13px] font-medium text-gray-500 mb-3" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
-                        {locale === "he" ? "לא נמצאו מסמכים" : "No documents found"}
-                      </p>
-                      {hasActiveFilters && (
-                        <button
-                          type="button"
-                          onClick={clearFilters}
-                          className="rounded-none border border-gray-200 bg-white px-4 py-2 text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-                          style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
-                        >
-                          {locale === "he" ? "נקה מסננים" : "Clear Filters"}
-                        </button>
-                      )}
+                    <td colSpan={6} className="px-4 py-16 text-center">
+                      <div className="flex flex-col items-center justify-center max-w-sm mx-auto">
+                        <div className="w-16 h-16 rounded-2xl bg-gray-100/80 flex items-center justify-center mb-4" style={{ color: TEAL }}>
+                          <FileText className="w-8 h-8 opacity-70" />
+                        </div>
+                        <p className="text-[15px] font-semibold text-gray-700 mb-1" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+                          {locale === "he" ? "לא נמצאו מסמכים" : "No documents found"}
+                        </p>
+                        <p className="text-[13px] text-gray-500 mb-4" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+                          {activeTab === "cancellations"
+                            ? (locale === "he" ? "אין מסמכים מבוטלים או מסמכי זיכוי" : "No canceled documents or credit notes in this view.")
+                            : (locale === "he" ? "בחר טווח תאריכים או לקוח אחר" : "Try adjusting date range or client filter.")}
+                        </p>
+                        {hasActiveFilters && (
+                          <button
+                            type="button"
+                            onClick={clearFilters}
+                            className="rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-[13px] font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all duration-150 shadow-sm"
+                            style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
+                          >
+                            {locale === "he" ? "נקה מסננים" : "Clear Filters"}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ) : (
@@ -2230,27 +2257,32 @@ export default function DocumentsPage() {
                     const canCancelQuote = d.type === "quote" && notCanceled;
                     const canCancelDeliveryNote = d.type === "delivery_note" && notCanceled;
                     const canCancelReceipt = d.type === "receipt" && notCanceled;
+                    const titleOrType = (d.title && d.title.trim()) ? d.title.trim() : `${docTypeLabel(d.type)} #${d.number}`;
                     return (
                       <React.Fragment key={d.id}>
-                        <tr className={isCanceled ? "bg-gray-50/50" : "bg-gray-50/30"}>
-                          <td colSpan={6} className={`px-4 py-1.5 border-b border-gray-100 ${isCanceled ? "text-gray-400" : "text-gray-800"}`}>
-                            <span className={`font-bold ${isCanceled ? "line-through text-gray-500" : "text-gray-900"}`} style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif", fontSize: "13px" }}>
-                              {d.title && d.title.trim() ? d.title : (locale === "he" ? "ללא כותרת" : "No title")}
-                            </span>
-                          </td>
-                        </tr>
-                        <tr className={`border-b border-gray-50 hover:bg-gray-50/50 transition-colors ${isCanceled ? "bg-gray-50/50" : ""}`}>
-                        <td className={`px-4 py-1.5 font-medium whitespace-nowrap ${isCanceled ? "text-gray-500 line-through" : "text-gray-900"}`}>{docTypeLabel(d.type)} #{d.number}</td>
-                        <td className={`px-4 py-1.5 whitespace-nowrap ${isCanceled ? "text-gray-400 line-through" : "text-gray-600"}`}>{d.clientName || "—"}</td>
-                        <td className={`px-4 py-1.5 whitespace-nowrap ${isCanceled ? "text-gray-400 line-through" : "text-gray-600"}`}>{docDateIso(d)}</td>
-                        <td className={`px-4 py-1.5 text-right font-medium tabular-nums whitespace-nowrap ${isCanceled ? "text-gray-400 line-through" : "text-gray-900"}`}>{formatMoney(d.total || 0)}</td>
-                        <td className="px-4 py-1.5 whitespace-nowrap"><StatusBadge status={uiStatus} locale={locale} /></td>
-                        <td className="px-4 py-1.5 text-right whitespace-nowrap">
+                        {!isCanceled && (
+                          <tr className="bg-gray-50/30">
+                            <td colSpan={6} className="px-4 py-1.5 border-b border-gray-100 text-gray-800">
+                              <span className="font-bold text-gray-900" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif", fontSize: "13px" }}>
+                                {d.title && d.title.trim() ? d.title : (locale === "he" ? "ללא כותרת" : "No title")}
+                              </span>
+                            </td>
+                          </tr>
+                        )}
+                        <tr className={`border-b border-gray-50 transition-colors duration-150 ${isCanceled ? "bg-gray-100/60 hover:bg-gray-100/80" : "hover:bg-gray-50/70"}`}>
+                        <td className={`px-4 py-2 font-medium whitespace-nowrap ${isCanceled ? "text-gray-500" : "text-gray-900"}`} style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif", fontSize: "13px" }}>
+                          {isCanceled ? titleOrType : `${docTypeLabel(d.type)} #${d.number}`}
+                        </td>
+                        <td className={`px-4 py-2 whitespace-nowrap ${isCanceled ? "text-gray-400" : "text-gray-600"}`}>{d.clientName || "—"}</td>
+                        <td className={`px-4 py-2 whitespace-nowrap ${isCanceled ? "text-gray-400" : "text-gray-600"}`}>{docDateIso(d)}</td>
+                        <td className={`px-4 py-2 text-right font-medium tabular-nums whitespace-nowrap ${isCanceled ? "text-gray-400" : "text-gray-900"}`}>{formatMoney(d.total || 0)}</td>
+                        <td className="px-4 py-2 whitespace-nowrap"><StatusBadge status={uiStatus} locale={locale} /></td>
+                        <td className="px-4 py-2 text-right whitespace-nowrap">
                           <div className="relative inline-flex">
                             <button
                               type="button"
                               onClick={() => setOpenMenuDocId((prev) => (prev === d.id ? null : d.id))}
-                              className="inline-flex items-center justify-center w-7 h-7 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+                              className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:bg-gray-200/80 hover:text-gray-900 transition-all duration-150"
                               aria-haspopup="menu"
                               aria-expanded={openMenuDocId === d.id}
                               aria-label="More actions"
@@ -2617,7 +2649,7 @@ export default function DocumentsPage() {
                     address: previewDoc.clientAddress,
                     taxId: previewDoc.clientTaxId,
                   }}
-                  items={previewDoc.items.map((i) => ({ description: i.description, quantity: i.quantity, unitPrice: i.unitPrice }))}
+                  items={previewDoc.items.map((i) => ({ description: i.description, quantity: i.quantity, unitPrice: i.unitPrice, discountPct: (i as { discountPct?: number }).discountPct }))}
                   subtotal={previewDoc.subtotal}
                   vatAmount={previewDoc.vatAmount}
                   total={previewDoc.total}
@@ -2668,7 +2700,7 @@ export default function DocumentsPage() {
                   <UnifiedDocumentPreview
                     company={{ name: businessProfile?.legalName ?? "", address: businessProfile?.address, taxId: businessProfile?.taxId, logoUrl: businessProfile?.businessLogo, signatureUrl: (businessProfile as { signature?: string })?.signature }}
                     client={{ name: issuedDoc.clientName ?? "", email: issuedDoc.clientEmail, phone: issuedDoc.clientPhone, address: issuedDoc.clientAddress, taxId: issuedDoc.clientTaxId }}
-                    items={issuedDoc.items.map((i) => ({ description: i.description, quantity: i.quantity, unitPrice: i.unitPrice }))}
+                    items={issuedDoc.items.map((i) => ({ description: i.description, quantity: i.quantity, unitPrice: i.unitPrice, discountPct: (i as { discountPct?: number }).discountPct }))}
                     subtotal={issuedDoc.subtotal}
                     vatAmount={issuedDoc.vatAmount}
                     total={issuedDoc.total}
@@ -2838,7 +2870,7 @@ export default function DocumentsPage() {
         if (!invoice || !receiptForm) return null;
         const vatRate = invoice.vatRate ?? 17;
         const { subtotal, vatAmount, total } = (() => {
-          const st = receiptForm.items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
+          const st = receiptForm.items.reduce((s, i) => s + i.quantity * i.unitPrice * (1 - ((i as { discountPct?: number }).discountPct ?? 0) / 100), 0);
           const stR = Math.round(st * 100) / 100;
           const vat = Math.round((stR * vatRate) / 100 * 100) / 100;
           return { subtotal: stR, vatAmount: vat, total: stR + vat };
@@ -2850,7 +2882,7 @@ export default function DocumentsPage() {
           clientPhone: receiptForm.clientPhone.trim() || undefined,
           clientAddress: receiptForm.clientAddress.trim() || undefined,
           clientTaxId: receiptForm.clientTaxId.trim() || undefined,
-          items: receiptForm.items.map((i) => ({ id: i.id, description: i.description.trim() || "Item", quantity: Math.max(0, i.quantity), unitPrice: Math.round(i.unitPrice * 100) / 100 })),
+          items: receiptForm.items.map((i) => ({ id: i.id, description: i.description.trim() || "Item", quantity: Math.max(0, i.quantity), unitPrice: Math.round(i.unitPrice * 100) / 100, discountPct: Math.min(100, Math.max(0, (i as { discountPct?: number }).discountPct ?? 0)) })),
           notes: receiptForm.notes.trim() || undefined,
           title: receiptForm.title.trim() || undefined,
         });
@@ -2940,7 +2972,7 @@ export default function DocumentsPage() {
         if (!sourceDoc) return null;
         const vatRate = sourceDoc.vatRate ?? 17;
         const { subtotal, vatAmount, total } = (() => {
-          const st = invoiceFromSourceForm.items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
+          const st = invoiceFromSourceForm.items.reduce((s, i) => s + i.quantity * i.unitPrice * (1 - (i.discountPct ?? 0) / 100), 0);
           const stR = Math.round(st * 100) / 100;
           const vat = Math.round((stR * vatRate) / 100 * 100) / 100;
           return { subtotal: stR, vatAmount: vat, total: stR + vat };
@@ -2952,7 +2984,7 @@ export default function DocumentsPage() {
           clientPhone: invoiceFromSourceForm.clientPhone.trim() || undefined,
           clientAddress: invoiceFromSourceForm.clientAddress.trim() || undefined,
           clientTaxId: invoiceFromSourceForm.clientTaxId.trim() || undefined,
-          items: invoiceFromSourceForm.items.map((i) => ({ id: i.id, description: i.description.trim() || "Item", quantity: Math.max(0, i.quantity), unitPrice: Math.round(i.unitPrice * 100) / 100 })),
+          items: invoiceFromSourceForm.items.map((i) => ({ id: i.id, description: i.description.trim() || "Item", quantity: Math.max(0, i.quantity), unitPrice: Math.round(i.unitPrice * 100) / 100, discountPct: Math.min(100, Math.max(0, i.discountPct ?? 0)) })),
           notes: invoiceFromSourceForm.notes.trim() || undefined,
           title: invoiceFromSourceForm.title.trim() || undefined,
           dueDate: invoiceFromSourceForm.dueDate.trim() || undefined,
@@ -2979,7 +3011,7 @@ export default function DocumentsPage() {
                   <div><label className="block text-xs font-medium text-gray-500 mb-1">{locale === "he" ? "תאריך פירעון" : "Due date"}</label><input type="date" value={invoiceFromSourceForm.dueDate} onChange={(e) => setInvoiceFromSourceForm((f) => f && { ...f, dueDate: e.target.value })} className="w-full rounded-none border border-gray-200 px-3 py-2 text-sm" /></div>
                 </div>
                 <div>
-                  <div className="flex items-center justify-between mb-2"><span className="text-xs font-medium text-gray-500">{locale === "he" ? "פריטים" : "Line items"}</span><button type="button" onClick={() => setInvoiceFromSourceForm((f) => f && { ...f, items: [...f.items, { id: generateUUID(), description: "", quantity: 1, unitPrice: 0 }] })} className="text-xs font-medium" style={{ color: TEAL }}>{locale === "he" ? "+ שורה" : "+ Add row"}</button></div>
+                  <div className="flex items-center justify-between mb-2"><span className="text-xs font-medium text-gray-500">{locale === "he" ? "פריטים" : "Line items"}</span><button type="button" onClick={() => setInvoiceFromSourceForm((f) => f && { ...f, items: [...f.items, { id: generateUUID(), description: "", quantity: 1, unitPrice: 0, discountPct: 0 }] })} className="text-xs font-medium" style={{ color: TEAL }}>{locale === "he" ? "+ שורה" : "+ Add row"}</button></div>
                   <div className="border border-gray-200 rounded-none overflow-hidden">
                     <table className="w-full text-sm"><thead className="bg-gray-50"><tr><th className="text-left p-2">{locale === "he" ? "תיאור" : "Description"}</th><th className="w-16 p-2">{locale === "he" ? "כמות" : "Qty"}</th><th className="w-24 p-2">{locale === "he" ? "מחיר" : "Price"}</th><th className="w-8 p-2" /></tr></thead><tbody>
                       {invoiceFromSourceForm.items.map((row, idx) => (
@@ -3074,7 +3106,7 @@ export default function DocumentsPage() {
                       <UnifiedDocumentPreview
                         company={{ name: businessProfile?.legalName ?? "", address: businessProfile?.address, taxId: businessProfile?.taxId, logoUrl: businessProfile?.businessLogo, signatureUrl: (businessProfile as { signature?: string })?.signature }}
                         client={{ name: preselectedInvoice.clientName ?? "", email: preselectedInvoice.clientEmail, phone: preselectedInvoice.clientPhone, address: preselectedInvoice.clientAddress, taxId: preselectedInvoice.clientTaxId }}
-                        items={preselectedInvoice.items.map((i) => ({ description: i.description, quantity: i.quantity, unitPrice: i.unitPrice }))}
+                        items={preselectedInvoice.items.map((i) => ({ description: i.description, quantity: i.quantity, unitPrice: i.unitPrice, discountPct: (i as { discountPct?: number }).discountPct }))}
                         subtotal={-preselectedInvoice.subtotal}
                         vatAmount={-preselectedInvoice.vatAmount}
                         total={-preselectedInvoice.total}
@@ -3174,7 +3206,7 @@ export default function DocumentsPage() {
                     <UnifiedDocumentPreview
                       company={{ name: businessProfile?.legalName ?? "", address: businessProfile?.address, taxId: businessProfile?.taxId, logoUrl: businessProfile?.businessLogo, signatureUrl: (businessProfile as { signature?: string })?.signature }}
                       client={{ name: receipt.clientName ?? "", email: receipt.clientEmail, phone: receipt.clientPhone, address: receipt.clientAddress, taxId: receipt.clientTaxId }}
-                      items={receipt.items.map((i) => ({ description: i.description, quantity: i.quantity, unitPrice: i.unitPrice }))}
+                      items={receipt.items.map((i) => ({ description: i.description, quantity: i.quantity, unitPrice: i.unitPrice, discountPct: (i as { discountPct?: number }).discountPct }))}
                       subtotal={-receipt.subtotal}
                       vatAmount={-receipt.vatAmount}
                       total={-receipt.total}

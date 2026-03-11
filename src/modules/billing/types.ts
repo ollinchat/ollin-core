@@ -37,10 +37,14 @@ export interface BillingLineItem {
   description: string;
   quantity: number;
   unitPrice: number;
+  /** Optional discount percentage 0–100 applied to this line (before VAT). */
+  discountPct?: number;
 }
 
 export function billingLineItemTotal(item: BillingLineItem): number {
-  return item.quantity * item.unitPrice;
+  const pct = item.discountPct ?? 0;
+  const afterDiscount = item.unitPrice * (1 - pct / 100);
+  return Math.round(item.quantity * afterDiscount * 100) / 100;
 }
 
 export function billingSubtotalFromItems(items: BillingLineItem[]): number {
