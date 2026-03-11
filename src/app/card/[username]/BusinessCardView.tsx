@@ -26,11 +26,32 @@ import {
   Facebook,
   Youtube,
   Plus,
+  User,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 
 // Standard business card aspect ratio (3.5" x 2")
 const CARD_ASPECT = 3.5 / 2;
+
+const VISIBLE_DURATION_MIN = 15;
+const VISIBLE_DURATION_MAX = 240;
+
+const RADIUS_STEPS_METERS = [2, 5, 10, 20] as const;
+type RadiusMeters = (typeof RADIUS_STEPS_METERS)[number];
+
+
+function formatVisibleDuration(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const hours = minutes / 60;
+  return hours === 1 ? "1 hour" : `${hours} hours`;
+}
+
+function clampRadiusMeters(value: number): RadiusMeters {
+  if (value <= 2) return 2;
+  if (value <= 5) return 5;
+  if (value <= 10) return 10;
+  return 20;
+}
 
 /** WhatsApp icon (simple) */
 function WhatsAppIcon({ className }: { className?: string }) {
@@ -110,10 +131,7 @@ type UpdateProfile = (partial: Partial<Profile>) => void;
 export function BusinessCardView({ profile, updateProfile }: { profile: Profile; updateProfile: UpdateProfile }) {
   const { dir, locale } = useLocale();
   const [shareMenuOpen, setShareMenuOpen] = useState(false);
-  const [nearbyOpen, setNearbyOpen] = useState(false);
   const [qrModalOpen, setQrModalOpen] = useState(false);
-  const [nearbyStatus, setNearbyStatus] = useState<"idle" | "requesting" | "searching" | "found" | "none" | "denied">("idle");
-  const [nearbyPeople, setNearbyPeople] = useState<{ id: string; name: string }[]>([]);
   const [editDrawerOpen, setEditDrawerOpen] = useState(false);
   const [addedChatChannels, setAddedChatChannels] = useState<PlatformKey[]>([]);
   const [addedSocialLinks, setAddedSocialLinks] = useState<PlatformKey[]>([]);
@@ -125,6 +143,9 @@ export function BusinessCardView({ profile, updateProfile }: { profile: Profile;
   const [showProfilePic, setShowProfilePic] = useState(true);
   const [showCompanyLogo, setShowCompanyLogo] = useState(true);
   const [showQrOnCard, setShowQrOnCard] = useState(true);
+  const [isNearbyVisible, setIsNearbyVisible] = useState(false);
+  const [visibleDurationMinutes, setVisibleDurationMinutes] = useState(60);
+  const [radiusMeters, setRadiusMeters] = useState<RadiusMeters>(5);
   const cardRef = useRef<HTMLElement>(null);
   const shareMenuRef = useRef<HTMLDivElement>(null);
   const profileImageInputRef = useRef<HTMLInputElement>(null);
@@ -150,44 +171,31 @@ export function BusinessCardView({ profile, updateProfile }: { profile: Profile;
     }
   }, [editDrawerOpen]);
 
-  const nearbySearchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (!nearbyOpen) {
-      setNearbyStatus("idle");
-      setNearbyPeople([]);
-      if (nearbySearchTimeoutRef.current) {
-        clearTimeout(nearbySearchTimeoutRef.current);
-        nearbySearchTimeoutRef.current = null;
+  const sendCard = useCallback(
+    (targetName: string) => {
+      if (!cardUrl) return;
+      const fullName = profile.name || targetName;
+      const phone = (profile as any).phone as string | undefined;
+      const lines: string[] = [
+        "BEGIN:VCARD",
+        "VERSION:3.0",
+        `FN:${fullName}`,
+      ];
+      if (phone) {
+        lines.push(`TEL;TYPE=CELL:${phone}`);
       }
-      return;
-    }
-    setNearbyStatus("requesting");
-    if (typeof navigator === "undefined" || !navigator.geolocation) {
-      setNearbyStatus("none");
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      () => {
-        setNearbyStatus("searching");
-        nearbySearchTimeoutRef.current = setTimeout(() => {
-          nearbySearchTimeoutRef.current = null;
-          setNearbyPeople([
-            { id: "1", name: locale === "he" ? "אדם בקרבת מקום 1" : "Person nearby 1" },
-            { id: "2", name: locale === "he" ? "אדם בקרבת מקום 2" : "Person nearby 2" },
-          ]);
-          setNearbyStatus("found");
-        }, 2500);
-      },
-      () => setNearbyStatus("denied"),
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
-    );
-    return () => {
-      if (nearbySearchTimeoutRef.current) {
-        clearTimeout(nearbySearchTimeoutRef.current);
-        nearbySearchTimeoutRef.current = null;
-      }
-    };
-  }, [nearbyOpen, locale]);
+      lines.push(`URL:${cardUrl}`);
+      lines.push("END:VCARD");
+      const blob = new Blob([lines.join("\n")], { type: "text/vcard;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `ollin-card-${encodeURIComponent(fullName || targetName || "contact")}.vcf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    },
+    [cardUrl, profile]
+  );
 
   const handleShareAsImage = useCallback(async () => {
     if (!cardRef.current) return;
@@ -313,25 +321,25 @@ export function BusinessCardView({ profile, updateProfile }: { profile: Profile;
 
   return (
     <div
-      className="business-card-print-wrapper fixed inset-0 flex flex-col items-center justify-start p-3 sm:p-4 gap-4 bg-gray-100 overflow-y-auto"
+      className="business-card-print-wrapper fixed inset-0 flex flex-col items-center overflow-y-auto bg-white"
       style={{ minHeight: "100vh" }}
       dir={dir}
     >
-      {/* Back to Chatbot: only when Business Card slide is active (no modal open) */}
-      {!qrModalOpen && !nearbyOpen && !editDrawerOpen && (
+      {/* Back: only when no modal open */}
+      {!qrModalOpen && !editDrawerOpen && (
         <Link
           href="/dashboard"
-          className="business-card-print-hide absolute top-6 left-6 z-50 w-11 h-11 rounded-full bg-white/80 backdrop-blur-md border border-white/60 shadow-lg text-gray-700 hover:bg-white/90 hover:text-gray-900 flex items-center justify-center"
+          className="business-card-print-hide absolute top-6 left-6 z-50 w-11 h-11 rounded-full bg-white border border-gray-200 shadow-sm text-gray-700 hover:bg-gray-50 flex items-center justify-center"
           aria-label={locale === "he" ? "חזרה" : "Back"}
         >
           <ChevronLeft className="w-6 h-6" />
         </Link>
       )}
 
-      {/* Control row: single horizontal row, even spacing, same width as card area */}
-      <div className="business-card-print-hide w-full max-w-md flex flex-row items-center justify-between gap-6 py-2.5 px-4 rounded-xl bg-white/90 border border-gray-200 shadow-sm">
-        <label className="flex items-center gap-2 cursor-pointer shrink-0">
-          <span className="text-sm font-medium text-gray-700 whitespace-nowrap">{locale === "he" ? "לוגו?" : "Include Logo?"}</span>
+      {/* Top: toggles for card appearance */}
+      <div className="business-card-print-hide w-full max-w-md flex flex-row items-center justify-between gap-4 py-3 px-4 border-b border-gray-100">
+        <label className="flex items-center gap-2 px-2 py-1 rounded-lg bg-gray-50 border border-gray-200 cursor-pointer shrink-0">
+          <ImageIcon className="w-4 h-4 text-gray-600" />
           <button
             type="button"
             role="switch"
@@ -342,8 +350,8 @@ export function BusinessCardView({ profile, updateProfile }: { profile: Profile;
             <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${showCompanyLogo ? "left-5" : "left-0.5"}`} />
           </button>
         </label>
-        <label className="flex items-center gap-2 cursor-pointer shrink-0">
-          <span className="text-sm font-medium text-gray-700 whitespace-nowrap">{locale === "he" ? "תמונה?" : "Show Picture?"}</span>
+        <label className="flex items-center gap-2 px-2 py-1 rounded-lg bg-gray-50 border border-gray-200 cursor-pointer shrink-0">
+          <User className="w-4 h-4 text-gray-600" />
           <button
             type="button"
             role="switch"
@@ -354,8 +362,8 @@ export function BusinessCardView({ profile, updateProfile }: { profile: Profile;
             <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${showProfilePic ? "left-5" : "left-0.5"}`} />
           </button>
         </label>
-        <label className="flex items-center gap-2 cursor-pointer shrink-0">
-          <span className="text-sm font-medium text-gray-700 whitespace-nowrap">{locale === "he" ? "QR?" : "Show QR?"}</span>
+        <label className="flex items-center gap-2 px-2 py-1 rounded-lg bg-gray-50 border border-gray-200 cursor-pointer shrink-0">
+          <QrCode className="w-4 h-4 text-gray-600" />
           <button
             type="button"
             role="switch"
@@ -368,17 +376,18 @@ export function BusinessCardView({ profile, updateProfile }: { profile: Profile;
         </label>
       </div>
 
-      {/* Card: standard business card proportions, printable, subtle shadow */}
-      <article
-        ref={cardRef}
-        className="business-card-print-card bg-white border border-gray-200 overflow-hidden flex-shrink-0 rounded-lg flex flex-col text-gray-900 print:shadow-none print:border-gray-300 shadow-[0_8px_30px_rgba(0,0,0,0.08)]"
-        style={{
-          width: "min(100%, 360px)",
-          aspectRatio: String(CARD_ASPECT),
-          maxHeight: "calc(100vh - 280px)",
-        }}
-      >
-        <div className="flex-1 min-h-0 flex flex-col p-4 sm:p-5 relative">
+      {/* Card: static focal point at top */}
+      <div className="w-full flex items-center justify-center pt-6 pb-2 px-3 sm:px-4 flex-shrink-0">
+        <article
+          ref={cardRef}
+          className="business-card-print-card bg-white border border-gray-200 overflow-hidden flex-shrink-0 rounded-lg flex flex-col text-gray-900 print:shadow-none print:border-gray-300 shadow-[0_8px_30px_rgba(0,0,0,0.08)]"
+          style={{
+            width: "min(100%, 360px)",
+            aspectRatio: String(CARD_ASPECT),
+            maxHeight: "calc(100vh - 280px)",
+          }}
+        >
+          <div className="flex-1 min-h-0 flex flex-col p-4 sm:p-5 relative">
           {/* Company logo: top-right corner */}
           {showCompanyLogo && profile.companyLogo?.trim() && (
             <div className="absolute top-3 right-3 w-9 h-9 rounded overflow-hidden flex-shrink-0 opacity-90">
@@ -457,23 +466,35 @@ export function BusinessCardView({ profile, updateProfile }: { profile: Profile;
               <QRCodeSVG value={cardUrl} size={48} level="M" includeMargin={false} />
             </div>
           )}
-        </div>
-      </article>
+          </div>
+        </article>
+      </div>
 
-      {/* Actions: Share Card (dropdown) + Share to Nearby */}
-      <div className="business-card-print-hide w-full max-w-md flex flex-col gap-3">
+      {/* Explore Nearby — navigates to dedicated /nearby page */}
+      <div className="business-card-print-hide w-full max-w-md px-3 sm:px-4 pt-6 pb-2">
+        <Link
+          href="/nearby"
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-none bg-[#008080] text-white text-sm font-semibold hover:bg-[#006666] transition-colors"
+        >
+          <Radio className="w-5 h-5" />
+          {locale === "he" ? "חקור בקרבת מקום" : "Explore Nearby"}
+        </Link>
+      </div>
+
+      {/* Secondary: Share Card dropdown */}
+      <div className="business-card-print-hide w-full max-w-md px-3 sm:px-4 pt-2 pb-2">
         <div className="relative" ref={shareMenuRef}>
           <button
             type="button"
             onClick={() => setShareMenuOpen((o) => !o)}
-            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-[#008080] text-white text-sm font-semibold hover:bg-[#006666] transition-colors shadow-md"
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-none border-2 border-gray-300 bg-white text-gray-800 text-sm font-medium hover:bg-gray-50 hover:border-gray-400 transition-colors"
           >
-            <Share2 className="w-5 h-5" />
+            <Share2 className="w-5 h-5 text-gray-600" />
             {locale === "he" ? "שתף כרטיס" : "Share Card"}
             <ChevronDown className={`w-4 h-4 opacity-90 transition-transform ${shareMenuOpen ? "rotate-180" : ""}`} />
           </button>
           {shareMenuOpen && (
-            <div className="absolute left-0 right-0 top-full mt-1.5 py-1.5 rounded-xl border border-gray-200 bg-white shadow-lg z-50">
+            <div className="absolute left-0 right-0 top-full mt-1.5 py-1.5 rounded-none border border-gray-200 bg-white shadow-lg z-50">
               <button type="button" onClick={handleShareStandard} className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm text-gray-800 hover:bg-gray-50">
                 <Share2 className="w-4 h-4 text-gray-600 shrink-0" />
                 {locale === "he" ? "שתף (רגיל)" : "Share (Standard)"}
@@ -502,22 +523,64 @@ export function BusinessCardView({ profile, updateProfile }: { profile: Profile;
             </div>
           )}
         </div>
-        <button
-          type="button"
-          onClick={() => setNearbyOpen(true)}
-          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-gray-300 bg-transparent text-gray-700 text-sm font-medium hover:bg-gray-100 hover:border-gray-400 transition-colors"
-        >
-          <Radio className="w-5 h-5 text-gray-600" />
-          {locale === "he" ? "שיתוף בקרבת מקום" : "Share to Nearby"}
-        </button>
+      </div>
+
+      {/* Edit Card */}
+      <div className="business-card-print-hide w-full max-w-md px-3 sm:px-4 py-2">
         <button
           type="button"
           onClick={() => setEditDrawerOpen(true)}
-          className="business-card-print-hide w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-gray-200 bg-transparent text-gray-600 text-sm font-medium hover:bg-gray-50 hover:border-gray-300 transition-colors"
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-none border border-gray-200 bg-white text-gray-600 text-sm font-medium hover:bg-gray-50 hover:border-gray-300 transition-colors"
         >
           <Pencil className="w-4 h-4 text-gray-500" />
           {locale === "he" ? "ערוך פרטי כרטיס" : "Edit Card Details"}
         </button>
+      </div>
+
+      {/* Radial settings: Visible for, Scanning radius — below main buttons, subtle */}
+      <div className="business-card-print-hide w-full max-w-md px-3 sm:px-4 pt-6 pb-8">
+        <div className="space-y-3 text-gray-500">
+          <div>
+            <p className="text-[11px] font-medium text-gray-400 mb-1">Visible for {formatVisibleDuration(visibleDurationMinutes)}</p>
+            <input
+              type="range"
+              min={VISIBLE_DURATION_MIN}
+              max={VISIBLE_DURATION_MAX}
+              step={15}
+              value={visibleDurationMinutes}
+              onChange={(e) => setVisibleDurationMinutes(Number(e.target.value))}
+              className="w-full h-1.5 rounded-full appearance-none bg-gray-200 accent-[#008080] cursor-pointer"
+            />
+          </div>
+          <div>
+            <p className="text-[11px] font-medium text-gray-400 mb-1">Scanning radius {radiusMeters} m</p>
+            <input
+              type="range"
+              min={0}
+              max={RADIUS_STEPS_METERS.length - 1}
+              step={1}
+              value={RADIUS_STEPS_METERS.indexOf(radiusMeters)}
+              onChange={(e) => {
+                const index = Number(e.target.value);
+                const next = RADIUS_STEPS_METERS[index] ?? 5;
+                setRadiusMeters(next);
+              }}
+              className="w-full h-1.5 rounded-full appearance-none bg-gray-200 accent-[#008080] cursor-pointer"
+            />
+          </div>
+          <label className="flex items-center justify-between gap-2 cursor-pointer pt-1">
+            <span className="text-xs text-gray-500">Visible to others</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={isNearbyVisible}
+              onClick={() => setIsNearbyVisible((v) => !v)}
+              className={`relative w-8 h-4 rounded-full transition-colors flex-shrink-0 ${isNearbyVisible ? "bg-[#008080]" : "bg-gray-200"}`}
+            >
+              <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${isNearbyVisible ? "left-4" : "left-0.5"}`} />
+            </button>
+          </label>
+        </div>
       </div>
 
       {/* QR Code: standard modal with Close only */}
@@ -531,82 +594,6 @@ export function BusinessCardView({ profile, updateProfile }: { profile: Profile;
             </div>
             <p className="text-xs text-gray-500 mt-3 break-all">{cardUrl}</p>
             <button type="button" onClick={() => setQrModalOpen(false)} className="w-full mt-4 py-2.5 rounded-xl bg-[#008080] text-white font-medium hover:bg-[#006666]">
-              {locale === "he" ? "סגור" : "Close"}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Share to Nearby: standard modal with radar UI and Close only */}
-      {nearbyOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setNearbyOpen(false)} role="dialog" aria-modal="true" aria-label={locale === "he" ? "שיתוף בקרבת מקום" : "Share to Nearby"}>
-          <div className="bg-white rounded-2xl p-6 shadow-xl max-w-[340px] w-full text-center" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-gray-900 mb-1">{locale === "he" ? "שיתוף בקרבת מקום" : "Share to Nearby"}</h3>
-
-            {(nearbyStatus === "requesting" || nearbyStatus === "searching") && (
-              <div className="py-8 flex flex-col items-center gap-4">
-                <div className="relative w-28 h-28 flex items-center justify-center">
-                  <span className="nearby-radar-ring absolute inset-0 rounded-full bg-[#008080]/25" style={{ animationDelay: "0s" }} />
-                  <span className="nearby-radar-ring absolute inset-0 rounded-full bg-[#008080]/20" style={{ animationDelay: "0.4s" }} />
-                  <span className="nearby-radar-ring absolute inset-0 rounded-full bg-[#008080]/15" style={{ animationDelay: "0.8s" }} />
-                  <span className="relative z-10 w-11 h-11 rounded-full bg-[#008080] flex items-center justify-center shadow-md">
-                    <Radio className="w-6 h-6 text-white" />
-                  </span>
-                </div>
-                <p className="text-sm text-gray-600">
-                  {nearbyStatus === "requesting"
-                    ? (locale === "he" ? "מבקש גישה למיקום..." : "Requesting location...")
-                    : (locale === "he" ? "מחפש אנשים בקרבת מקום..." : "Searching for nearby people...")}
-                </p>
-              </div>
-            )}
-
-            {nearbyStatus === "found" && nearbyPeople.length > 0 && (
-              <div className="py-2">
-                <p className="text-sm font-medium text-gray-700 mb-3">{locale === "he" ? "אנשים שנמצאו בקרבת מקום" : "People found nearby"}</p>
-                <ul className="space-y-2 text-left">
-                  {nearbyPeople.map((person) => (
-                    <li key={person.id} className="flex items-center gap-3 p-3 rounded-xl border border-gray-200 bg-gray-50/50">
-                      <span className="w-10 h-10 rounded-full bg-[#008080]/20 flex items-center justify-center text-[#008080] font-semibold text-sm">
-                        {person.name.slice(0, 1)}
-                      </span>
-                      <span className="flex-1 text-sm font-medium text-gray-900 truncate">{person.name}</span>
-                      <button type="button" className="flex-shrink-0 px-3 py-1.5 rounded-lg bg-[#008080] text-white text-xs font-medium hover:bg-[#006666]">
-                        {locale === "he" ? "שתף" : "Share"}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {(nearbyStatus === "none" || nearbyStatus === "denied") && (
-              <div className="py-4">
-                <p className="text-sm text-gray-600 mb-4">
-                  {nearbyStatus === "denied"
-                    ? (locale === "he" ? "גישה למיקום נדחתה. השתמש בקוד QR כדי לשתף." : "Location access denied. Use a QR code to share instead.")
-                    : (locale === "he" ? "לא נמצאו אנשים בקרבת מקום כרגע." : "No one nearby right now.")}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => { setNearbyOpen(false); setQrModalOpen(true); }}
-                  className="w-full py-3 rounded-xl bg-[#008080] text-white text-sm font-semibold hover:bg-[#006666] transition-colors"
-                >
-                  {locale === "he" ? "הצג קוד QR" : "Show QR code"}
-                </button>
-              </div>
-            )}
-
-            {nearbyStatus === "found" && nearbyPeople.length === 0 && (
-              <div className="py-4">
-                <p className="text-sm text-gray-600 mb-4">{locale === "he" ? "לא נמצאו אנשים בקרבת מקום כרגע." : "No one nearby right now."}</p>
-                <button type="button" onClick={() => { setNearbyOpen(false); setQrModalOpen(true); }} className="w-full py-3 rounded-xl bg-[#008080] text-white text-sm font-semibold hover:bg-[#006666]">
-                  {locale === "he" ? "הצג קוד QR" : "Show QR code"}
-                </button>
-              </div>
-            )}
-
-            <button type="button" onClick={() => setNearbyOpen(false)} className="w-full mt-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50">
               {locale === "he" ? "סגור" : "Close"}
             </button>
           </div>
