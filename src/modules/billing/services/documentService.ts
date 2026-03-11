@@ -9,6 +9,7 @@ import {
   type BillingInvoice,
   type BillingReceipt,
   type BillingCreditNote,
+  type BillingNegativeReceipt,
   type BillingDeliveryNote,
   type BillingLineItem,
   BILLING_VAT_RATE,
@@ -54,7 +55,8 @@ export function createDraft(
   clientAddress?: string,
   clientTaxId?: string,
   items: BillingLineItem[] = [{ id: generateUUID(), description: "Item", quantity: 1, unitPrice: 0 }],
-  notes?: string
+  notes?: string,
+  title?: string
 ): BillingDocument {
   const docs = vault.getAllDocuments(userId);
   const number = nextNumber("DRAFT", docs);
@@ -78,6 +80,7 @@ export function createDraft(
     vatAmount,
     total,
     date: nowIso(),
+    title,
     notes,
     createdAt: now,
     updatedAt: now,
@@ -182,7 +185,8 @@ export function createDeliveryNote(
   clientAddress?: string,
   clientTaxId?: string,
   items: BillingLineItem[] = [{ id: generateUUID(), description: "Item", quantity: 1, unitPrice: 0 }],
-  notes?: string
+  notes?: string,
+  title?: string
 ): BillingDeliveryNote {
   const number = getNextDeliveryNoteNumber();
   const { subtotal, vatAmount, total } = baseFromItems(items, BILLING_VAT_RATE);
@@ -205,6 +209,7 @@ export function createDeliveryNote(
     vatAmount,
     total,
     date: nowIso(),
+    title,
     notes,
     createdAt: now,
     updatedAt: now,
@@ -213,7 +218,7 @@ export function createDeliveryNote(
   return vault.createDocument(userId, doc) as BillingDeliveryNote;
 }
 
-/** Issue credit note for an invoice (cancel). Invoice becomes canceled and is immutable. */
+/** Issue credit note (מסמך זיכוי) for an invoice. Original invoice is voided, not deleted. */
 export function issueCreditNote(userId: string, invoiceId: string): BillingCreditNote | null {
   const invoice = vault.getDocumentById(userId, invoiceId) as BillingInvoice | null;
   if (!invoice || invoice.type !== "invoice") return null;
@@ -226,6 +231,10 @@ export function issueCreditNote(userId: string, invoiceId: string): BillingCredi
     type: "credit_note",
     status: "canceled",
     creditForInvoiceId: invoiceId,
+    creditForInvoiceNumber: invoice.number,
+    subtotal: -invoice.subtotal,
+    vatAmount: -invoice.vatAmount,
+    total: -invoice.total,
     auditTrail: [...invoice.auditTrail, { action: "canceled", at: Date.now(), note: "Credit note issued" }],
     updatedAt: Date.now(),
   };
@@ -239,6 +248,40 @@ export function issueCreditNote(userId: string, invoiceId: string): BillingCredi
   };
   vault.replaceDocument(userId, updatedInvoice);
   return credit;
+}
+
+/** Issue negative receipt to offset a receipt (Israeli bookkeeping). Original receipt is voided. */
+export function issueNegativeReceipt(userId: string, receiptId: string): BillingNegativeReceipt | null {
+  const receipt = vault.getDocumentById(userId, receiptId) as BillingReceipt | null;
+  if (!receipt || receipt.type !== "receipt") return null;
+  const docs = vault.getAllDocuments(userId);
+  const number = nextNumber("NR", docs.filter((d) => d.type === "negative_receipt"));
+  const now = Date.now();
+  const negative: BillingNegativeReceipt = {
+    ...receipt,
+    id: generateUUID(),
+    number,
+    type: "negative_receipt",
+    status: "canceled",
+    originalReceiptId: receiptId,
+    originalReceiptNumber: receipt.number,
+    subtotal: -receipt.subtotal,
+    vatAmount: -receipt.vatAmount,
+    total: -receipt.total,
+    date: nowIso(),
+    auditTrail: [...receipt.auditTrail, { action: "canceled", at: now, note: "Negative receipt – offset" }],
+    updatedAt: now,
+  };
+  vault.createDocument(userId, negative);
+  const updatedReceipt: BillingReceipt = {
+    ...receipt,
+    status: "canceled",
+    canceledByNegativeReceiptId: negative.id,
+    auditTrail: [...receipt.auditTrail, { action: "canceled", at: now }],
+    updatedAt: now,
+  };
+  vault.replaceDocument(userId, updatedReceipt);
+  return negative;
 }
 
 export function updateDraftOrQuoteItems(

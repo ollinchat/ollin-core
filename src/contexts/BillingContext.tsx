@@ -45,20 +45,23 @@ type BillingContextType = {
   expenses: BillingExpense[];
   addExpense: (e: Omit<BillingExpense, "id" | "createdAt">) => BillingExpense | null;
   removeExpense: (id: string) => void;
-  createDraft: (client: BillingClient, items?: BillingLineItem[], notes?: string) => BillingDocument | null;
+  createDraft: (client: BillingClient, items?: BillingLineItem[], notes?: string, title?: string) => BillingDocument | null;
   convertToQuote: (draftId: string) => BillingDocument | null;
   convertQuoteToInvoice: (quoteId: string) => BillingDocument | null;
-  createDeliveryNote: (client: BillingClient, items?: BillingLineItem[], notes?: string) => BillingDocument | null;
+  createDeliveryNote: (client: BillingClient, items?: BillingLineItem[], notes?: string, title?: string) => BillingDocument | null;
   convertDeliveryNoteToInvoice: (deliveryNoteId: string) => BillingDocument | null;
   markPaid: (invoiceId: string) => BillingDocument | null;
   createReceipt: (invoiceId: string) => BillingDocument | null;
   issueCreditNote: (invoiceId: string) => BillingDocument | null;
+  issueNegativeReceipt: (receiptId: string) => BillingDocument | null;
   cancelQuote: (quoteId: string) => BillingDocument | null;
   cancelDeliveryNote: (deliveryNoteId: string) => BillingDocument | null;
   duplicateDoc: (docId: string) => BillingDocument | null;
   updateDocItems: (docId: string, items: BillingLineItem[]) => BillingDocument | null;
   updateDocClient: (docId: string, client: Partial<BillingClient>) => BillingDocument | null;
   downloadPdf: (docId: string, options?: { password?: string; qrDataUrl?: string }) => Promise<void>;
+  /** Returns PDF blob for sharing (e.g. Web Share API with file). */
+  getPdfBlob: (docId: string) => Promise<Blob | null>;
   getShareLink: (docId: string) => string;
   logViewed: (docId: string) => void;
 };
@@ -154,6 +157,7 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
             total: total1,
             date: isoDaysAgo(6),
             dueDate: isoDaysAgo(1),
+            title: "Consulting proposal – phase 1",
             createdAt: now - 6 * 86400000,
             updatedAt: now - 6 * 86400000,
             auditTrail: [],
@@ -177,6 +181,7 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
             total: total2,
             date: isoDaysAgo(40),
             dueDate: isoDaysAgo(10), // overdue
+            title: "Annual license renewal",
             createdAt: now - 40 * 86400000,
             updatedAt: now - 40 * 86400000,
             auditTrail: [],
@@ -199,6 +204,7 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
             vatAmount: vat1,
             total: total1,
             date: isoDaysAgo(12),
+            title: "Consulting invoice – Acme",
             createdAt: now - 12 * 86400000,
             updatedAt: now - 12 * 86400000,
             auditTrail: [],
@@ -335,7 +341,7 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
   );
 
   const createDraft = useCallback(
-    (client: BillingClient, items?: BillingLineItem[], notes?: string) => {
+    (client: BillingClient, items?: BillingLineItem[], notes?: string, title?: string) => {
       if (!userId) return null;
       const doc = documentService.createDraft(
         userId,
@@ -346,7 +352,8 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
         client.address,
         client.taxId,
         items,
-        notes
+        notes,
+        title
       );
       refreshDocuments();
       return doc;
@@ -375,7 +382,7 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
   );
 
   const createDeliveryNote = useCallback(
-    (client: BillingClient, items?: BillingLineItem[], notes?: string) => {
+    (client: BillingClient, items?: BillingLineItem[], notes?: string, title?: string) => {
       if (!userId) return null;
       const doc = documentService.createDeliveryNote(
         userId,
@@ -386,7 +393,8 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
         client.address,
         client.taxId,
         items,
-        notes
+        notes,
+        title
       );
       refreshDocuments();
       return doc;
@@ -428,6 +436,16 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
     (invoiceId: string) => {
       if (!userId) return null;
       const doc = documentService.issueCreditNote(userId, invoiceId);
+      refreshDocuments();
+      return doc;
+    },
+    [userId, refreshDocuments]
+  );
+
+  const issueNegativeReceipt = useCallback(
+    (receiptId: string) => {
+      if (!userId) return null;
+      const doc = documentService.issueNegativeReceipt(userId, receiptId);
       refreshDocuments();
       return doc;
     },
@@ -509,6 +527,21 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
     [userId, fromProfile]
   );
 
+  const getPdfBlob = useCallback(
+    async (docId: string): Promise<Blob | null> => {
+      if (!userId) return null;
+      const doc = vault.getDocumentById(userId, docId);
+      if (!doc) return null;
+      try {
+        const { blob } = await generateDocumentPdf(doc, fromProfile, {});
+        return blob;
+      } catch {
+        return null;
+      }
+    },
+    [userId, fromProfile]
+  );
+
   const getShareLink = useCallback(
     (docId: string) => {
       if (typeof window === "undefined") return "";
@@ -545,12 +578,14 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
       markPaid,
       createReceipt,
       issueCreditNote,
+      issueNegativeReceipt,
       cancelQuote,
       cancelDeliveryNote,
       duplicateDoc,
       updateDocItems,
       updateDocClient,
       downloadPdf,
+      getPdfBlob,
       getShareLink,
       logViewed,
     }),
@@ -574,12 +609,14 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
       markPaid,
       createReceipt,
       issueCreditNote,
+      issueNegativeReceipt,
       cancelQuote,
       cancelDeliveryNote,
       duplicateDoc,
       updateDocItems,
       updateDocClient,
       downloadPdf,
+      getPdfBlob,
       getShareLink,
       logViewed,
     ]

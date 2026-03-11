@@ -30,7 +30,7 @@ export const defaultBusinessProfile: BusinessProfile = {
 export type BillingDocStatus = "draft" | "pending" | "paid" | "canceled";
 
 /** Document type in the chain */
-export type BillingDocType = "draft" | "quote" | "invoice" | "receipt" | "delivery_note" | "credit_note";
+export type BillingDocType = "draft" | "quote" | "invoice" | "receipt" | "delivery_note" | "credit_note" | "negative_receipt";
 
 export interface BillingLineItem {
   id: string;
@@ -81,6 +81,8 @@ export interface BillingDocumentBase {
   total: number;
   date: string; // ISO date
   dueDate?: string;
+  /** Optional human-friendly subject/title (כותרת המסמך) for search & display */
+  title?: string;
   /** Free-text notes (הערות) */
   notes?: string;
   createdAt: number;
@@ -93,8 +95,16 @@ export interface BillingDocumentBase {
   auditTrail: AuditEntry[];
   /** For credit note: reference to canceled invoice id */
   creditForInvoiceId?: string;
+  /** For credit note: original invoice number (e.g. INV-1) for display */
+  creditForInvoiceNumber?: string;
   /** When invoice is canceled, id of the credit note */
   canceledByCreditNoteId?: string;
+  /** For negative receipt: reference to original receipt id */
+  originalReceiptId?: string;
+  /** For negative receipt: original receipt number for display */
+  originalReceiptNumber?: string;
+  /** When receipt is offset by a negative receipt */
+  canceledByNegativeReceiptId?: string;
 }
 
 export interface BillingDraft extends BillingDocumentBase {
@@ -124,13 +134,20 @@ export interface BillingCreditNote extends BillingDocumentBase {
   creditForInvoiceId: string;
 }
 
+/** Negative receipt (מסמך זיכוי לקבלה) – offsets original receipt for Israeli bookkeeping */
+export interface BillingNegativeReceipt extends BillingDocumentBase {
+  type: "negative_receipt";
+  originalReceiptId: string;
+}
+
 export type BillingDocument =
   | BillingDraft
   | BillingQuote
   | BillingInvoice
   | BillingReceipt
   | BillingDeliveryNote
-  | BillingCreditNote;
+  | BillingCreditNote
+  | BillingNegativeReceipt;
 
 export type AuditAction = "created" | "viewed" | "signed" | "issued" | "paid" | "canceled" | "downloaded" | "shared";
 

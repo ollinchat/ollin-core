@@ -10,7 +10,7 @@ import { useInternalMessages } from "@/contexts/ChatEngineContext";
 import { useContacts } from "@/contexts/ContactsContext";
 import type { FinanceClient, TaxInvoice } from "@/lib/finance-types";
 import type { BillingDocument, BillingExpense } from "@/modules/billing/types";
-import { ChevronLeft, FileText, Receipt, FileStack, Plus, Package, Fingerprint, UserPlus, DollarSign, TrendingUp, Download, Trash2, ChevronDown, X, Loader2, MoreVertical, Share2, Settings, Upload, Camera } from "lucide-react";
+import { ChevronLeft, FileText, Receipt, FileStack, Plus, Package, Fingerprint, UserPlus, DollarSign, TrendingUp, Download, Trash2, ChevronDown, X, Loader2, MoreVertical, Share2, Settings, Upload, Camera, Search, SlidersHorizontal, Check } from "lucide-react";
 import { DocumentCard } from "@/components/finances/DocumentCard";
 import type { Quote, DeliveryNote, LineItem } from "@/lib/finance-types";
 import { getNextNumberPreview } from "@/lib/document-numbering";
@@ -86,12 +86,26 @@ function docTypeLabel(t: BillingDocument["type"]): string {
   if (t === "receipt") return "Receipt";
   if (t === "delivery_note") return "Delivery Note";
   if (t === "credit_note") return "Credit Note";
+  if (t === "negative_receipt") return "Negative Receipt";
   return "Draft";
 }
 
 function formatMoney(n: number): string {
   if (typeof n !== "number" || Number.isNaN(n)) return "0.00";
   return n.toFixed(2);
+}
+
+/** Optional: convert integer part to words for "Total in Words" (English). */
+function numberToWordsEn(n: number): string {
+  if (n <= 0 || n >= 10000) return "";
+  const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"];
+  const teens = ["Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+  const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+  if (n < 10) return ones[n];
+  if (n < 20) return teens[n - 10];
+  if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 ? " " + ones[n % 10] : "");
+  if (n < 1000) return ones[Math.floor(n / 100)] + " Hundred" + (n % 100 ? " " + numberToWordsEn(n % 100) : "");
+  return numberToWordsEn(Math.floor(n / 1000)) + " Thousand" + (n % 1000 ? " " + numberToWordsEn(n % 1000) : "");
 }
 
 function StatusBadge({ status }: { status: UiStatus }) {
@@ -125,6 +139,227 @@ function getInvoiceUiStatus(doc: BillingDocument, todayIso: string): UiStatus {
   if (s === "paid" || s === "canceled" || s === "draft") return s;
   if (s === "pending" && doc.dueDate && doc.dueDate < todayIso) return "overdue";
   return "pending";
+}
+
+/** Elite document template – luxury invoice look: grid header, notes, bank, signature */
+function UnifiedDocumentPreview({
+  company,
+  client,
+  items,
+  subtotal,
+  vatAmount,
+  total,
+  currencySymbol,
+  docNumber,
+  docType,
+  language,
+  compact,
+  date,
+  dueDate,
+  totalInWords,
+  vatRate = 17,
+  title,
+  notes,
+  bankDetails,
+  creditForInvoiceNumber,
+  originalReceiptNumber,
+  isCanceled,
+}: {
+  company: { name: string; address?: string; taxId?: string; logoUrl?: string; signatureUrl?: string };
+  client: { name: string; email?: string; phone?: string; address?: string; taxId?: string };
+  items: { description: string; quantity: number; unitPrice: number }[];
+  subtotal: number;
+  vatAmount: number;
+  total: number;
+  currencySymbol: string;
+  docNumber?: string;
+  docType?: BillingDocument["type"];
+  language: "he" | "en" | "both";
+  compact?: boolean;
+  date?: string;
+  dueDate?: string;
+  totalInWords?: string;
+  vatRate?: number;
+  title?: string;
+  notes?: string;
+  bankDetails?: { bankName?: string; branchNumber?: string; accountNumber?: string; iban?: string; swift?: string; bitLink?: string };
+  creditForInvoiceNumber?: string;
+  originalReceiptNumber?: string;
+  isCanceled?: boolean;
+}) {
+  const lang = language === "both" ? "en" : language;
+  const L = {
+    from: lang === "he" ? "מהחברה" : "From",
+    to: lang === "he" ? "אל" : "To",
+    client: lang === "he" ? "לקוח" : "Client",
+    description: lang === "he" ? "תיאור" : "Description",
+    price: lang === "he" ? "מחיר" : "Price",
+    qty: lang === "he" ? "כמות" : "Qty",
+    vat: lang === "he" ? "מע\"מ" : "VAT",
+    lineTotal: lang === "he" ? "סה\"כ" : "Total",
+    subtotal: lang === "he" ? "סיכום ביניים (ללא מע\"מ)" : "Sub-total (Excl. VAT)",
+    vatBase: lang === "he" ? "בסיס לחישוב מע\"מ" : "VAT base",
+    vatRateLabel: (rate: number) => (lang === "he" ? `מע\"מ (${rate}%)` : `VAT (${rate}%)`),
+    grandTotal: lang === "he" ? "סה\"כ כולל" : "Grand Total",
+    taxId: lang === "he" ? "ח.פ" : "Tax ID",
+    docDate: lang === "he" ? "תאריך" : "Date",
+    dueDateLabel: lang === "he" ? "תאריך פירעון" : "Due Date",
+    totalInWordsLabel: lang === "he" ? "סכום במלים" : "Total in Words",
+    signature: lang === "he" ? "חתימה" : "Signature",
+    notesLabel: lang === "he" ? "הערות" : "Comments / Notes",
+    bankInfo: lang === "he" ? "פרטי בנק" : "Bank Information",
+    bankName: lang === "he" ? "שם הבנק" : "Bank Name",
+    branch: lang === "he" ? "סניף" : "Branch",
+    account: lang === "he" ? "חשבון" : "Account",
+  };
+  const docTypeLabel =
+    docType === "invoice" ? (lang === "he" ? "חשבונית" : "Invoice")
+    : docType === "quote" ? (lang === "he" ? "הצעת מחיר" : "Quote")
+    : docType === "delivery_note" ? (lang === "he" ? "תעודת משלוח" : "Delivery Note")
+    : docType === "credit_note" ? (lang === "he" ? "מסמך זיכוי" : "Credit Note")
+    : docType === "negative_receipt" ? (lang === "he" ? "קבלה שלילית" : "Negative Receipt")
+    : docType ?? "";
+  const scale = compact ? "scale-90 origin-top" : "";
+  const textSize = compact ? "text-xs" : "text-sm";
+  const textSizeSmall = compact ? "text-[10px]" : "text-xs";
+  const hasBank = bankDetails && (bankDetails.bankName || bankDetails.branchNumber || bankDetails.accountNumber || bankDetails.iban || bankDetails.swift || bankDetails.bitLink);
+  const formatAmount = (n: number) => (n < 0 ? `-${currencySymbol}${formatMoney(-n)}` : `${currencySymbol}${formatMoney(n)}`);
+  return (
+    <div
+      className={`relative bg-white rounded-none border border-gray-200 overflow-hidden ${compact ? "shadow-md max-w-[420px]" : "shadow-xl max-w-[595px]"} ${scale}`}
+      style={{ fontFamily: "Inter, var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
+    >
+      {isCanceled && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none" aria-hidden>
+          <span className="text-red-600 font-black text-4xl md:text-5xl uppercase tracking-widest opacity-90 rotate-[-12deg]" style={{ textShadow: "0 0 2px rgba(255,255,255,0.9), 0 2px 8px rgba(0,0,0,0.2)", border: "4px solid rgb(220 38 38)", padding: "0.5rem 1.5rem" }}>
+            {lang === "he" ? "מבוטל" : "CANCELLED"}
+          </span>
+        </div>
+      )}
+      <div className={compact ? "p-3" : "p-8"}>
+        {/* Single row: From (Sender) | To (Recipient) – Israeli standard */}
+        <div className={`grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10 mb-8 border-b border-gray-200 pb-6 ${compact ? "mb-5 pb-4" : ""}`}>
+          <div>
+            {company.logoUrl && (
+              <div className="mb-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={company.logoUrl} alt="" className={`${compact ? "h-10" : "h-12"} w-auto object-contain`} />
+              </div>
+            )}
+            <p className={`text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1`}>{L.from}</p>
+            <p className={`font-semibold text-gray-900 ${compact ? "text-sm" : "text-base"}`}>{company.name}</p>
+            {company.address && <p className={`text-gray-600 ${textSize} mt-0.5 leading-snug`}>{company.address}</p>}
+            {company.taxId && <p className={`text-gray-500 ${textSize} mt-0.5`}>{L.taxId}: {company.taxId}</p>}
+          </div>
+          <div>
+            <p className={`text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1`}>{L.to}</p>
+            <p className={`font-semibold text-gray-900 ${compact ? "text-sm" : "text-base"}`}>{client.name}</p>
+            {client.email && <p className={`text-gray-600 ${textSize}`}>{client.email}</p>}
+            {client.phone && <p className={`text-gray-600 ${textSize}`}>{client.phone}</p>}
+            {client.address && <p className={`text-gray-600 ${textSize}`}>{client.address}</p>}
+            {client.taxId && <p className={`text-gray-500 ${textSize}`}>{L.taxId}: {client.taxId}</p>}
+          </div>
+        </div>
+
+        {/* Doc type, number, date, title – minimal header */}
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-4">
+          {docType && <span className={`font-semibold ${compact ? "text-sm" : "text-base"}`} style={{ color: TEAL }}>{docTypeLabel}</span>}
+          {docNumber && <span className={`text-gray-600 ${textSizeSmall}`}>#{docNumber}</span>}
+          {creditForInvoiceNumber && <span className={`text-gray-600 ${textSizeSmall}`}>{lang === "he" ? `עבור חשבונית #${creditForInvoiceNumber}` : `For Invoice #${creditForInvoiceNumber}`}</span>}
+          {originalReceiptNumber && <span className={`text-gray-600 ${textSizeSmall}`}>{lang === "he" ? `עבור קבלה #${originalReceiptNumber}` : `For Receipt #${originalReceiptNumber}`}</span>}
+          {date && <span className={`text-gray-500 ${textSizeSmall}`}>{L.docDate}: {date}</span>}
+          {dueDate && <span className={`text-gray-500 ${textSizeSmall}`}>{L.dueDateLabel}: {dueDate}</span>}
+          {title && title.trim() && <span className={`font-medium text-gray-900 ${textSizeSmall}`}>{title}</span>}
+        </div>
+
+        {/* Items table */}
+        <table className={`w-full ${textSize} border-collapse`} style={{ tableLayout: "fixed" }}>
+          <thead>
+            <tr className="border-b-2 border-gray-200">
+              <th className="text-left py-3 font-semibold text-gray-700 w-[40%]">{L.description}</th>
+              <th className="text-right py-3 font-semibold text-gray-700 w-[15%]">{L.price}</th>
+              <th className="text-right py-3 font-semibold text-gray-700 w-[10%]">{L.qty}</th>
+              <th className="text-right py-3 font-semibold text-gray-700 w-[15%]">{L.vat}</th>
+              <th className="text-right py-3 font-semibold text-gray-700 w-[20%]">{L.lineTotal}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((i, idx) => {
+              const lineTotal = i.quantity * i.unitPrice;
+              const lineVat = Math.round(lineTotal * (vatRate / 100) * 100) / 100;
+              return (
+                <tr key={idx} className="border-b border-gray-100">
+                  <td className="py-3 text-gray-900 align-top">{i.description || "—"}</td>
+                  <td className="py-3 text-right tabular-nums text-gray-700 align-top">{currencySymbol}{formatMoney(i.unitPrice)}</td>
+                  <td className="py-3 text-right tabular-nums text-gray-700 align-top">{i.quantity}</td>
+                  <td className="py-3 text-right tabular-nums text-gray-600 align-top">{currencySymbol}{formatMoney(lineVat)}</td>
+                  <td className="py-3 text-right tabular-nums text-gray-900 font-medium align-top">{currencySymbol}{formatMoney(lineTotal)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+
+        {/* Notes – before totals */}
+        {notes && notes.trim() && (
+          <div className="mt-6 pt-4 border-t border-gray-100">
+            <p className={`text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1`}>{L.notesLabel}</p>
+            <p className={`text-gray-700 ${textSize} leading-relaxed whitespace-pre-wrap`}>{notes.trim()}</p>
+          </div>
+        )}
+
+        {/* Totals */}
+        <div className={`mt-6 pt-4 border-t-2 border-gray-200 space-y-2 ${textSize}`}>
+          <div className="flex justify-between text-gray-600">
+            <span>{L.subtotal}</span>
+            <span className="tabular-nums">{formatAmount(subtotal)}</span>
+          </div>
+          <div className="flex justify-between text-gray-600">
+            <span>{L.vatBase}</span>
+            <span className="tabular-nums">{formatAmount(subtotal)}</span>
+          </div>
+          <div className="flex justify-between text-gray-600">
+            <span>{L.vatRateLabel(vatRate)}</span>
+            <span className="tabular-nums">{formatAmount(vatAmount)}</span>
+          </div>
+          <div className="flex justify-between font-bold pt-2 text-gray-900" style={{ color: TEAL }}>
+            <span>{L.grandTotal}</span>
+            <span className="tabular-nums">{formatAmount(total)}</span>
+          </div>
+          {totalInWords && totalInWords.trim() && (
+            <p className={`pt-2 text-gray-600 italic ${textSizeSmall}`}>{L.totalInWordsLabel}: {totalInWords}</p>
+          )}
+        </div>
+
+        {/* Footer: Bank details (from company profile) + Signature bottom right */}
+        <div className={`mt-10 pt-6 border-t border-gray-200 flex flex-col md:flex-row md:items-end md:justify-between gap-6 ${compact ? "mt-6 pt-4" : ""}`}>
+          {hasBank && !compact && (
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-2">{L.bankInfo}</p>
+              {bankDetails!.bankName && <p className={`text-gray-700 ${textSize}`}>{L.bankName}: {bankDetails!.bankName}</p>}
+              {(bankDetails!.branchNumber || bankDetails!.accountNumber) && (
+                <p className={`text-gray-700 ${textSize}`}>
+                  {bankDetails!.branchNumber && <span>{L.branch}: {bankDetails!.branchNumber}</span>}
+                  {bankDetails!.branchNumber && bankDetails!.accountNumber && " · "}
+                  {bankDetails!.accountNumber && <span>{L.account}: {bankDetails!.accountNumber}</span>}
+                </p>
+              )}
+              {bankDetails!.iban && <p className={`text-gray-700 ${textSize}`}>IBAN: {bankDetails!.iban}</p>}
+              {bankDetails!.swift && <p className={`text-gray-700 ${textSize}`}>SWIFT: {bankDetails!.swift}</p>}
+              {bankDetails!.bitLink && <p className={`text-gray-700 ${textSize}`}>Payment: {bankDetails!.bitLink}</p>}
+            </div>
+          )}
+          {company.signatureUrl && !compact && (
+            <div className="md:ml-auto md:text-right">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">{L.signature}</p>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={company.signatureUrl} alt="" className="inline-block max-w-[180px] max-h-16 object-contain" />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function ExpenseModal({
@@ -197,11 +432,286 @@ function ExpenseModal({
   );
 }
 
-function emptyLineItem(): BillingLineItem {
-  return { id: generateUUID(), description: "", quantity: 1, unitPrice: 0 };
+const VAT_RATE_PCT = 17;
+
+/** Price Excl. VAT → Incl. VAT (+17%) */
+function priceExclToIncl(excl: number): number {
+  return Math.round((excl * (1 + VAT_RATE_PCT / 100)) * 100) / 100;
 }
 
-const VAT_RATE_PCT = 17;
+/** Price Incl. VAT → Excl. VAT (reverse) */
+function priceInclToExcl(incl: number): number {
+  return Math.round((incl / (1 + VAT_RATE_PCT / 100)) * 100) / 100;
+}
+
+/** Line VAT amount from unit price (excl), quantity, discount % */
+function lineVatAmount(unitPriceExcl: number, quantity: number, discountPct: number): number {
+  const afterDiscount = unitPriceExcl * (1 - discountPct / 100);
+  return Math.round(quantity * afterDiscount * (VAT_RATE_PCT / 100) * 100) / 100;
+}
+
+/** Line total excl. VAT */
+function lineTotalExcl(unitPriceExcl: number, quantity: number, discountPct: number): number {
+  return Math.round(quantity * unitPriceExcl * (1 - discountPct / 100) * 100) / 100;
+}
+
+type UiLineItem = {
+  id: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  discountPct: number;
+  confirmed: boolean;
+};
+
+function emptyUiLineItem(): UiLineItem {
+  return { id: generateUUID(), description: "", quantity: 1, unitPrice: 0, discountPct: 0, confirmed: false };
+}
+
+/** World currencies for searchable dropdown (code, symbol, name) */
+const CURRENCIES: { code: string; symbol: string; name: string }[] = [
+  { code: "ILS", symbol: "₪", name: "Israeli Shekel" },
+  { code: "USD", symbol: "$", name: "US Dollar" },
+  { code: "EUR", symbol: "€", name: "Euro" },
+  { code: "GBP", symbol: "£", name: "British Pound" },
+  { code: "CHF", symbol: "Fr", name: "Swiss Franc" },
+  { code: "JPY", symbol: "¥", name: "Japanese Yen" },
+  { code: "CAD", symbol: "C$", name: "Canadian Dollar" },
+  { code: "AUD", symbol: "A$", name: "Australian Dollar" },
+  { code: "CNY", symbol: "¥", name: "Chinese Yuan" },
+  { code: "INR", symbol: "₹", name: "Indian Rupee" },
+  { code: "MXN", symbol: "MX$", name: "Mexican Peso" },
+  { code: "BRL", symbol: "R$", name: "Brazilian Real" },
+  { code: "ZAR", symbol: "R", name: "South African Rand" },
+  { code: "RUB", symbol: "₽", name: "Russian Ruble" },
+  { code: "KRW", symbol: "₩", name: "South Korean Won" },
+  { code: "TRY", symbol: "₺", name: "Turkish Lira" },
+  { code: "PLN", symbol: "zł", name: "Polish Zloty" },
+  { code: "SEK", symbol: "kr", name: "Swedish Krona" },
+  { code: "NOK", symbol: "kr", name: "Norwegian Krone" },
+  { code: "DKK", symbol: "kr", name: "Danish Krone" },
+];
+const CURRENCY_SYMBOLS: Record<string, string> = Object.fromEntries(CURRENCIES.map((c) => [c.code, c.symbol]));
+
+function NewClientModal({
+  open,
+  onClose,
+  onSave,
+  locale,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSave: (client: BillingClient) => void;
+  locale: "en" | "he";
+}) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+
+  if (!open) return null;
+
+  const handleSave = () => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    onSave({
+      id: generateUUID(),
+      name: trimmed,
+      email: email.trim() || undefined,
+      phone: phone.trim() || undefined,
+    });
+    setName("");
+    setEmail("");
+    setPhone("");
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
+      <div
+        className="w-full max-w-sm bg-white border border-gray-200 shadow-xl rounded-none"
+        style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+          <h3 className="text-sm font-semibold text-gray-900">
+            {locale === "he" ? "לקוח חדש" : "New Client"}
+          </h3>
+          <button type="button" onClick={onClose} className="p-2 rounded-none text-gray-500 hover:bg-gray-100">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="p-4 space-y-3">
+          <div>
+            <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1">
+              {locale === "he" ? "שם" : "Name"}
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full rounded-none border border-gray-200 bg-white px-3 py-2 text-[13px] text-gray-900 focus:outline-none focus:border-[#008080]"
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1">
+              {locale === "he" ? "אימייל" : "Email"}
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-none border border-gray-200 bg-white px-3 py-2 text-[13px] text-gray-900 focus:outline-none focus:border-[#008080]"
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1">
+              {locale === "he" ? "טלפון" : "Phone"}
+            </label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className="w-full rounded-none border border-gray-200 bg-white px-3 py-2 text-[13px] text-gray-900 focus:outline-none focus:border-[#008080]"
+            />
+          </div>
+        </div>
+        <div className="flex gap-2 p-4 border-t border-gray-200">
+          <button type="button" onClick={onClose} className="flex-1 py-2 rounded-none border border-gray-200 bg-white text-[13px] font-medium text-gray-700">
+            {locale === "he" ? "ביטול" : "Cancel"}
+          </button>
+          <button type="button" onClick={handleSave} disabled={!name.trim()} className="flex-1 py-2 rounded-none text-white text-[13px] font-semibold disabled:opacity-50" style={{ backgroundColor: TEAL }}>
+            {locale === "he" ? "שמור" : "Save"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type DocCreateStep = "form" | "preview" | "generated";
+
+function SuccessWithPreview({
+  genDoc,
+  businessProfile,
+  symbol,
+  docLang,
+  documentLanguage,
+  t,
+  locale,
+  generatedDocId,
+  downloadPdf,
+  getShareLink,
+  getPdfBlob,
+  onClose,
+  bankDetails,
+}: {
+  genDoc: BillingDocument | null | undefined;
+  businessProfile?: { legalName?: string; taxId?: string; address?: string; businessLogo?: string; signature?: string };
+  symbol: string;
+  docLang: "he" | "en" | "both";
+  documentLanguage?: string;
+  t: Record<string, string>;
+  locale: "en" | "he";
+  generatedDocId: string;
+  downloadPdf: (id: string) => void;
+  getShareLink: (id: string) => string | null;
+  getPdfBlob: (id: string) => Promise<Blob | null>;
+  onClose: () => void;
+  bankDetails?: { bankName?: string; branchNumber?: string; accountNumber?: string; iban?: string; swift?: string; bitLink?: string };
+}) {
+  const [linkCopied, setLinkCopied] = useState(false);
+  const handleShare = useCallback(async () => {
+    if (typeof navigator !== "undefined" && navigator.share) {
+      const blob = await getPdfBlob(generatedDocId);
+      if (blob) {
+        const fileName = genDoc ? `${genDoc.type}-${genDoc.number}.pdf` : "document.pdf";
+        const file = new File([blob], fileName, { type: "application/pdf" });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ files: [file], title: fileName });
+            return;
+          } catch (err) {
+            if ((err as Error).name === "AbortError") return;
+          }
+        }
+      }
+    }
+    const link = getShareLink(generatedDocId);
+    if (link) {
+      navigator.clipboard.writeText(link);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    }
+  }, [generatedDocId, getPdfBlob, getShareLink, genDoc]);
+  const totalInWords =
+    genDoc && docLang !== "he"
+      ? numberToWordsEn(Math.floor(genDoc.total)) + " " + symbol + " only"
+      : undefined;
+  return (
+    <div className="flex flex-col gap-6 p-4 bg-white">
+      <div className="flex-1 overflow-y-auto flex justify-center min-h-0">
+        {genDoc ? (
+          <div className="flex-shrink-0 w-full" style={{ maxWidth: 595 }}>
+            <UnifiedDocumentPreview
+              company={{
+                name: businessProfile?.legalName ?? "",
+                address: businessProfile?.address,
+                taxId: businessProfile?.taxId,
+                logoUrl: businessProfile?.businessLogo,
+                signatureUrl: businessProfile?.signature,
+              }}
+              client={{
+                name: genDoc.clientName ?? "",
+                email: genDoc.clientEmail,
+                phone: genDoc.clientPhone,
+                address: genDoc.clientAddress,
+                taxId: genDoc.clientTaxId,
+              }}
+              items={genDoc.items.map((i) => ({ description: i.description, quantity: i.quantity, unitPrice: i.unitPrice }))}
+              subtotal={genDoc.subtotal}
+              vatAmount={genDoc.vatAmount}
+              total={genDoc.total}
+              currencySymbol={symbol}
+              docNumber={genDoc.number}
+              docType={genDoc.type}
+              language={docLang}
+              date={genDoc.date}
+              dueDate={genDoc.dueDate}
+              totalInWords={totalInWords}
+              vatRate={genDoc.vatRate ?? 17}
+              title={genDoc.title}
+              notes={genDoc.notes}
+              bankDetails={(genDoc.type === "invoice" || genDoc.type === "credit_note" || genDoc.type === "negative_receipt") ? bankDetails : undefined}
+            />
+          </div>
+        ) : (
+          <p className="text-[13px] text-gray-600">{t.documentCreated}</p>
+        )}
+      </div>
+      <p className="text-center text-[13px] font-semibold text-gray-900">{t.documentCreated}</p>
+      <div className="flex flex-col gap-2 flex-shrink-0">
+        <button
+          type="button"
+          onClick={() => { downloadPdf(generatedDocId); onClose(); }}
+          className="w-full py-3 rounded-none border border-gray-200 bg-white text-gray-700 font-medium text-[13px]"
+        >
+          {t.downloadPdf}
+        </button>
+        <button
+          type="button"
+          onClick={handleShare}
+          className="w-full py-3 rounded-none text-white font-semibold text-[13px]"
+          style={{ backgroundColor: TEAL }}
+        >
+          {linkCopied ? (locale === "he" ? "הועתק!" : "Copied!") : (locale === "he" ? "שיתוף" : "Share")}
+        </button>
+        <button type="button" onClick={onClose} className="w-full py-2.5 rounded-none border border-gray-200 bg-gray-50 text-gray-700 font-medium text-[13px]">
+          {locale === "he" ? "סגור" : "Close"}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function DocumentCreateSlideOver({
   open,
@@ -210,57 +720,145 @@ function DocumentCreateSlideOver({
   docNumberPreview,
   documentLanguage,
   bankDetails,
-  clientOptions,
+  businessProfile,
+  clientOptions: initialClientOptions,
   locale,
   onClose,
   onSubmit,
   isSubmitting,
+  downloadPdf,
+  getShareLink,
+  getPdfBlob,
+  documents,
 }: {
   open: boolean;
   type: "quote" | "invoice" | "delivery_note";
   title: string;
   docNumberPreview: string;
   documentLanguage?: string;
-  bankDetails?: { bankName?: string; iban?: string; swift?: string; bitLink?: string };
+  bankDetails?: { bankName?: string; branchNumber?: string; accountNumber?: string; iban?: string; swift?: string; bitLink?: string };
+  businessProfile?: { legalName?: string; taxId?: string; address?: string; businessLogo?: string; signature?: string };
   clientOptions: BillingClient[];
   locale: "en" | "he";
   onClose: () => void;
-  onSubmit: (client: BillingClient, items: BillingLineItem[], notes?: string) => void;
+  onSubmit: (client: BillingClient, items: BillingLineItem[], notes?: string, title?: string) => Promise<string | null>;
   isSubmitting: boolean;
+  downloadPdf: (docId: string) => void;
+  getShareLink: (docId: string) => string | null;
+  getPdfBlob: (docId: string) => Promise<Blob | null>;
+  documents?: BillingDocument[];
 }) {
+  const [localClients, setLocalClients] = useState<BillingClient[]>([]);
+  const clientOptions = useMemo(() => [...initialClientOptions, ...localClients], [initialClientOptions, localClients]);
   const [selectedClient, setSelectedClient] = useState<BillingClient | null>(null);
-  const [lineItems, setLineItems] = useState<BillingLineItem[]>([emptyLineItem()]);
+  const [newClientMode, setNewClientMode] = useState(false);
+  const [newClientFields, setNewClientFields] = useState({ name: "", email: "", phone: "", address: "", taxId: "" });
+  const [lineItems, setLineItems] = useState<UiLineItem[]>([emptyUiLineItem()]);
   const [notes, setNotes] = useState("");
+  const [documentTitle, setDocumentTitle] = useState("");
+  const [autoSendPdf, setAutoSendPdf] = useState(true);
+  const [currency, setCurrency] = useState("ILS");
+  const [currencySearch, setCurrencySearch] = useState("");
+  const [currencyOpen, setCurrencyOpen] = useState(false);
+  const [documentDate, setDocumentDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [dueDate, setDueDate] = useState("");
+  const [step, setStep] = useState<DocCreateStep>("form");
+  const [generatedDocId, setGeneratedDocId] = useState<string | null>(null);
+  const currencyRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!currencyOpen) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (currencyRef.current && !currencyRef.current.contains(e.target as Node)) setCurrencyOpen(false);
+    };
+    document.addEventListener("click", onDocClick);
+    return () => document.removeEventListener("click", onDocClick);
+  }, [currencyOpen]);
+  const filteredCurrencies = useMemo(
+    () =>
+      CURRENCIES.filter(
+        (c) =>
+          c.code.toLowerCase().includes(currencySearch.toLowerCase()) ||
+          c.symbol.includes(currencySearch) ||
+          c.name.toLowerCase().includes(currencySearch.toLowerCase())
+      ),
+    [currencySearch]
+  );
+  const effectiveClient = useMemo((): BillingClient | null => {
+    if (newClientMode) {
+      const { name, email, phone, address, taxId } = newClientFields;
+      if (!name.trim()) return null;
+      return { id: "new", name: name.trim(), email: email.trim() || undefined, phone: phone.trim() || undefined, address: address.trim() || undefined, taxId: taxId.trim() || undefined };
+    }
+    return selectedClient;
+  }, [newClientMode, newClientFields, selectedClient]);
 
-  const addLine = useCallback(() => setLineItems((p) => [...p, emptyLineItem()]), []);
+  const addLine = useCallback(() => setLineItems((p) => [...p, emptyUiLineItem()]), []);
   const removeLine = useCallback((id: string) => setLineItems((p) => (p.length <= 1 ? p : p.filter((i) => i.id !== id))), []);
-  const updateLine = useCallback((id: string, patch: Partial<BillingLineItem>) => {
-    setLineItems((p) => p.map((i) => (i.id === id ? { ...i, ...patch } : i)));
+
+  const updateLine = useCallback((id: string, patch: Partial<UiLineItem>) => {
+    setLineItems((p) =>
+      p.map((i) => {
+        if (i.id !== id) return i;
+        const next = { ...i, ...patch };
+        if ("unitPrice" in patch || "quantity" in patch || "discountPct" in patch || "description" in patch) next.confirmed = false;
+        return next;
+      })
+    );
   }, []);
 
-  const validItems = useMemo(
-    () => lineItems.filter((i) => i.description.trim() || i.quantity > 0 || i.unitPrice > 0),
-    [lineItems]
-  );
+  const setExclFromIncl = useCallback((id: string, inclValue: number) => {
+    const excl = priceInclToExcl(inclValue);
+    updateLine(id, { unitPrice: excl });
+  }, [updateLine]);
+
+  const setInclFromExcl = useCallback((id: string, exclValue: number) => {
+    updateLine(id, { unitPrice: exclValue });
+  }, [updateLine]);
+
+  const confirmRow = useCallback((id: string) => {
+    setLineItems((p) => p.map((i) => (i.id === id ? { ...i, confirmed: true } : i)));
+  }, []);
+
+  const allConfirmed = useMemo(() => lineItems.every((i) => i.confirmed), [lineItems]);
+  const canGoToPreview = effectiveClient && allConfirmed && !isSubmitting;
 
   const { subtotal, vatAmount, total } = useMemo(() => {
-    const st = validItems.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
-    const vat = Math.round((st * VAT_RATE_PCT) / 100 * 100) / 100;
+    let st = 0;
+    lineItems.forEach((i) => {
+      st += lineTotalExcl(i.unitPrice, i.quantity, i.discountPct);
+    });
+    st = Math.round(st * 100) / 100;
+    const vat = Math.round(st * (VAT_RATE_PCT / 100) * 100) / 100;
     return { subtotal: st, vatAmount: vat, total: st + vat };
-  }, [validItems]);
+  }, [lineItems]);
 
-  const handleSubmit = useCallback(() => {
-    if (!selectedClient) return;
-    const items = validItems.length > 0 ? validItems : [emptyLineItem()];
-    const normalized = items.map((i) => ({
-      ...i,
+  const buildPayload = useCallback(() => {
+    if (!effectiveClient) return null;
+    const normalized: BillingLineItem[] = lineItems.map((i) => ({
       id: i.id || generateUUID(),
       description: i.description.trim() || "Item",
       quantity: Math.max(0, Number(i.quantity)),
-      unitPrice: Math.max(0, Number(i.unitPrice)),
+      unitPrice: Math.round(i.unitPrice * (1 - i.discountPct / 100) * 100) / 100,
     }));
-    onSubmit(selectedClient, normalized, notes.trim() || undefined);
-  }, [selectedClient, validItems, notes, onSubmit]);
+    return {
+      client: effectiveClient,
+      items: normalized.length > 0 ? normalized : [{ id: generateUUID(), description: "Item", quantity: 1, unitPrice: 0 }],
+      notes: notes.trim() || undefined,
+      title: documentTitle.trim() || undefined,
+    };
+  }, [effectiveClient, lineItems, notes, documentTitle]);
+
+  const handleGenerate = useCallback(async () => {
+    const payload = buildPayload();
+    if (!payload) return;
+    const docId = await onSubmit(payload.client, payload.items, payload.notes, payload.title);
+    if (docId) {
+      setGeneratedDocId(docId);
+      setStep("generated");
+    }
+  }, [buildPayload, onSubmit]);
+
+  const symbol = CURRENCY_SYMBOLS[currency] ?? "₪";
 
   if (!open) return null;
 
@@ -270,154 +868,456 @@ function DocumentCreateSlideOver({
     bankDetails: locale === "he" ? "פרטי בנק" : "Bank Details",
     bankName: locale === "he" ? "שם הבנק" : "Bank Name",
     client: locale === "he" ? "לקוח" : "Client",
+    newClient: locale === "he" ? "לקוח חדש" : "New Client",
+    selectClient: locale === "he" ? "בחר לקוח" : "Select client",
+    email: locale === "he" ? "אימייל" : "Email",
+    phone: locale === "he" ? "טלפון" : "Phone",
+    address: locale === "he" ? "כתובת" : "Address",
+    businessId: locale === "he" ? "ח.פ" : "Business ID",
+    autoSend: locale === "he" ? "שלח אוטומטית PDF למייל הלקוח בשמירה" : "Automatically send PDF to client email on Save",
     lineItems: locale === "he" ? "פריטים" : "Line Items",
     addLine: locale === "he" ? "הוסף שורה" : "Add line",
     description: locale === "he" ? "תיאור" : "Description",
     qty: locale === "he" ? "כמות" : "Qty",
-    price: locale === "he" ? "מחיר" : "Price",
-    subtotal: locale === "he" ? "סיכום ביניים" : "Subtotal",
-    vat: locale === "he" ? "מע\"מ" : "VAT",
+    discount: locale === "he" ? "הנחה" : "Discount",
+    priceExcl: locale === "he" ? "מחיר ללא מע\"מ" : "Price Excl. VAT",
+    priceIncl: locale === "he" ? "מחיר כולל מע\"מ" : "Price Incl. VAT",
+    vatLabel: locale === "he" ? "מע\"מ" : "VAT",
+    confirm: locale === "he" ? "אישור" : "Confirm",
+    subtotal: locale === "he" ? "סיכום ביניים (ללא מע\"מ)" : "Sub-total (Excl. VAT)",
+    vatAmountLabel: locale === "he" ? "סכום מע\"מ (17%)" : "VAT Amount (17%)",
+    grandTotal: locale === "he" ? "סה\"כ כולל" : "Grand Total",
     total: locale === "he" ? "סה\"כ" : "Total",
+    documentDate: locale === "he" ? "תאריך מסמך" : "Document Date",
+    dueDate: locale === "he" ? "לתשלום עד" : "Due Date",
     notes: locale === "he" ? "הערות" : "Notes",
-    notesPlaceholder: locale === "he" ? "הערות (אופציונלי)" : "Notes (optional)",
-    selectClient: locale === "he" ? "בחר לקוח…" : "Select client…",
     cancel: locale === "he" ? "ביטול" : "Cancel",
     create: locale === "he" ? "צור" : "Create",
     creating: locale === "he" ? "יוצר…" : "Creating…",
+    preview: locale === "he" ? "תצוגה מקדימה" : "Preview",
+    generateDoc: locale === "he" ? "הפק מסמך" : "Generate Document",
+    downloadPdf: locale === "he" ? "הורד PDF" : "Download PDF",
+    sendToClient: locale === "he" ? "שלח ללקוח" : "Send to Client",
+    documentCreated: locale === "he" ? "המסמך נוצר בהצלחה" : "Document created successfully",
+    newDocTitle: locale === "he" ? "הפקת מסמך חדש" : "New Document",
   };
 
   return (
-    <div className="fixed inset-0 z-[110] flex justify-end bg-black/40" onClick={onClose}>
-      <motion.div
-        initial={{ x: "100%" }}
-        animate={{ x: 0 }}
-        exit={{ x: "100%" }}
-        transition={{ type: "tween", duration: 0.25 }}
-        className="w-full max-w-lg bg-white border-l border-gray-100 shadow-xl flex flex-col max-h-screen"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 flex-shrink-0">
-          <h2 className="font-semibold text-gray-900 text-lg">{title}</h2>
-          <button type="button" onClick={onClose} className="p-2 rounded-sm text-gray-500 hover:bg-gray-100" aria-label="Close">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">{t.docNumber}</label>
-            <p className="text-sm font-medium text-gray-900">#{docNumberPreview}</p>
-          </div>
-          {documentLanguage && (
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">{t.docLanguage}</label>
-              <p className="text-sm text-gray-700">{documentLanguage === "he" ? "Hebrew" : documentLanguage === "en" ? "English" : "Bilingual"}</p>
-            </div>
-          )}
-          {type === "invoice" && bankDetails && (bankDetails.bankName || bankDetails.iban || bankDetails.swift || bankDetails.bitLink) && (
-            <div className="rounded-sm border border-gray-100 p-3 bg-gray-50/50">
-              <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">{t.bankDetails}</label>
-              {bankDetails.bankName && <p className="text-sm text-gray-700">{t.bankName}: {bankDetails.bankName}</p>}
-              {bankDetails.iban && <p className="text-sm text-gray-700">IBAN: {bankDetails.iban}</p>}
-              {bankDetails.swift && <p className="text-sm text-gray-700">SWIFT: {bankDetails.swift}</p>}
-              {bankDetails.bitLink && <p className="text-sm text-gray-700">Payment link: {bankDetails.bitLink}</p>}
-            </div>
-          )}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">{t.client}</label>
-            <select
-              value={selectedClient?.id ?? ""}
-              onChange={(e) => {
-                const c = clientOptions.find((x) => x.id === e.target.value) ?? null;
-                setSelectedClient(c);
-              }}
-              className="w-full rounded-sm border border-gray-100 px-3 py-2 text-sm text-gray-900 bg-white"
-            >
-              <option value="">{t.selectClient}</option>
-              {clientOptions.map((c) => (
-                <option key={c.id} value={c.id}>{c.name} {c.email ? `(${c.email})` : ""}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-sm font-medium text-gray-700">{t.lineItems}</label>
-              <button type="button" onClick={addLine} className="text-xs font-medium text-gray-600 hover:text-gray-900 flex items-center gap-1">
-                <Plus className="w-3.5 h-3.5" /> {t.addLine}
+    <>
+      <div className="fixed inset-0 z-[110] flex justify-end bg-black/40" onClick={onClose}>
+        <motion.div
+          initial={{ x: "100%" }}
+          animate={{ x: 0 }}
+          exit={{ x: "100%" }}
+          transition={{ type: "tween", duration: 0.25 }}
+          className="w-full max-w-lg bg-white border-l border-gray-200 shadow-xl flex flex-col max-h-screen rounded-none"
+          style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-200 flex-shrink-0">
+            <h2 className="font-bold text-gray-900 text-lg truncate">{t.newDocTitle}</h2>
+            <div className="flex items-center gap-2 shrink-0">
+              {step === "form" && (
+                <div className="relative w-[100px]" ref={currencyRef}>
+                  <button
+                    type="button"
+                    onClick={() => setCurrencyOpen((o) => !o)}
+                    className="w-full flex items-center justify-between gap-1 rounded-none border border-gray-200 bg-white px-2 py-1.5 text-[12px] text-gray-900"
+                  >
+                    <span>{CURRENCY_SYMBOLS[currency] ?? "₪"}</span>
+                    <ChevronDown className={`w-3.5 h-3.5 text-gray-500 shrink-0 transition-transform ${currencyOpen ? "rotate-180" : ""}`} />
+                  </button>
+                  {currencyOpen && (
+                    <div className="absolute top-full right-0 z-10 mt-1 w-48 max-h-56 overflow-auto rounded-none border border-gray-200 bg-white shadow-lg">
+                      <input
+                        type="text"
+                        value={currencySearch}
+                        onChange={(e) => setCurrencySearch(e.target.value)}
+                        className="w-full rounded-none border-b border-gray-200 px-2 py-1.5 text-[12px] text-gray-900 focus:outline-none"
+                        aria-label="Search currency"
+                      />
+                      {filteredCurrencies.map((c) => (
+                        <button
+                          key={c.code}
+                          type="button"
+                          onClick={() => { setCurrency(c.code); setCurrencyOpen(false); setCurrencySearch(""); }}
+                          className={`w-full flex items-center gap-1.5 px-2 py-1.5 text-left text-[12px] rounded-none ${currency === c.code ? "bg-[#008080] text-white" : "text-gray-900 hover:bg-gray-50"}`}
+                        >
+                          <span>{c.symbol}</span>
+                          <span className="truncate">{c.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              <button type="button" onClick={onClose} className="p-2 rounded-none text-gray-500 hover:bg-gray-100" aria-label="Close">
+                <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="space-y-2">
-              {lineItems.map((item) => (
-                <div key={item.id} className="grid grid-cols-[1fr_70px_90px_auto] gap-2 items-center rounded-sm border border-gray-100 p-2">
-                  <input
-                    type="text"
-                    value={item.description}
-                    onChange={(e) => updateLine(item.id, { description: e.target.value })}
-                    placeholder={t.description}
-                    className="rounded-sm border border-gray-100 px-2 py-1.5 text-xs"
-                  />
-                  <input
-                    type="number"
-                    min={0}
-                    value={item.quantity}
-                    onChange={(e) => updateLine(item.id, { quantity: parseFloat(e.target.value) || 0 })}
-                    placeholder={t.qty}
-                    className="rounded-sm border border-gray-100 px-2 py-1.5 text-xs"
-                  />
-                  <input
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    value={item.unitPrice}
-                    onChange={(e) => updateLine(item.id, { unitPrice: parseFloat(e.target.value) || 0 })}
-                    placeholder={t.price}
-                    className="rounded-sm border border-gray-100 px-2 py-1.5 text-xs"
-                  />
-                  <button type="button" onClick={() => removeLine(item.id)} className="p-1.5 rounded-sm text-gray-400 hover:bg-gray-100 hover:text-red-600" aria-label="Remove">
-                    <Trash2 className="w-4 h-4" />
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {step === "form" && (
+              <>
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-500 mb-1">{t.docNumber}</label>
+              <p className="text-sm font-medium text-gray-900">#{docNumberPreview}</p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 border-b border-gray-200 pb-4">
+              <div>
+                <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1">{t.documentDate}</label>
+                <input
+                  type="date"
+                  value={documentDate}
+                  onChange={(e) => setDocumentDate(e.target.value)}
+                  className="rounded-none border border-gray-200 bg-white px-3 py-2 text-[13px] text-gray-900 focus:outline-none focus:border-[#008080]"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1">{t.dueDate}</label>
+                <input
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  className="rounded-none border border-gray-200 bg-white px-3 py-2 text-[13px] text-gray-900 focus:outline-none focus:border-[#008080]"
+                />
+              </div>
+              <div className="flex-1 min-w-[200px]">
+                <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1">
+                  {locale === "he" ? "כותרת המסמך" : "Document Title"}
+                </label>
+                <input
+                  type="text"
+                  value={documentTitle}
+                  onChange={(e) => setDocumentTitle(e.target.value)}
+                  className="w-full rounded-none border border-gray-200 bg-white px-3 py-2 text-[13px] text-gray-900 focus:outline-none focus:border-[#008080]"
+                  placeholder={locale === "he" ? "לדוגמה: פרויקט אלפא – שלב 1" : "e.g. Project Alpha – Phase 1"}
+                />
+              </div>
+            </div>
+
+            {documentLanguage && (
+              <div>
+                <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-500 mb-1">{t.docLanguage}</label>
+                <p className="text-sm text-gray-700">{documentLanguage === "he" ? "Hebrew" : documentLanguage === "en" ? "English" : "Bilingual"}</p>
+              </div>
+            )}
+            {type === "invoice" && bankDetails && (bankDetails.bankName || bankDetails.iban || bankDetails.swift || bankDetails.bitLink) && (
+              <div className="rounded-none border border-gray-200 p-3 bg-gray-50/50">
+                <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-500 mb-1">{t.bankDetails}</label>
+                {bankDetails.bankName && <p className="text-sm text-gray-700">{t.bankName}: {bankDetails.bankName}</p>}
+                {bankDetails.iban && <p className="text-sm text-gray-700">IBAN: {bankDetails.iban}</p>}
+                {bankDetails.swift && <p className="text-sm text-gray-700">SWIFT: {bankDetails.swift}</p>}
+                {bankDetails.bitLink && <p className="text-sm text-gray-700">Payment link: {bankDetails.bitLink}</p>}
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <label className="block text-sm font-medium text-gray-700">{t.client}</label>
+                <button
+                  type="button"
+                  onClick={() => setNewClientMode(false)}
+                  className={`px-3 py-1.5 rounded-none text-[13px] font-medium border ${!newClientMode ? "bg-[#008080] text-white border-[#008080]" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}
+                >
+                  {t.selectClient}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewClientMode(true)}
+                  className={`px-3 py-1.5 rounded-none text-[13px] font-medium border flex items-center gap-1 ${newClientMode ? "bg-[#008080] text-white border-[#008080]" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}
+                >
+                  <Plus className="w-3.5 h-3.5" /> + {t.newClient}
+                </button>
+              </div>
+              {!newClientMode ? (
+                <>
+                  <select
+                    value={selectedClient?.id ?? ""}
+                    onChange={(e) => {
+                      const c = clientOptions.find((x) => x.id === e.target.value) ?? null;
+                      setSelectedClient(c);
+                    }}
+                    className="w-full rounded-none border border-gray-200 bg-white px-3 py-2 text-[13px] text-gray-900 focus:outline-none focus:border-[#008080]"
+                  >
+                    <option value="">{t.selectClient}</option>
+                    {clientOptions.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  {selectedClient && (
+                    <div className="rounded-none border border-gray-200 bg-white p-4 space-y-2">
+                      <p className="text-[13px] font-semibold text-gray-900">{selectedClient.name}</p>
+                      {selectedClient.email && <p className="text-[12px] text-gray-600">{t.email}: {selectedClient.email}</p>}
+                      {selectedClient.phone && <p className="text-[12px] text-gray-600">{t.phone}: {selectedClient.phone}</p>}
+                      {selectedClient.address && <p className="text-[12px] text-gray-600">{t.address}: {selectedClient.address}</p>}
+                      {selectedClient.taxId && <p className="text-[12px] text-gray-600">{t.businessId}: {selectedClient.taxId}</p>}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="rounded-none border border-gray-200 bg-white p-4 space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1">{locale === "he" ? "שם" : "Name"}</label>
+                    <input type="text" value={newClientFields.name} onChange={(e) => setNewClientFields((p) => ({ ...p, name: e.target.value }))} className="w-full rounded-none border border-gray-200 bg-white px-3 py-2 text-[13px] text-gray-900 focus:outline-none focus:border-[#008080]" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1">{t.email}</label>
+                    <input type="email" value={newClientFields.email} onChange={(e) => setNewClientFields((p) => ({ ...p, email: e.target.value }))} className="w-full rounded-none border border-gray-200 bg-white px-3 py-2 text-[13px] text-gray-900 focus:outline-none focus:border-[#008080]" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1">{t.phone}</label>
+                    <input type="tel" value={newClientFields.phone} onChange={(e) => setNewClientFields((p) => ({ ...p, phone: e.target.value }))} className="w-full rounded-none border border-gray-200 bg-white px-3 py-2 text-[13px] text-gray-900 focus:outline-none focus:border-[#008080]" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1">{t.address}</label>
+                    <input type="text" value={newClientFields.address} onChange={(e) => setNewClientFields((p) => ({ ...p, address: e.target.value }))} className="w-full rounded-none border border-gray-200 bg-white px-3 py-2 text-[13px] text-gray-900 focus:outline-none focus:border-[#008080]" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1">{t.businessId}</label>
+                    <input type="text" value={newClientFields.taxId} onChange={(e) => setNewClientFields((p) => ({ ...p, taxId: e.target.value }))} className="w-full rounded-none border border-gray-200 bg-white px-3 py-2 text-[13px] text-gray-900 focus:outline-none focus:border-[#008080]" />
+                  </div>
+                </div>
+              )}
+              {effectiveClient && (
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={autoSendPdf} onChange={(e) => setAutoSendPdf(e.target.checked)} className="rounded-none border border-gray-200 text-[#008080] focus:ring-[#008080] accent-[#008080]" />
+                  <span className="text-[13px] text-gray-700">{t.autoSend}{effectiveClient.email ? ` (${effectiveClient.email})` : ""}</span>
+                </label>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">{t.lineItems}</label>
+              <div className="space-y-3">
+                {lineItems.map((item) => {
+                  const incl = priceExclToIncl(item.unitPrice);
+                  const lineVat = lineVatAmount(item.unitPrice, item.quantity, item.discountPct);
+                  const lineTotal = lineTotalExcl(item.unitPrice, item.quantity, item.discountPct);
+                  return (
+                    <div
+                      key={item.id}
+                      className={`rounded-none border border-gray-200 p-2.5 ${item.confirmed ? "border-[#008080]/40 bg-[#008080]/5" : "bg-white"}`}
+                    >
+                      <div className="space-y-1.5">
+                        <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide">{t.description}</label>
+                        <textarea
+                          value={item.description}
+                          onChange={(e) => updateLine(item.id, { description: e.target.value })}
+                          rows={2}
+                          className="w-full min-h-[52px] rounded-none border border-gray-200 bg-white px-2.5 py-1.5 text-[13px] text-gray-900 focus:outline-none focus:border-[#008080] resize-y"
+                          style={{ resize: "vertical" }}
+                        />
+                        <div className="grid grid-cols-4 gap-1.5">
+                          <div>
+                            <label className="block text-[10px] font-medium text-gray-500 uppercase tracking-wide mb-0.5">{t.priceExcl}</label>
+                            <input
+                              type="number"
+                              min={0}
+                              step={0.01}
+                              value={item.unitPrice || ""}
+                              onChange={(e) => {
+                                const v = parseFloat(e.target.value);
+                                if (!Number.isNaN(v)) setInclFromExcl(item.id, v);
+                              }}
+                              className="w-full rounded-none border border-gray-200 bg-white px-1.5 py-1 text-[12px] text-gray-900 tabular-nums focus:outline-none focus:border-[#008080]"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-medium text-gray-500 uppercase tracking-wide mb-0.5">{t.qty}</label>
+                            <input
+                              type="number"
+                              min={0}
+                              step={1}
+                              value={item.quantity}
+                              onChange={(e) => updateLine(item.id, { quantity: parseFloat(e.target.value) || 0 })}
+                              className="w-full rounded-none border border-gray-200 bg-white px-1.5 py-1 text-[12px] text-gray-900 tabular-nums focus:outline-none focus:border-[#008080]"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-medium text-gray-500 uppercase tracking-wide mb-0.5">{t.discount}</label>
+                            <div className="relative rounded-none border border-gray-200 bg-white">
+                              <input
+                                type="number"
+                                min={0}
+                                max={100}
+                                step={0.5}
+                                value={item.discountPct || ""}
+                                onChange={(e) => updateLine(item.id, { discountPct: Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)) })}
+                                className="w-full rounded-none border-0 bg-transparent px-1.5 py-1 pr-5 text-[12px] text-gray-900 tabular-nums focus:outline-none focus:ring-0"
+                              />
+                              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-gray-500 pointer-events-none">%</span>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-medium text-gray-500 uppercase tracking-wide mb-0.5">{locale === "he" ? "סה\"כ" : "Line Total"}</label>
+                            <input
+                              type="number"
+                              readOnly
+                              value={lineTotal || 0}
+                              className="w-full rounded-none border border-gray-200 bg-gray-50 px-1.5 py-1 text-[12px] text-gray-900 tabular-nums focus:outline-none focus:border-[#008080]"
+                            />
+                          </div>
+                        </div>
+                        <p className="text-[10px] text-[#008080] font-medium">
+                          {t.vatLabel}: {symbol}{formatMoney(lineVat)}
+                        </p>
+                        <p className="text-[10px] text-gray-500 tabular-nums">
+                          {locale === "he" ? "סה\"כ שורה (ללא מע\"מ)" : "Line total (excl.)"}: {symbol}{formatMoney(lineTotal)}
+                        </p>
+                        <div className="flex items-center gap-1.5 pt-0.5">
+                          <button
+                            type="button"
+                            onClick={() => confirmRow(item.id)}
+                            disabled={item.confirmed}
+                            className="inline-flex items-center gap-1 rounded-none px-2 py-1 text-[11px] font-medium disabled:opacity-60 disabled:cursor-default text-white hover:opacity-90"
+                            style={{ backgroundColor: item.confirmed ? "#006666" : TEAL }}
+                          >
+                            <Check className="w-3 h-3" /> {t.confirm}
+                          </button>
+                          <button type="button" onClick={() => removeLine(item.id)} className="inline-flex items-center justify-center w-7 h-7 rounded-none text-gray-400 hover:bg-gray-100 hover:text-red-600" aria-label="Delete">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <button type="button" onClick={addLine} className="mt-3 w-full py-2.5 rounded-none border border-gray-200 border-dashed bg-gray-50/50 text-gray-600 hover:bg-gray-100 hover:text-gray-900 font-medium text-[13px] flex items-center justify-center gap-1.5" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+                <Plus className="w-4 h-4" /> {t.addLine}
+              </button>
+              <div className="mt-4 rounded-none border border-gray-200 p-4 bg-white space-y-2">
+                <div className="flex justify-between text-[13px] text-gray-600">
+                  <span>{t.subtotal}</span>
+                  <span className="tabular-nums">{symbol}{formatMoney(subtotal)}</span>
+                </div>
+                <div className="flex justify-between text-[13px] text-gray-600">
+                  <span>{t.vatAmountLabel}</span>
+                  <span className="tabular-nums">{symbol}{formatMoney(vatAmount)}</span>
+                </div>
+                <div className="flex justify-between text-[13px] font-bold pt-2 border-t border-gray-200" style={{ color: TEAL }}>
+                  <span>{t.grandTotal}</span>
+                  <span className="tabular-nums">{symbol}{formatMoney(total)}</span>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t.notes}</label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={2}
+                className="w-full rounded-none border border-gray-200 bg-white px-3 py-2 text-[13px] text-gray-900 focus:outline-none focus:border-[#008080] resize-none"
+              />
+            </div>
+              </>
+            )}
+
+            {step === "preview" && (
+              <div className="fixed inset-0 z-[120] flex flex-col bg-gray-100" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+                <div className="flex-1 overflow-y-auto overflow-x-auto p-6 flex justify-center min-h-0">
+                  <div className="flex-shrink-0 w-full" style={{ maxWidth: 595, minHeight: 842 }}>
+                    <UnifiedDocumentPreview
+                      company={{
+                        name: businessProfile?.legalName ?? "",
+                        address: businessProfile?.address,
+                        taxId: businessProfile?.taxId,
+                        logoUrl: businessProfile?.businessLogo,
+                        signatureUrl: businessProfile?.signature,
+                      }}
+                      client={{
+                        name: effectiveClient?.name ?? "",
+                        email: effectiveClient?.email,
+                        phone: effectiveClient?.phone,
+                        address: effectiveClient?.address,
+                        taxId: effectiveClient?.taxId,
+                      }}
+                      items={lineItems
+                        .filter((i) => i.description.trim() || i.quantity > 0 || i.unitPrice > 0)
+                        .map((i) => ({
+                          description: i.description.trim() || "—",
+                          quantity: i.quantity,
+                          unitPrice: Math.round(i.unitPrice * (1 - (i.discountPct || 0) / 100) * 100) / 100,
+                        }))}
+                      subtotal={subtotal}
+                      vatAmount={vatAmount}
+                      total={total}
+                      currencySymbol={symbol}
+                      docNumber={docNumberPreview}
+                      docType={type}
+                      language={documentLanguage === "he" ? "he" : documentLanguage === "en" ? "en" : "both"}
+                      date={documentDate || undefined}
+                      dueDate={dueDate || undefined}
+                      vatRate={17}
+                      title={documentTitle.trim() || undefined}
+                      notes={notes.trim() || undefined}
+                      bankDetails={type === "invoice" ? bankDetails : undefined}
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2 p-4 border-t border-gray-200 bg-white flex-shrink-0">
+                  <button type="button" onClick={() => setStep("form")} className="flex-1 py-2.5 rounded-none border border-gray-200 bg-white text-gray-700 font-medium text-[13px]">
+                    {locale === "he" ? "חזרה" : "Edit"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleGenerate}
+                    disabled={isSubmitting}
+                    className="flex-1 py-2.5 rounded-none text-white font-semibold text-[13px] disabled:opacity-50"
+                    style={{ backgroundColor: TEAL }}
+                  >
+                    {isSubmitting ? t.creating : (locale === "he" ? "הפק מסמך" : "Finalize & Generate")}
                   </button>
                 </div>
-              ))}
-            </div>
-            <div className="mt-2 rounded-sm border border-gray-100 p-3 bg-gray-50/50 text-xs">
-              <div className="flex justify-between text-gray-600">
-                <span>{t.subtotal}</span>
-                <span className="tabular-nums">{formatMoney(subtotal)}</span>
               </div>
-              <div className="flex justify-between text-gray-600 mt-1">
-                <span>{t.vat} ({VAT_RATE_PCT}%)</span>
-                <span className="tabular-nums">{formatMoney(vatAmount)}</span>
-              </div>
-              <div className="flex justify-between font-semibold text-gray-900 mt-1 pt-1 border-t border-gray-100">
-                <span>{t.total}</span>
-                <span className="tabular-nums">{formatMoney(total)}</span>
-              </div>
-            </div>
+            )}
+
+            {step === "generated" && (() => {
+              const genDoc = generatedDocId && documents ? documents.find((d) => d.id === generatedDocId) : null;
+              const docLang = documentLanguage === "he" ? "he" : documentLanguage === "en" ? "en" : "both";
+              return (
+                <SuccessWithPreview
+                  genDoc={genDoc}
+                  businessProfile={businessProfile}
+                  symbol={symbol}
+                  docLang={docLang}
+                  documentLanguage={documentLanguage}
+                  t={t}
+                  locale={locale}
+                  generatedDocId={generatedDocId!}
+                  downloadPdf={downloadPdf}
+                  getShareLink={getShareLink}
+                  getPdfBlob={getPdfBlob}
+                  onClose={onClose}
+                  bankDetails={bankDetails}
+                />
+              );
+            })()}
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">{t.notes}</label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder={t.notesPlaceholder}
-              rows={2}
-              className="w-full rounded-sm border border-gray-100 px-3 py-2 text-sm text-gray-900 bg-white resize-none"
-            />
+          <div className="flex gap-2 p-4 border-t border-gray-200 flex-shrink-0">
+            {step === "form" && (
+              <>
+                <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-none border border-gray-200 bg-white text-gray-700 font-medium text-[13px]">
+                  {t.cancel}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStep("preview")}
+                  disabled={!canGoToPreview}
+                  className="flex-1 py-2.5 rounded-none text-white font-semibold text-[13px] disabled:opacity-50"
+                  style={{ backgroundColor: TEAL }}
+                >
+                  {t.create}
+                </button>
+              </>
+            )}
           </div>
-        </div>
-        <div className="flex gap-2 p-4 border-t border-gray-100 flex-shrink-0">
-          <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-sm border border-gray-100 text-gray-700 font-medium">{t.cancel}</button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={!selectedClient || isSubmitting}
-            className="flex-1 py-2.5 rounded-sm text-white font-semibold disabled:opacity-50"
-            style={{ backgroundColor: TEAL }}
-          >
-            {isSubmitting ? t.creating : t.create}
-          </button>
-        </div>
-      </motion.div>
-    </div>
+        </motion.div>
+      </div>
+    </>
   );
 }
 
@@ -430,6 +1330,7 @@ export default function DocumentsPage() {
     businessProfile,
     downloadPdf,
     getShareLink,
+    getPdfBlob,
     addExpense,
     createDraft,
     convertToQuote,
@@ -439,6 +1340,7 @@ export default function DocumentsPage() {
     createReceipt,
     markPaid,
     issueCreditNote,
+    issueNegativeReceipt,
     cancelQuote,
     cancelDeliveryNote,
   } = useBilling();
@@ -450,9 +1352,13 @@ export default function DocumentsPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [filterClientId, setFilterClientId] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterStatus, setFilterStatus] = useState<"" | "paid" | "pending" | "overdue">("");
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [loadingDocId, setLoadingDocId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [openMenuDocId, setOpenMenuDocId] = useState<string | null>(null);
+  const [previewDocId, setPreviewDocId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [previewExpense, setPreviewExpense] = useState<BillingExpense | null>(null);
   const [createModal, setCreateModal] = useState<CreateModalType | null>(null);
@@ -472,12 +1378,51 @@ export default function DocumentsPage() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [openMenuDocId]);
 
-  const handleShare = useCallback((docId: string) => {
-    const link = getShareLink(docId);
-    if (!link) return;
-    navigator.clipboard.writeText(link);
-    showSuccessToast("Share link copied");
-  }, [getShareLink, showSuccessToast]);
+  const handleShare = useCallback(
+    async (docId: string) => {
+      if (typeof navigator !== "undefined" && navigator.share) {
+        const blob = await getPdfBlob(docId);
+        if (!blob) {
+          const link = getShareLink(docId);
+          if (link) {
+            navigator.clipboard.writeText(link);
+            showSuccessToast(locale === "he" ? "הקישור הועתק" : "Link copied");
+          }
+          return;
+        }
+        const doc = documents.find((d) => d.id === docId);
+        const fileName = doc ? `${doc.type}-${doc.number}.pdf` : "document.pdf";
+        const file = new File([blob], fileName, { type: "application/pdf" });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ files: [file], title: fileName });
+            showSuccessToast(locale === "he" ? "המסמך שותף" : "Document shared");
+          } catch (err) {
+            if ((err as Error).name !== "AbortError") {
+              const link = getShareLink(docId);
+              if (link) {
+                navigator.clipboard.writeText(link);
+                showSuccessToast(locale === "he" ? "הקישור הועתק" : "Link copied");
+              }
+            }
+          }
+        } else {
+          const link = getShareLink(docId);
+          if (link) {
+            navigator.clipboard.writeText(link);
+            showSuccessToast(locale === "he" ? "הקישור הועתק" : "Link copied");
+          }
+        }
+      } else {
+        const link = getShareLink(docId);
+        if (link) {
+          navigator.clipboard.writeText(link);
+          showSuccessToast(locale === "he" ? "הקישור הועתק" : "Link copied");
+        }
+      }
+    },
+    [getPdfBlob, getShareLink, showSuccessToast, documents, locale]
+  );
 
   const handleConvertToInvoice = useCallback(
     (docId: string) => {
@@ -571,6 +1516,15 @@ export default function DocumentsPage() {
     showSuccessToast("Scan Receipt (coming soon)");
   }, [showSuccessToast]);
 
+  const hasActiveFilters = !!(searchQuery.trim() || dateFrom || dateTo || filterClientId || filterStatus);
+  const clearFilters = useCallback(() => {
+    setSearchQuery("");
+    setDateFrom("");
+    setDateTo("");
+    setFilterClientId("");
+    setFilterStatus("");
+  }, []);
+
   const handleUploadExpenseFile = useCallback(
     (file: File) => {
       const reader = new FileReader();
@@ -623,45 +1577,37 @@ export default function DocumentsPage() {
   const [createDocSubmitting, setCreateDocSubmitting] = useState(false);
   const handleCreateDocument = useCallback(
     (type: "quote" | "invoice" | "delivery_note") =>
-      (client: BillingClient, items: BillingLineItem[], notes?: string) => {
+      async (client: BillingClient, items: BillingLineItem[], notes?: string, title?: string): Promise<string | null> => {
         setCreateDocSubmitting(true);
-        setTimeout(() => {
-          try {
-            if (type === "delivery_note") {
-              const doc = createDeliveryNote(client, items, notes);
-              if (doc) {
-                setCreateModal(null);
-                setActiveTab("delivery_notes");
-                showSuccessToast("Delivery note created");
-              }
-            } else {
-              const draft = createDraft(client, items, notes);
-              if (!draft) {
-                setCreateDocSubmitting(false);
-                return;
-              }
-              const quote = convertToQuote(draft.id);
-              if (!quote) {
-                setCreateDocSubmitting(false);
-                return;
-              }
-              if (type === "invoice") {
-                const inv = convertQuoteToInvoice(quote.id);
-                if (inv) {
-                  setCreateModal(null);
-                  setActiveTab("invoices");
-                  showSuccessToast("Invoice created");
-                }
-              } else {
-                setCreateModal(null);
-                setActiveTab("quotes");
-                showSuccessToast("Quote created");
-              }
+        try {
+          if (type === "delivery_note") {
+            const doc = createDeliveryNote(client, items, notes, title);
+            if (doc) {
+              setActiveTab("delivery_notes");
+              showSuccessToast("Delivery note created");
+              return doc.id;
             }
-          } finally {
-            setCreateDocSubmitting(false);
+            return null;
           }
-        }, 300);
+          const draft = createDraft(client, items, notes, title);
+          if (!draft) return null;
+          const quote = convertToQuote(draft.id);
+          if (!quote) return null;
+          if (type === "invoice") {
+            const inv = convertQuoteToInvoice(quote.id);
+            if (inv) {
+              setActiveTab("invoices");
+              showSuccessToast("Invoice created");
+              return inv.id;
+            }
+            return null;
+          }
+          setActiveTab("quotes");
+          showSuccessToast("Quote created");
+          return quote.id;
+        } finally {
+          setCreateDocSubmitting(false);
+        }
       },
     [createDraft, convertToQuote, convertQuoteToInvoice, createDeliveryNote, showSuccessToast]
   );
@@ -672,22 +1618,43 @@ export default function DocumentsPage() {
     return true;
   };
   const byClient = (clientId: string) => (!filterClientId ? true : clientId === filterClientId);
+  const searchLower = searchQuery.trim().toLowerCase();
+  const matchesSearch = (d: BillingDocument) => {
+    if (!searchLower) return true;
+    const num = (d.number ?? "").toLowerCase();
+    const name = (d.clientName ?? "").toLowerCase();
+    const title = (d.title ?? "").toLowerCase();
+    return num.includes(searchLower) || name.includes(searchLower) || title.includes(searchLower);
+  };
 
   const filteredDocs = useMemo(() => {
     return documents.filter((d) => {
       const iso = docDateIso(d);
       if (!inRange(iso)) return false;
       if (!byClient(d.clientId)) return false;
+      if (!matchesSearch(d)) return false;
+      if (activeTab === "invoices" && filterStatus) {
+        if (getInvoiceUiStatus(d, todayIso) !== filterStatus) return false;
+      }
       if (activeTab === "quotes") return d.type === "quote";
       if (activeTab === "invoices") return d.type === "invoice";
       if (activeTab === "receipts") return d.type === "receipt";
       if (activeTab === "delivery_notes") return d.type === "delivery_note";
-      if (activeTab === "cancellations") return (d.status as string) === "canceled" || d.type === "credit_note";
+      if (activeTab === "cancellations") return (d.status as string) === "canceled" || d.type === "credit_note" || d.type === "negative_receipt";
       return false;
     });
-  }, [documents, activeTab, dateFrom, dateTo, filterClientId]);
+  }, [documents, activeTab, dateFrom, dateTo, filterClientId, searchQuery, filterStatus, todayIso]);
 
-  const filteredExpenses = useMemo(() => expenses.filter((e) => inRange(expenseDateIso(e))), [expenses, dateFrom, dateTo]);
+  const expenseSearchLower = searchQuery.trim().toLowerCase();
+  const filteredExpenses = useMemo(() => {
+    return expenses.filter((e) => {
+      if (!inRange(expenseDateIso(e))) return false;
+      if (!expenseSearchLower) return true;
+      const vendor = (e.vendor ?? "").toLowerCase();
+      const category = (e.category ?? "").toLowerCase();
+      return vendor.includes(expenseSearchLower) || category.includes(expenseSearchLower);
+    });
+  }, [expenses, dateFrom, dateTo, searchQuery]);
 
   const metrics = useMemo(() => {
     const receipts = documents.filter((d) => d.type === "receipt").filter((d) => inRange(docDateIso(d)) && byClient(d.clientId));
@@ -708,7 +1675,7 @@ export default function DocumentsPage() {
     { id: "invoices", label: locale === "he" ? "חשבוניות" : "Invoices", icon: <FileText className="w-4 h-4" /> },
     { id: "receipts", label: locale === "he" ? "קבלות" : "Receipts", icon: <Receipt className="w-4 h-4" /> },
     { id: "delivery_notes", label: locale === "he" ? "תעודות משלוח" : "Delivery Notes", icon: <Package className="w-4 h-4" /> },
-    { id: "cancellations", label: "Cancellations", icon: <X className="w-4 h-4" /> },
+    { id: "cancellations", label: locale === "he" ? "מבוטלים" : "Cancellations", icon: <X className="w-4 h-4" /> },
     { id: "expenses", label: locale === "he" ? "הוצאות" : "Expenses", icon: <DollarSign className="w-4 h-4" /> },
   ];
 
@@ -868,7 +1835,7 @@ export default function DocumentsPage() {
       {/* Table */}
       <main className="flex-1 px-4 py-4">
         {activeTab !== "expenses" ? (
-          <div className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
+          <div className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-visible">
             {/* Section header: title + Create New button */}
             <div className="px-4 py-2 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between gap-3">
               <h2 className="text-xs font-bold uppercase tracking-wider text-gray-600">
@@ -914,22 +1881,249 @@ export default function DocumentsPage() {
                 </button>
               )}
             </div>
+
+            {/* Luxury filter bar: unified horizontal bar, Search button, thin borders, sharp corners */}
+            <div className="px-4 py-3 border-b border-gray-100 bg-white">
+              {/* Mobile: Filter button that opens drawer */}
+              <div className="flex items-center gap-2 lg:hidden">
+                <button
+                  type="button"
+                  onClick={() => setFilterDrawerOpen(true)}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-none border border-gray-100 bg-white text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                  style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
+                >
+                  <SlidersHorizontal className="w-4 h-4 text-gray-500" />
+                  {locale === "he" ? "מסננים" : "Filter"}
+                </button>
+                {hasActiveFilters && (
+                  <button type="button" onClick={clearFilters} className="text-[13px] font-medium text-gray-500 hover:text-gray-700" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+                    {locale === "he" ? "נקה" : "Clear"}
+                  </button>
+                )}
+              </div>
+              {/* Desktop: full horizontal bar */}
+              <div className="hidden lg:flex flex-wrap items-end gap-3">
+                <div className="flex-1 min-w-[200px] flex items-end gap-0">
+                  <div className="flex-1 min-w-0">
+                    <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+                      {activeTab === "expenses"
+                        ? (locale === "he" ? "חיפוש (ספק / קטגוריה)" : "Search (vendor / category)")
+                        : (locale === "he" ? "חיפוש (מס׳ מסמך / לקוח)" : "Search (document # / customer)")}
+                    </label>
+                    <input
+                      type="search"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder={activeTab === "expenses" ? (locale === "he" ? "ספק או קטגוריה…" : "Vendor or category…") : (locale === "he" ? "מס׳ מסמך או שם לקוח…" : "Document number or customer name…")}
+                      className="w-full rounded-none border border-gray-100 bg-white py-2 px-3 text-[13px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-[#008080] focus:ring-1 focus:ring-[#008080]"
+                      style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {}}
+                    className="shrink-0 h-[38px] px-4 rounded-none border border-l-0 border-gray-100 bg-[#008080] text-white hover:bg-[#006666] transition-colors flex items-center justify-center"
+                    style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
+                    aria-label={locale === "he" ? "חפש" : "Search"}
+                  >
+                    <Search className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="min-w-[140px]">
+                  <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+                    {locale === "he" ? "לקוח" : "Customer"}
+                  </label>
+                  <select
+                    value={filterClientId}
+                    onChange={(e) => setFilterClientId(e.target.value)}
+                    className="w-full rounded-none border border-gray-100 bg-white px-3 py-2 text-[13px] text-gray-900 focus:outline-none focus:border-[#008080]"
+                    style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
+                  >
+                    <option value="">{locale === "he" ? "כל הלקוחות" : "All customers"}</option>
+                    {clientOptions.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+                    {locale === "he" ? "מתאריך" : "From Date"}
+                  </label>
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    className="w-full min-w-[120px] rounded-none border border-gray-100 bg-white px-3 py-2 text-[13px] text-gray-900 focus:outline-none focus:border-[#008080]"
+                    style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+                    {locale === "he" ? "עד תאריך" : "To Date"}
+                  </label>
+                  <input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    className="w-full min-w-[120px] rounded-none border border-gray-100 bg-white px-3 py-2 text-[13px] text-gray-900 focus:outline-none focus:border-[#008080]"
+                    style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
+                  />
+                </div>
+                {activeTab === "invoices" && (
+                  <div className="min-w-[120px]">
+                    <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+                      {locale === "he" ? "סטטוס" : "Status"}
+                    </label>
+                    <select
+                      value={filterStatus}
+                      onChange={(e) => setFilterStatus(e.target.value as "" | "paid" | "pending" | "overdue")}
+                      className="w-full rounded-none border border-gray-100 bg-white px-3 py-2 text-[13px] text-gray-900 focus:outline-none focus:border-[#008080]"
+                      style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
+                    >
+                      <option value="">{locale === "he" ? "הכל" : "All"}</option>
+                      <option value="paid">{locale === "he" ? "שולם" : "Paid"}</option>
+                      <option value="pending">{locale === "he" ? "ממתין" : "Pending"}</option>
+                      <option value="overdue">{locale === "he" ? "באיחור" : "Overdue"}</option>
+                    </select>
+                  </div>
+                )}
+                {hasActiveFilters && (
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    className="shrink-0 px-3 py-2 rounded-none border border-gray-100 bg-white text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                    style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
+                  >
+                    {locale === "he" ? "נקה מסננים" : "Clear Filters"}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Filter drawer (mobile) */}
+            <AnimatePresence>
+              {filterDrawerOpen && (
+                <>
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 z-[180] bg-black/40 lg:hidden"
+                    onClick={() => setFilterDrawerOpen(false)}
+                    aria-hidden
+                  />
+                  <motion.div
+                    initial={{ x: "100%" }}
+                    animate={{ x: 0 }}
+                    exit={{ x: "100%" }}
+                    transition={{ type: "tween", duration: 0.25 }}
+                    className="fixed top-0 right-0 bottom-0 z-[181] w-full max-w-sm bg-white border-l border-gray-100 shadow-xl lg:hidden flex flex-col"
+                  >
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                      <span className="text-[13px] font-semibold text-gray-900" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+                        {locale === "he" ? "מסננים" : "Filters"}
+                      </span>
+                      <button type="button" onClick={() => setFilterDrawerOpen(false)} className="p-2 rounded-none text-gray-500 hover:bg-gray-100">
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                      <div>
+                        <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+                          {activeTab === "expenses" ? (locale === "he" ? "חיפוש" : "Search") : (locale === "he" ? "חיפוש" : "Search")}
+                        </label>
+                        <input
+                          type="search"
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          placeholder={activeTab === "expenses" ? (locale === "he" ? "ספק או קטגוריה…" : "Vendor or category…") : (locale === "he" ? "מס׳ מסמך או שם לקוח…" : "Document number or customer…")}
+                          className="w-full rounded-none border border-gray-100 bg-white py-2.5 px-3 text-[13px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-[#008080]"
+                          style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+                          {locale === "he" ? "לקוח" : "Customer"}
+                        </label>
+                        <select
+                          value={filterClientId}
+                          onChange={(e) => setFilterClientId(e.target.value)}
+                          className="w-full rounded-none border border-gray-100 bg-white px-3 py-2.5 text-[13px] text-gray-900 focus:outline-none focus:border-[#008080]"
+                          style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
+                        >
+                          <option value="">{locale === "he" ? "כל הלקוחות" : "All customers"}</option>
+                          {clientOptions.map((c) => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+                          {locale === "he" ? "מתאריך" : "From Date"}
+                        </label>
+                        <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-full rounded-none border border-gray-100 bg-white px-3 py-2.5 text-[13px] text-gray-900 focus:outline-none focus:border-[#008080]" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }} />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+                          {locale === "he" ? "עד תאריך" : "To Date"}
+                        </label>
+                        <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-full rounded-none border border-gray-100 bg-white px-3 py-2.5 text-[13px] text-gray-900 focus:outline-none focus:border-[#008080]" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }} />
+                      </div>
+                      {activeTab === "invoices" && (
+                        <div>
+                          <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+                            {locale === "he" ? "סטטוס" : "Status"}
+                          </label>
+                          <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as "" | "paid" | "pending" | "overdue")} className="w-full rounded-none border border-gray-100 bg-white px-3 py-2.5 text-[13px] text-gray-900 focus:outline-none focus:border-[#008080]" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+                            <option value="">{locale === "he" ? "הכל" : "All"}</option>
+                            <option value="paid">{locale === "he" ? "שולם" : "Paid"}</option>
+                            <option value="pending">{locale === "he" ? "ממתין" : "Pending"}</option>
+                            <option value="overdue">{locale === "he" ? "באיחור" : "Overdue"}</option>
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-4 border-t border-gray-100 flex gap-2">
+                      <button type="button" onClick={clearFilters} className="flex-1 py-2.5 rounded-none border border-gray-100 bg-white text-[13px] font-medium text-gray-700" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+                        {locale === "he" ? "נקה" : "Clear"}
+                      </button>
+                      <button type="button" onClick={() => setFilterDrawerOpen(false)} className="flex-1 py-2.5 rounded-none text-white text-[13px] font-semibold" style={{ backgroundColor: TEAL, fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+                        {locale === "he" ? "החל" : "Apply"}
+                      </button>
+                    </div>
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>
+
             <table className="w-full text-xs">
               <thead className="bg-gray-50/80 border-b border-gray-100">
                 <tr>
-                  <th className="text-left px-4 py-2 text-xs font-semibold text-gray-600 whitespace-nowrap">Type / Number</th>
-                  <th className="text-left px-4 py-2 text-xs font-semibold text-gray-600 whitespace-nowrap">Client</th>
-                  <th className="text-left px-4 py-2 text-xs font-semibold text-gray-600 whitespace-nowrap">Date</th>
-                  <th className="text-right px-4 py-2 text-xs font-semibold text-gray-600 whitespace-nowrap">Amount</th>
-                  <th className="text-left px-4 py-2 text-xs font-semibold text-gray-600 whitespace-nowrap">Status</th>
+                  <th className="text-left px-4 py-2 text-xs font-semibold text-gray-600 whitespace-nowrap">{locale === "he" ? "סוג / מס'" : "Type / Number"}</th>
+                  <th className="text-left px-4 py-2 text-xs font-semibold text-gray-600 whitespace-nowrap">{locale === "he" ? "לקוח" : "Client"}</th>
+                  <th className="text-left px-4 py-2 text-xs font-semibold text-gray-600 whitespace-nowrap">{locale === "he" ? "תאריך" : "Date"}</th>
+                  <th className="text-right px-4 py-2 text-xs font-semibold text-gray-600 whitespace-nowrap">{locale === "he" ? "סכום" : "Amount"}</th>
+                  <th className="text-left px-4 py-2 text-xs font-semibold text-gray-600 whitespace-nowrap">{locale === "he" ? "סטטוס" : "Status"}</th>
                   <th className="text-right px-4 py-2 text-xs font-semibold text-gray-600 whitespace-nowrap" />
                 </tr>
               </thead>
               <tbody>
                 {filteredDocs.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-10 text-center text-gray-500 text-[12px] font-medium">
-                      No documents in this view.
+                    <td colSpan={6} className="px-4 py-10 text-center">
+                      <p className="text-[13px] font-medium text-gray-500 mb-3" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+                        {locale === "he" ? "לא נמצאו מסמכים" : "No documents found"}
+                      </p>
+                      {hasActiveFilters && (
+                        <button
+                          type="button"
+                          onClick={clearFilters}
+                          className="rounded-none border border-gray-200 bg-white px-4 py-2 text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                          style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
+                        >
+                          {locale === "he" ? "נקה מסננים" : "Clear Filters"}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ) : (
@@ -942,8 +2136,15 @@ export default function DocumentsPage() {
                     const canCreateCreditNote = d.type === "invoice" && notCanceled;
                     const canCancelQuote = d.type === "quote" && notCanceled;
                     const canCancelDeliveryNote = d.type === "delivery_note" && notCanceled;
+                    const canCancelReceipt = d.type === "receipt" && notCanceled;
                     return (
-                      <tr key={d.id} className={`border-b border-gray-50 hover:bg-gray-50/50 transition-colors ${isCanceled ? "bg-gray-50/50" : ""}`}>
+                      <React.Fragment key={d.id}>
+                        <tr className={isCanceled ? "bg-gray-50/50" : ""}>
+                          <td colSpan={6} className={`px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider ${isCanceled ? "text-gray-400 line-through" : "text-gray-500"}`}>
+                            {d.title && d.title.trim() ? d.title : (locale === "he" ? "ללא כותרת" : "No title")}
+                          </td>
+                        </tr>
+                        <tr className={`border-b border-gray-50 hover:bg-gray-50/50 transition-colors ${isCanceled ? "bg-gray-50/50" : ""}`}>
                         <td className={`px-4 py-2 font-medium whitespace-nowrap ${isCanceled ? "text-gray-500 line-through" : "text-gray-900"}`}>{docTypeLabel(d.type)} #{d.number}</td>
                         <td className={`px-4 py-2 whitespace-nowrap ${isCanceled ? "text-gray-400 line-through" : "text-gray-600"}`}>{d.clientName || "—"}</td>
                         <td className={`px-4 py-2 whitespace-nowrap ${isCanceled ? "text-gray-400 line-through" : "text-gray-600"}`}>{docDateIso(d)}</td>
@@ -970,10 +2171,41 @@ export default function DocumentsPage() {
                                   animate={{ opacity: 1, y: 0, scale: 1 }}
                                   exit={{ opacity: 0, y: -6, scale: 0.98 }}
                                   transition={{ duration: 0.15, ease: "easeOut" }}
-                                  className="absolute right-0 top-[calc(100%+0.5rem)] z-[160] w-56 rounded-xl border border-gray-100 bg-white shadow-lg p-1"
+                                  className="absolute right-0 top-[calc(100%+0.5rem)] z-[220] w-56 rounded-none border border-gray-100 bg-white p-1 min-w-[12rem]"
+                                  style={{ boxShadow: "0 4px 24px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04)" }}
                                   role="menu"
                                 >
-                                  {/* Quotes & Delivery Notes: Convert first (primary), then Share, Download PDF, Cancel */}
+                                  <button
+                                    type="button"
+                                    onClick={() => { setOpenMenuDocId(null); setPreviewDocId(d.id); }}
+                                    className="w-full flex items-center gap-2 px-3 py-2 rounded-none text-gray-700 hover:bg-gray-50 text-[12px] font-medium"
+                                    style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
+                                    role="menuitem"
+                                  >
+                                    <FileText className="w-4 h-4 text-gray-500" />
+                                    {locale === "he" ? "תצוגה מקדימה" : "Preview"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => { setOpenMenuDocId(null); downloadPdf(d.id); }}
+                                    className="w-full flex items-center gap-2 px-3 py-2 rounded-none text-gray-700 hover:bg-gray-50 text-[12px] font-medium"
+                                    style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
+                                    role="menuitem"
+                                  >
+                                    <Download className="w-4 h-4 text-gray-500" />
+                                    Download PDF
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => { setOpenMenuDocId(null); handleShare(d.id); }}
+                                    className="w-full flex items-center gap-2 px-3 py-2 rounded-none text-gray-700 hover:bg-gray-50 text-[12px] font-medium"
+                                    style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
+                                    role="menuitem"
+                                  >
+                                    <Share2 className="w-4 h-4 text-gray-500" />
+                                    {locale === "he" ? "שלח ללקוח" : "Send to Client"}
+                                  </button>
+                                  {/* Context-specific actions */}
                                   {canConvertToInvoice && (
                                     <button
                                       type="button"
@@ -983,8 +2215,8 @@ export default function DocumentsPage() {
                                         if (d.type === "quote") handleConvertToInvoice(d.id);
                                         if (d.type === "delivery_note") handleConvertDeliveryNoteToInvoice(d.id);
                                       }}
-                                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] font-medium disabled:opacity-60 text-white hover:opacity-90 transition-opacity"
-                                      style={{ backgroundColor: TEAL }}
+                                      className="w-full flex items-center gap-2 px-3 py-2 rounded-none text-[12px] font-medium disabled:opacity-60 text-white hover:opacity-90 transition-opacity"
+                                      style={{ backgroundColor: TEAL, fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
                                       role="menuitem"
                                     >
                                       {loadingDocId === d.id ? (
@@ -995,24 +2227,6 @@ export default function DocumentsPage() {
                                       Convert to Invoice
                                     </button>
                                   )}
-                                  <button
-                                    type="button"
-                                    onClick={() => { setOpenMenuDocId(null); handleShare(d.id); }}
-                                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-50 text-[12px] font-medium"
-                                    role="menuitem"
-                                  >
-                                    <Share2 className="w-4 h-4 text-gray-500" />
-                                    Share
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => { setOpenMenuDocId(null); downloadPdf(d.id); }}
-                                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-50 text-[12px] font-medium"
-                                    role="menuitem"
-                                  >
-                                    <Download className="w-4 h-4 text-gray-500" />
-                                    Download PDF
-                                  </button>
                                   {(canCancelQuote || canCancelDeliveryNote) && (
                                     <button
                                       type="button"
@@ -1021,13 +2235,14 @@ export default function DocumentsPage() {
                                         if (d.type === "quote") cancelQuote(d.id);
                                         if (d.type === "delivery_note") cancelDeliveryNote(d.id);
                                         setActiveTab("cancellations");
-                                        showSuccessToast("Document canceled");
+                                        showSuccessToast(locale === "he" ? "המסמך בוטל" : "Document canceled");
                                       }}
-                                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-red-600 hover:bg-red-50 text-[12px] font-medium"
+                                      className="w-full flex items-center gap-2 px-3 py-2 rounded-none text-amber-700 hover:bg-amber-50 text-[12px] font-medium"
+                                      style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
                                       role="menuitem"
                                     >
                                       <X className="w-4 h-4" />
-                                      Cancel
+                                      {locale === "he" ? "ביטול" : "Cancel"}
                                     </button>
                                   )}
 
@@ -1039,7 +2254,8 @@ export default function DocumentsPage() {
                                         setOpenMenuDocId(null);
                                         handleIssueReceiptFromInvoice(d);
                                       }}
-                                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-50 text-[12px] font-medium disabled:opacity-60"
+                                      className="w-full flex items-center gap-2 px-3 py-2 rounded-none text-gray-700 hover:bg-gray-50 text-[12px] font-medium disabled:opacity-60"
+                                      style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
                                       role="menuitem"
                                     >
                                       {loadingDocId === d.id ? (
@@ -1059,7 +2275,8 @@ export default function DocumentsPage() {
                                         setOpenMenuDocId(null);
                                         handleCreateCreditNote(d.id);
                                       }}
-                                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-50 text-[12px] font-medium disabled:opacity-60"
+                                      className="w-full flex items-center gap-2 px-3 py-2 rounded-none text-gray-700 hover:bg-gray-50 text-[12px] font-medium disabled:opacity-60"
+                                      style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
                                       role="menuitem"
                                     >
                                       {loadingDocId === d.id ? (
@@ -1070,12 +2287,33 @@ export default function DocumentsPage() {
                                       Create Credit Note
                                     </button>
                                   )}
+
+                                  {canCancelReceipt && (
+                                    <button
+                                      type="button"
+                                      disabled={loadingDocId === d.id}
+                                      onClick={() => {
+                                        setOpenMenuDocId(null);
+                                        if (issueNegativeReceipt(d.id)) {
+                                          setActiveTab("cancellations");
+                                          showSuccessToast(locale === "he" ? "קבלה שלילית נוצרה" : "Negative receipt issued");
+                                        }
+                                      }}
+                                      className="w-full flex items-center gap-2 px-3 py-2 rounded-none text-amber-700 hover:bg-amber-50 text-[12px] font-medium"
+                                      style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
+                                      role="menuitem"
+                                    >
+                                      <X className="w-4 h-4" />
+                                      {locale === "he" ? "ביטול (קבלה שלילית)" : "Cancel (Negative Receipt)"}
+                                    </button>
+                                  )}
                                 </motion.div>
                               )}
                             </AnimatePresence>
                           </div>
                         </td>
-                      </tr>
+                        </tr>
+                      </React.Fragment>
                     );
                   })
                 )}
@@ -1100,7 +2338,7 @@ export default function DocumentsPage() {
                 <button
                   type="button"
                   onClick={handleScanReceipt}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-100 bg-white text-[12px] font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-none border border-gray-200 bg-white text-[12px] font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
                 >
                   <Camera className="w-4 h-4 text-gray-600" />
                   Scan Receipt
@@ -1128,7 +2366,63 @@ export default function DocumentsPage() {
               </div>
             </div>
 
-            <div className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
+            <div className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-visible">
+              {/* Expenses filter bar: luxury style + mobile Filter button */}
+              <div className="px-4 py-3 border-b border-gray-100 bg-white">
+                <div className="flex items-center gap-2 lg:hidden">
+                  <button
+                    type="button"
+                    onClick={() => setFilterDrawerOpen(true)}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-none border border-gray-100 bg-white text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                    style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
+                  >
+                    <SlidersHorizontal className="w-4 h-4 text-gray-500" />
+                    {locale === "he" ? "מסננים" : "Filter"}
+                  </button>
+                  {hasActiveFilters && (
+                    <button type="button" onClick={clearFilters} className="text-[13px] font-medium text-gray-500 hover:text-gray-700" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+                      {locale === "he" ? "נקה" : "Clear"}
+                    </button>
+                  )}
+                </div>
+                <div className="hidden lg:flex flex-wrap items-end gap-3">
+                  <div className="flex-1 min-w-[200px] flex items-end gap-0">
+                    <div className="flex-1 min-w-0">
+                      <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+                        {locale === "he" ? "חיפוש (ספק / קטגוריה)" : "Search (vendor / category)"}
+                      </label>
+                      <input
+                        type="search"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder={locale === "he" ? "ספק או קטגוריה…" : "Vendor or category…"}
+                        className="w-full rounded-none border border-gray-100 bg-white py-2 px-3 text-[13px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-[#008080] focus:ring-1 focus:ring-[#008080]"
+                        style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
+                      />
+                    </div>
+                    <button type="button" onClick={() => {}} className="shrink-0 h-[38px] px-4 rounded-none border border-l-0 border-gray-100 bg-[#008080] text-white hover:bg-[#006666] transition-colors flex items-center justify-center" aria-label={locale === "he" ? "חפש" : "Search"}>
+                      <Search className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+                      {locale === "he" ? "מתאריך" : "From Date"}
+                    </label>
+                    <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-full min-w-[120px] rounded-none border border-gray-100 bg-white px-3 py-2 text-[13px] text-gray-900 focus:outline-none focus:border-[#008080]" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }} />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+                      {locale === "he" ? "עד תאריך" : "To Date"}
+                    </label>
+                    <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-full min-w-[120px] rounded-none border border-gray-100 bg-white px-3 py-2 text-[13px] text-gray-900 focus:outline-none focus:border-[#008080]" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }} />
+                  </div>
+                  {hasActiveFilters && (
+                    <button type="button" onClick={clearFilters} className="shrink-0 px-3 py-2 rounded-none border border-gray-100 bg-white text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition-colors" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+                      {locale === "he" ? "נקה מסננים" : "Clear Filters"}
+                    </button>
+                  )}
+                </div>
+              </div>
               <table className="w-full text-[12px]">
                 <thead className="bg-gray-50/80 border-b border-gray-100">
                   <tr>
@@ -1142,8 +2436,20 @@ export default function DocumentsPage() {
                 <tbody>
                   {filteredExpenses.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-6 py-10 text-center text-gray-500 font-medium">
-                        No expenses in this view.
+                      <td colSpan={5} className="px-6 py-10 text-center">
+                        <p className="text-[13px] font-medium text-gray-500 mb-3" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+                          {locale === "he" ? "לא נמצאו הוצאות" : "No expenses found"}
+                        </p>
+                        {hasActiveFilters && (
+                          <button
+                            type="button"
+                            onClick={clearFilters}
+                            className="rounded-none border border-gray-200 bg-white px-4 py-2 text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                            style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
+                          >
+                            {locale === "he" ? "נקה מסננים" : "Clear Filters"}
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ) : (
@@ -1195,14 +2501,77 @@ export default function DocumentsPage() {
             }
             documentLanguage={businessProfile?.documentLanguage}
             bankDetails={createModal === "invoice" ? businessProfile?.bankDetails : undefined}
+            businessProfile={businessProfile ? { legalName: businessProfile.legalName, taxId: businessProfile.taxId, address: businessProfile.address, businessLogo: businessProfile.businessLogo, signature: (businessProfile as { signature?: string }).signature } : undefined}
             clientOptions={billingClientOptions}
             locale={locale}
             onClose={() => setCreateModal(null)}
             onSubmit={handleCreateDocument(createModal)}
             isSubmitting={createDocSubmitting}
+            downloadPdf={downloadPdf}
+            getShareLink={getShareLink}
+            getPdfBlob={getPdfBlob}
+            documents={documents}
           />
         )}
       </AnimatePresence>
+
+      {/* History document preview modal (3-dots → Preview) – full A4 */}
+      {previewDocId && (() => {
+        const previewDoc = documents.find((d) => d.id === previewDocId);
+        if (!previewDoc) return null;
+        const docLang = (businessProfile as { documentLanguage?: string } | undefined)?.documentLanguage === "he" ? "he" : (businessProfile as { documentLanguage?: string } | undefined)?.documentLanguage === "en" ? "en" : "both";
+        const bp = businessProfile as { bankDetails?: { bankName?: string; iban?: string; swift?: string; bitLink?: string } } | undefined;
+        return (
+          <div className="fixed inset-0 z-[200] flex flex-col bg-black/50" onClick={() => setPreviewDocId(null)}>
+            <div className="flex-1 overflow-y-auto overflow-x-auto p-6 flex justify-center min-h-0" onClick={(e) => e.stopPropagation()}>
+              <div className="flex-shrink-0 w-full bg-white shadow-xl rounded-none" style={{ width: 595, minHeight: 842, maxWidth: "100%" }}>
+                <UnifiedDocumentPreview
+                  company={{
+                    name: businessProfile?.legalName ?? "",
+                    address: businessProfile?.address,
+                    taxId: businessProfile?.taxId,
+                    logoUrl: businessProfile?.businessLogo,
+                    signatureUrl: (businessProfile as { signature?: string })?.signature,
+                  }}
+                  client={{
+                    name: previewDoc.clientName ?? "",
+                    email: previewDoc.clientEmail,
+                    phone: previewDoc.clientPhone,
+                    address: previewDoc.clientAddress,
+                    taxId: previewDoc.clientTaxId,
+                  }}
+                  items={previewDoc.items.map((i) => ({ description: i.description, quantity: i.quantity, unitPrice: i.unitPrice }))}
+                  subtotal={previewDoc.subtotal}
+                  vatAmount={previewDoc.vatAmount}
+                  total={previewDoc.total}
+                  currencySymbol={CURRENCY_SYMBOLS["ILS"] ?? "₪"}
+                  docNumber={previewDoc.number}
+                  docType={previewDoc.type}
+                  language={docLang}
+                  date={previewDoc.date}
+                  dueDate={previewDoc.dueDate}
+                  vatRate={previewDoc.vatRate ?? 17}
+                  title={previewDoc.title}
+                  notes={previewDoc.notes}
+                  bankDetails={(previewDoc.type === "invoice" || previewDoc.type === "credit_note" || previewDoc.type === "negative_receipt") ? bp?.bankDetails : undefined}
+                  creditForInvoiceNumber={previewDoc.creditForInvoiceNumber}
+                  originalReceiptNumber={previewDoc.originalReceiptNumber}
+                  isCanceled={(previewDoc.status as string) === "canceled" && previewDoc.type !== "credit_note" && previewDoc.type !== "negative_receipt"}
+                />
+              </div>
+            </div>
+            <div className="flex justify-center p-4 bg-white border-t border-gray-200 flex-shrink-0 rounded-none">
+              <button
+                type="button"
+                onClick={() => setPreviewDocId(null)}
+                className="px-6 py-2.5 rounded-none border border-gray-200 bg-white text-gray-700 font-medium text-[13px]"
+              >
+                {locale === "he" ? "סגור" : "Close"}
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Create Receipt: select paid invoice */}
       {createModal === "receipt" && (
