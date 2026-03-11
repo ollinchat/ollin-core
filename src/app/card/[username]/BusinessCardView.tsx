@@ -131,6 +131,7 @@ type UpdateProfile = (partial: Partial<Profile>) => void;
 export function BusinessCardView({ profile, updateProfile }: { profile: Profile; updateProfile: UpdateProfile }) {
   const { dir, locale } = useLocale();
   const [shareMenuOpen, setShareMenuOpen] = useState(false);
+  const [nearbyScanOpen, setNearbyScanOpen] = useState(false);
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [editDrawerOpen, setEditDrawerOpen] = useState(false);
   const [addedChatChannels, setAddedChatChannels] = useState<PlatformKey[]>([]);
@@ -326,7 +327,7 @@ export function BusinessCardView({ profile, updateProfile }: { profile: Profile;
       dir={dir}
     >
       {/* Back: only when no modal open */}
-      {!qrModalOpen && !editDrawerOpen && (
+      {!qrModalOpen && !nearbyScanOpen && !editDrawerOpen && (
         <Link
           href="/dashboard"
           className="business-card-print-hide absolute top-6 left-6 z-50 w-11 h-11 rounded-full bg-white border border-gray-200 shadow-sm text-gray-700 hover:bg-gray-50 flex items-center justify-center"
@@ -470,14 +471,25 @@ export function BusinessCardView({ profile, updateProfile }: { profile: Profile;
         </article>
       </div>
 
-      {/* Explore Nearby — navigates to dedicated /nearby page */}
+      {/* Button 1: Nearby Scan — popup only (live search moment) */}
       <div className="business-card-print-hide w-full max-w-md px-3 sm:px-4 pt-6 pb-2">
+        <button
+          type="button"
+          onClick={() => setNearbyScanOpen(true)}
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-none bg-[#008080] text-white text-sm font-semibold hover:bg-[#006666] transition-colors"
+        >
+          <Radio className="w-5 h-5" />
+          {locale === "he" ? "סריקת קרבת מקום" : "Nearby Scan"}
+        </button>
+      </div>
+
+      {/* Button 2: Nearby Cards — navigates to discovery hub page */}
+      <div className="business-card-print-hide w-full max-w-md px-3 sm:px-4 py-2">
         <Link
           href="/nearby"
           className="w-full flex items-center justify-center gap-2 py-3 rounded-none bg-[#008080] text-white text-sm font-semibold hover:bg-[#006666] transition-colors"
         >
-          <Radio className="w-5 h-5" />
-          {locale === "he" ? "חקור בקרבת מקום" : "Explore Nearby"}
+          {locale === "he" ? "כרטיסי קרבת מקום" : "Nearby Cards"}
         </Link>
       </div>
 
@@ -596,6 +608,33 @@ export function BusinessCardView({ profile, updateProfile }: { profile: Profile;
             <button type="button" onClick={() => setQrModalOpen(false)} className="w-full mt-4 py-2.5 rounded-xl bg-[#008080] text-white font-medium hover:bg-[#006666]">
               {locale === "he" ? "סגור" : "Close"}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Nearby Scan: popup — radar + Searching... only */}
+      {nearbyScanOpen && (
+        <div className="fixed inset-0 z-50 bg-white flex flex-col" role="dialog" aria-modal="true" aria-label="Nearby Scan">
+          <div className="flex-shrink-0 flex items-center justify-end px-4 py-3 border-b border-gray-200">
+            <button
+              type="button"
+              onClick={() => setNearbyScanOpen(false)}
+              className="p-2 text-gray-500 hover:bg-gray-100 rounded-none"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="flex-1 flex flex-col items-center justify-center px-4 min-h-0">
+            <div className="relative w-48 h-48 flex items-center justify-center">
+              <span className="nearby-radar-ring absolute inset-0 rounded-full bg-[#008080]/20" style={{ animationDelay: "0s" }} />
+              <span className="nearby-radar-ring absolute inset-0 rounded-full bg-[#008080]/16" style={{ animationDelay: "0.4s" }} />
+              <span className="nearby-radar-ring absolute inset-0 rounded-full bg-[#008080]/12" style={{ animationDelay: "0.8s" }} />
+              <span className="relative z-10 w-16 h-16 rounded-full bg-[#008080] flex items-center justify-center text-white">
+                <Radio className="w-8 h-8" />
+              </span>
+            </div>
+            <p className="mt-6 text-base font-medium text-gray-600">Searching...</p>
           </div>
         </div>
       )}

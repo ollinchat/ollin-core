@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useLocale } from "@/contexts/LocaleContext";
-import { ChevronLeft, Radio, Star, Phone, Mail, Globe } from "lucide-react";
+import { ChevronLeft, Star, Phone, Mail, Globe, Search, SlidersHorizontal } from "lucide-react";
 
 const CARD_ASPECT = 3.5 / 2;
 const VISIBLE_DURATION_MIN = 15;
@@ -34,23 +34,109 @@ function formatVisibleDuration(minutes: number): string {
   return hours === 1 ? "1 hour" : `${hours} hours`;
 }
 
+function formatTimeLeft(seconds: number): string {
+  if (seconds <= 0) return "0m left";
+  const m = Math.floor(seconds / 60);
+  const h = Math.floor(m / 60);
+  const mins = m % 60;
+  if (h > 0) return `${h}h ${mins}m left`;
+  return `${m}m left`;
+}
+
+function formatDigitalCountdown(seconds: number): string {
+  if (seconds <= 0) return "00:00:00";
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  return [h, m, s].map((n) => String(n).padStart(2, "0")).join(":");
+}
+
+type Tab = "all" | "starred";
+type StarredSort = "newest" | "oldest" | "az";
+
 export default function NearbyPage() {
   const { locale } = useLocale();
-  const [scanning, setScanning] = useState(true);
+  const [tab, setTab] = useState<Tab>("all");
   const [distanceMeters, setDistanceMeters] = useState<number>(20);
   const [visibleMinutes, setVisibleMinutes] = useState(60);
   const [starredIds, setStarredIds] = useState<Set<string>>(new Set());
+  const [starredAt, setStarredAt] = useState<Map<string, number>>(new Map());
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
+  const [visibilityEndTime, setVisibilityEndTime] = useState(0);
+  const [totalDurationSeconds, setTotalDurationSeconds] = useState(60 * 60);
+  const [starredSearch, setStarredSearch] = useState("");
+  const [starredSort, setStarredSort] = useState<StarredSort>("newest");
+  const [starredFilterOpen, setStarredFilterOpen] = useState(false);
 
-  useEffect(() => {
-    const t = setTimeout(() => setScanning(false), 4000);
-    return () => clearTimeout(t);
+  const startVisibility = useCallback((minutes: number) => {
+    const total = minutes * 60;
+    setTotalDurationSeconds(total);
+    setVisibilityEndTime(Date.now() + total * 1000);
+    setRemainingSeconds(total);
   }, []);
 
-  const filtered = MOCK_PEOPLE.filter((p) => p.distanceMeters <= distanceMeters);
+  useEffect(() => {
+    if (visibilityEndTime <= 0) return;
+    const tick = () => {
+      const left = Math.max(0, Math.ceil((visibilityEndTime - Date.now()) / 1000));
+      setRemainingSeconds(left);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [visibilityEndTime]);
+
+  useEffect(() => {
+    if (remainingSeconds === 0 && visibilityEndTime > 0 && totalDurationSeconds > 0) {
+      setVisibilityEndTime(0);
+    }
+  }, [remainingSeconds, visibilityEndTime, totalDurationSeconds]);
+
+  const allFiltered = MOCK_PEOPLE.filter((p) => p.distanceMeters <= distanceMeters);
+  const starredBase = MOCK_PEOPLE.filter((p) => starredIds.has(p.id));
+  const starredSearchLower = starredSearch.trim().toLowerCase();
+  const starredFiltered = starredSearchLower
+    ? starredBase.filter(
+        (p) =>
+          p.name.toLowerCase().includes(starredSearchLower) ||
+          (p.company?.toLowerCase().includes(starredSearchLower) ?? false) ||
+          (p.professionalTitle?.toLowerCase().includes(starredSearchLower) ?? false)
+      )
+    : starredBase;
+  const starredSorted = [...starredFiltered].sort((a, b) => {
+    if (starredSort === "az") return a.name.localeCompare(b.name);
+    const ta = starredAt.get(a.id) ?? 0;
+    const tb = starredAt.get(b.id) ?? 0;
+    return starredSort === "newest" ? tb - ta : ta - tb;
+  });
+  const list = tab === "all" ? allFiltered : starredSorted;
+
+  const handleStar = (personId: string, add: boolean) => {
+    setStarredIds((prev) => {
+      const next = new Set(prev);
+      if (add) {
+        next.add(personId);
+        setStarredAt((at) => new Map(at).set(personId, Date.now()));
+      } else {
+        next.delete(personId);
+        setStarredAt((at) => {
+          const m = new Map(at);
+          m.delete(personId);
+          return m;
+        });
+      }
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    startVisibility(visibleMinutes);
+  }, []);
+
+  const isVisible = remainingSeconds > 0 || visibilityEndTime > 0;
 
   return (
     <div className="min-h-screen bg-white flex flex-col" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
-      {/* Back navigation */}
       <header className="flex-shrink-0 flex items-center h-14 px-4 border-b border-gray-200">
         <Link
           href="/dashboard"
@@ -60,71 +146,172 @@ export default function NearbyPage() {
           <ChevronLeft className="w-6 h-6" />
         </Link>
         <h1 className="flex-1 text-center text-base font-semibold text-gray-900">
-          {locale === "he" ? "בקרבת מקום" : "Nearby"}
+          {locale === "he" ? "כרטיסי קרבת מקום" : "Nearby Cards"}
         </h1>
         <div className="w-10" />
       </header>
 
+      {/* Animated Live Visibility Tracker */}
+      <section className="flex-shrink-0 px-4 py-4 border-b border-gray-200 bg-white">
+        {isVisible && remainingSeconds > 0 ? (
+          <>
+            <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1">
+              {locale === "he" ? "זמן נותר לחשיפה" : "Time remaining for visibility"}
+            </p>
+            <p className="text-2xl font-semibold tabular-nums text-gray-900 mb-3" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+              {formatDigitalCountdown(remainingSeconds)}
+            </p>
+            <div className="relative h-2 w-full bg-gray-200 rounded-none overflow-visible">
+              <div
+                className="absolute inset-y-0 left-0 bg-[#008080] rounded-none transition-[width] duration-1000 ease-linear"
+                style={{ width: `${Math.max(0, Math.min(100, (remainingSeconds / totalDurationSeconds) * 100))}%` }}
+              >
+                <span
+                  className={`absolute right-0 top-1/2 w-4 h-4 rounded-full bg-white border-2 border-[#008080] shadow-sm ${remainingSeconds > 0 && remainingSeconds < 300 ? "visibility-dot-pulse" : ""}`}
+                  style={{ transform: "translate(50%, -50%)" }}
+                />
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <p className="text-xs font-medium text-gray-500">
+              {locale === "he" ? "הנראות פגה" : "Visibility Expired"}
+            </p>
+            <button
+              type="button"
+              onClick={() => startVisibility(visibleMinutes)}
+              className="w-full py-2 rounded-none bg-[#008080] text-white text-sm font-semibold hover:bg-[#006666] transition-colors"
+            >
+              {locale === "he" ? "הפעל שוב" : "Re-activate"}
+            </button>
+          </div>
+        )}
+      </section>
+
       <main className="flex-1 overflow-y-auto">
-        {/* Scanner */}
-        <section className="pt-6 pb-4 px-4 border-b border-gray-200">
-          <div className="flex flex-col items-center">
-            <div className="relative w-40 h-40 flex items-center justify-center">
-              <span className="nearby-radar-ring absolute inset-0 rounded-full bg-[#008080]/20" style={{ animationDelay: "0s" }} />
-              <span className="nearby-radar-ring absolute inset-0 rounded-full bg-[#008080]/16" style={{ animationDelay: "0.4s" }} />
-              <span className="nearby-radar-ring absolute inset-0 rounded-full bg-[#008080]/12" style={{ animationDelay: "0.8s" }} />
-              <span className={`relative z-10 w-14 h-14 rounded-full flex items-center justify-center text-white ${scanning ? "bg-[#008080]" : "bg-gray-400"}`}>
-                <Radio className="w-7 h-7" />
-              </span>
-            </div>
-            <p className="mt-3 text-sm font-medium text-gray-600">
-              {scanning ? "Searching..." : "Discovery complete"}
-            </p>
-          </div>
+        {/* Dual tabs: All Discovered | Starred/Favorites */}
+        <section className="flex border-b border-gray-200">
+          <button
+            type="button"
+            onClick={() => setTab("all")}
+            className={`flex-1 py-3 text-sm font-semibold rounded-none border-b-2 transition-colors ${
+              tab === "all" ? "border-[#008080] text-[#008080] bg-white" : "border-transparent text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            {locale === "he" ? "כולם שהתגלו" : "All Discovered"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("starred")}
+            className={`flex-1 py-3 text-sm font-semibold rounded-none border-b-2 transition-colors ${
+              tab === "starred" ? "border-[#008080] text-[#008080] bg-white" : "border-transparent text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            {locale === "he" ? "מועדפים" : "Starred"}
+          </button>
         </section>
 
-        {/* Filters */}
-        <section className="px-4 py-4 border-b border-gray-200 space-y-4">
-          <div>
-            <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1.5">Distance</p>
+        {/* Starred: search bar + filter */}
+        {tab === "starred" && (
+          <section className="px-4 py-3 border-b border-gray-200 space-y-2">
             <div className="flex gap-2">
-              {RADIUS_OPTIONS.map((r) => (
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="search"
+                  value={starredSearch}
+                  onChange={(e) => setStarredSearch(e.target.value)}
+                  placeholder={locale === "he" ? "חיפוש לפי שם, חברה, תפקיד..." : "Search by name, company, title..."}
+                  className="w-full pl-9 pr-3 py-2 rounded-none border border-gray-200 bg-white text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-[#008080]"
+                />
+              </div>
+              <div className="relative">
                 <button
-                  key={r}
                   type="button"
-                  onClick={() => setDistanceMeters(r)}
-                  className={`flex-1 py-2 rounded-none text-xs font-semibold border transition-colors ${
-                    distanceMeters === r ? "bg-[#008080] text-white border-[#008080]" : "bg-white text-gray-600 border-gray-300 hover:border-gray-400"
-                  }`}
+                  onClick={() => setStarredFilterOpen((o) => !o)}
+                  className="p-2 rounded-none border border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                  aria-label="Sort"
                 >
-                  {r === 100 ? "100m" : `${r}m`}
+                  <SlidersHorizontal className="w-5 h-5" />
                 </button>
-              ))}
+                {starredFilterOpen && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setStarredFilterOpen(false)} aria-hidden />
+                    <div className="absolute right-0 top-full mt-1 py-1 rounded-none border border-gray-200 bg-white shadow-lg z-20 min-w-[180px]">
+                      <button
+                        type="button"
+                        onClick={() => { setStarredSort("newest"); setStarredFilterOpen(false); }}
+                        className={`w-full px-4 py-2 text-left text-sm ${starredSort === "newest" ? "bg-[#008080]/10 text-[#008080] font-medium" : "text-gray-700"}`}
+                      >
+                        {locale === "he" ? "תאריך (חדש לישן)" : "Date Added (Newest)"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setStarredSort("oldest"); setStarredFilterOpen(false); }}
+                        className={`w-full px-4 py-2 text-left text-sm ${starredSort === "oldest" ? "bg-[#008080]/10 text-[#008080] font-medium" : "text-gray-700"}`}
+                      >
+                        {locale === "he" ? "תאריך (ישן לחדש)" : "Date Added (Oldest)"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setStarredSort("az"); setStarredFilterOpen(false); }}
+                        className={`w-full px-4 py-2 text-left text-sm ${starredSort === "az" ? "bg-[#008080]/10 text-[#008080] font-medium" : "text-gray-700"}`}
+                      >
+                        {locale === "he" ? "א׳–ת׳" : "Alphabetical (A–Z)"}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
-          <div>
-            <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1.5">
-              Visible for {formatVisibleDuration(visibleMinutes)}
-            </p>
-            <input
-              type="range"
-              min={VISIBLE_DURATION_MIN}
-              max={VISIBLE_DURATION_MAX}
-              step={15}
-              value={visibleMinutes}
-              onChange={(e) => setVisibleMinutes(Number(e.target.value))}
-              className="w-full h-1.5 rounded-none appearance-none bg-gray-200 accent-[#008080] cursor-pointer"
-            />
-          </div>
-        </section>
+          </section>
+        )}
 
-        {/* Discovered cards — full-frame */}
+        {/* Distance filter — only for All Discovered */}
+        {tab === "all" && (
+          <section className="px-4 py-4 border-b border-gray-200 space-y-4">
+            <div>
+              <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1.5">Distance</p>
+              <div className="flex gap-2">
+                {RADIUS_OPTIONS.map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => setDistanceMeters(r)}
+                    className={`flex-1 py-2 rounded-none text-xs font-semibold border transition-colors ${
+                      distanceMeters === r ? "bg-[#008080] text-white border-[#008080]" : "bg-white text-gray-600 border-gray-300 hover:border-gray-400"
+                    }`}
+                  >
+                    {r === 100 ? "100m" : `${r}m`}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1.5">
+                Visible for {formatVisibleDuration(visibleMinutes)}
+              </p>
+              <input
+                type="range"
+                min={VISIBLE_DURATION_MIN}
+                max={VISIBLE_DURATION_MAX}
+                step={15}
+                value={visibleMinutes}
+                onChange={(e) => setVisibleMinutes(Number(e.target.value))}
+                className="w-full h-1.5 rounded-none appearance-none bg-gray-200 accent-[#008080] cursor-pointer"
+              />
+            </div>
+          </section>
+        )}
+
+        {/* Full-frame cards — All or Starred */}
         <section className="px-4 py-6">
           <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-3">
-            {locale === "he" ? "אנשים שהתגלו" : "Discovered"}
+            {tab === "all" ? (locale === "he" ? "אנשים שהתגלו" : "Discovered") : (locale === "he" ? "אנשי קשר מועדפים" : "Favorites")}
           </p>
           <div className="flex flex-col items-center gap-6">
-            {filtered.map((person) => {
+            {list.map((person) => {
               const isStarred = starredIds.has(person.id);
               return (
                 <article
@@ -138,12 +325,7 @@ export default function NearbyPage() {
                     </span>
                     <button
                       type="button"
-                      onClick={() => setStarredIds((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(person.id)) next.delete(person.id);
-                        else next.add(person.id);
-                        return next;
-                      })}
+                      onClick={() => handleStar(person.id, !isStarred)}
                       className="p-1.5 rounded-none text-gray-400 hover:text-[#008080] transition-colors bg-white/95 border border-gray-200"
                       aria-label={isStarred ? "Remove from favorites" : "Add to favorites"}
                     >
@@ -191,8 +373,10 @@ export default function NearbyPage() {
               );
             })}
           </div>
-          {filtered.length === 0 && (
-            <p className="text-sm text-gray-500 py-8 text-center">No one in range. Increase distance above.</p>
+          {list.length === 0 && (
+            <p className="text-sm text-gray-500 py-8 text-center">
+              {tab === "all" ? "No one in range. Increase distance above." : (locale === "he" ? "עדיין אין מועדפים. לחץ על הכוכב בכרטיס כדי לשמור." : "No starred contacts yet. Tap the star on a card to save.")}
+            </p>
           )}
         </section>
       </main>

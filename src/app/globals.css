@@ -166,3 +166,12 @@ nav a,
 .nearby-radar-ring {
   animation: radar-ring 1.5s ease-out infinite;
 }
+
+/* Visibility tracker: pulse dot when < 5 min left */
+@keyframes visibility-dot-pulse {
+  0%, 100% { opacity: 1; transform: translate(50%, -50%) scale(1); }
+  50% { opacity: 0.85; transform: translate(50%, -50%) scale(1.12); }
+}
+.visibility-dot-pulse {
+  animation: visibility-dot-pulse 1.5s ease-in-out infinite;
+}
