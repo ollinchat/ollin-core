@@ -28,7 +28,7 @@ export function UserAvatar({ name, email, imageUrl, size = "sm", className = "" 
 
   return (
     <span
-      className={`inline-flex items-center justify-center flex-shrink-0 rounded-sm bg-[#008080]/20 text-[#006666] font-semibold overflow-hidden ${sizeClass} ${className}`}
+      className={`inline-flex items-center justify-center flex-shrink-0 rounded-full bg-[#008080]/20 text-[#006666] font-semibold overflow-hidden ${sizeClass} ${className}`}
       title={name || email || undefined}
     >
       {imageUrl ? (

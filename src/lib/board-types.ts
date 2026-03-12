@@ -63,6 +63,8 @@ export interface BoardTask {
   creatorId?: string;
   /** Optional due date (ms) for calendar display */
   dueDate?: number;
+  /** Reminder: minutes before due date (e.g. 15, 60, 1440) */
+  reminderMinutesBefore?: number;
   /** Priority for accent bar (green / yellow / red) */
   priority?: "low" | "medium" | "high";
   /** Task-level attachments (proof of completion, updates) */
@@ -75,6 +77,8 @@ export interface BoardTask {
   archived?: boolean;
   archivedAt?: number;
   createdAt: number;
+  /** When set, this task was auto-created from a recurring checklist (link back to checklist) */
+  recurringChecklistId?: string;
 }
 
 export type RSVPStatus = "attending" | "not_attending" | "pending";

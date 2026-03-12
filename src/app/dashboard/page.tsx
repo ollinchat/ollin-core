@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { useLocale } from "@/contexts/LocaleContext";
 import { useProfile } from "@/contexts/ProfileContext";
 import { slugFromUsername } from "@/lib/profile-types";
-import { User, Settings, LogOut, ChevronDown, CreditCard } from "lucide-react";
+import { User, Settings, LogOut, ChevronDown, CreditCard, FileText } from "lucide-react";
 import { DashboardPanels, BOARD_PANEL_INDEX } from "@/app/dashboard/DashboardPanels";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 
@@ -133,6 +133,14 @@ function DashboardPageInner() {
                 >
                   <Settings className="w-4 h-4 text-gray-500 shrink-0" />
                   {locale === "he" ? "העדפות חשבון / הגדרות כלליות" : "Account Preferences"}
+                </Link>
+                <Link
+                  href="/dashboard/summary"
+                  onClick={() => setProfileOpen(false)}
+                  className="flex items-center gap-3 w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <FileText className="w-4 h-4 text-gray-500 shrink-0" />
+                  {locale === "he" ? "סיכום פעילות" : "Summarize Activity"}
                 </Link>
                 <div className="my-1 border-t border-gray-100" />
                 <Link

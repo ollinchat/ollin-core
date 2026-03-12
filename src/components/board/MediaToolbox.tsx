@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef } from "react";
-import { Paperclip, FileText, Camera, Video, ScanLine, MapPin } from "lucide-react";
+import { Plus, FileText, Camera, Video, ScanLine, MapPin } from "lucide-react";
 import type { TaskAttachment, TaskAttachmentType } from "@/lib/board-types";
 
 type MediaToolboxProps = {
@@ -112,7 +112,7 @@ export function MediaToolbox({ onAddAttachment, locale, disabled, count = 0 }: M
         title={locale === "he" ? "מדיה / קבצים" : "Media / attachments"}
         aria-label="Media"
       >
-        <Paperclip className="w-4 h-4" />
+        <Plus className="w-4 h-4" strokeWidth={2} />
         {count > 0 && (
           <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 px-1 rounded-sm bg-[#008080] text-white text-[10px] flex items-center justify-center">
             {count}
@@ -121,8 +121,8 @@ export function MediaToolbox({ onAddAttachment, locale, disabled, count = 0 }: M
       </button>
       {open && (
         <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} aria-hidden />
-          <div className="absolute left-0 top-full mt-1 z-20 min-w-[220px] rounded-sm border border-gray-200 bg-white shadow-lg py-1">
+          <div className="fixed inset-0 z-[9998]" onClick={() => setOpen(false)} aria-hidden />
+          <div className="absolute left-0 top-full mt-1 z-[9999] min-w-[220px] rounded-sm border border-gray-200 bg-white shadow-lg py-1" style={{ position: "absolute" }}>
             {MENU_ITEMS.map(({ type, labelEn, labelHe, icon: Icon }) => (
               <button
                 key={type}

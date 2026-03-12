@@ -1,10 +1,12 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Check, Circle, ChevronDown, ChevronUp, Trash2, Bell, MessageSquare, Paperclip, X, Mic, ImagePlus } from "lucide-react";
+import { Check, Circle, ChevronDown, ChevronUp, Trash2, Bell, MessageSquare, Paperclip, X, Mic, ImagePlus, Pencil, Repeat } from "lucide-react";
 import type { RecurringChecklist, RecurringChecklistItem, RecurringChecklistItemAttachment, RecurringChecklistItemFeedback } from "@/lib/recurring-checklist-types";
 import type { TaskAttachmentType } from "@/lib/board-types";
 import { useChecklists } from "@/contexts/ChecklistsContext";
+import { useBoard } from "@/contexts/BoardContext";
+import { useProfile } from "@/contexts/ProfileContext";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { MediaToolbox } from "./MediaToolbox";
 
@@ -63,8 +65,11 @@ export function RecurringChecklistCard({
   locale,
   currentUserId,
 }: RecurringChecklistCardProps) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const [newItemText, setNewItemText] = useState("");
+  const [repeatOpen, setRepeatOpen] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [editTitleValue, setEditTitleValue] = useState(checklist.title);
   const [feedbackTrayItemId, setFeedbackTrayItemId] = useState<string | null>(null);
   const [feedbackTrayText, setFeedbackTrayText] = useState("");
   const [feedbackTrayAttachments, setFeedbackTrayAttachments] = useState<RecurringChecklistItemAttachment[]>([]);
@@ -76,7 +81,11 @@ export function RecurringChecklistCard({
     if (feedbackTrayItemId) setFeedbackTrayVisible(true);
     else setFeedbackTrayVisible(false);
   }, [feedbackTrayItemId]);
+  useEffect(() => {
+    setEditTitleValue(checklist.title);
+  }, [checklist.title]);
   const isCreator = currentUserId && checklist.createdBy === currentUserId;
+  const isReceived = currentUserId && checklist.assignedTo === currentUserId && !isCreator;
   const canToggle = currentUserId && checklist.assignedTo === currentUserId;
   const commentsDisabled = !!checklist.disableComments;
 
@@ -158,27 +167,112 @@ export function RecurringChecklistCard({
     }
   };
 
+  const handleSaveTitle = () => {
+    const v = editTitleValue.trim();
+    if (v && v !== checklist.title) updateChecklist(checklist.id, { title: v });
+    setEditingTitle(false);
+  };
+
   return (
-    <div className="clean-card overflow-hidden flex">
+    <div className={`clean-card overflow-visible flex ${isCreator ? "border-l-4 border-l-[var(--clean-accent)]/60" : ""}`}>
       <div className="w-[3px] flex-shrink-0 bg-[var(--clean-accent)]" aria-hidden />
       <div className="flex-1 min-w-0">
       <button
         type="button"
-        onClick={() => setExpanded((e) => !e)}
+        onClick={() => !editingTitle && setExpanded((e) => !e)}
         className="w-full p-3 flex items-center gap-3 text-left hover:bg-[var(--clean-border)]/50 transition-colors"
       >
         <ScoreCircle score={checklist.currentScore} />
         <div className="flex-1 min-w-0 flex items-center gap-2">
+          {isCreator && (
+            <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--clean-accent)] bg-[var(--clean-accent)]/10 rounded">
+              {locale === "he" ? "בעלים" : "Owner"}
+            </span>
+          )}
           {showAssignedTo && (assignedToLabel || checklist.assignedTo) && (
             <UserAvatar name={checklist.assignedTo} size="sm" className="flex-shrink-0" />
           )}
           <div className="min-w-0">
-            <h3 className="font-medium text-[13px] text-[var(--clean-text)] tracking-wide truncate">{checklist.title}</h3>
+            {editingTitle ? (
+              <input
+                type="text"
+                value={editTitleValue}
+                onChange={(e) => setEditTitleValue(e.target.value)}
+                onBlur={handleSaveTitle}
+                onKeyDown={(e) => { if (e.key === "Enter") handleSaveTitle(); if (e.key === "Escape") { setEditTitleValue(checklist.title); setEditingTitle(false); } }}
+                onClick={(e) => e.stopPropagation()}
+                className="font-medium text-[13px] text-[var(--clean-text)] tracking-wide w-full px-1 py-0.5 border border-[var(--clean-accent)] rounded focus:outline-none"
+                autoFocus
+              />
+            ) : (
+              <h3 className="font-medium text-[13px] text-[var(--clean-text)] tracking-wide truncate">{checklist.title}</h3>
+            )}
             <p className="text-xs text-[var(--clean-text-secondary)] capitalize">{checklist.frequency}</p>
             {showAssignedTo && assignedToLabel && (
               <p className="text-xs text-[var(--clean-accent)] mt-0.5 truncate">{assignedToLabel}</p>
             )}
           </div>
+        </div>
+        <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+          {/* Repeat (תזמון) */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setRepeatOpen((o) => !o); }}
+              className="p-1.5 rounded text-[var(--clean-text-secondary)] hover:text-[var(--clean-accent)] hover:bg-[var(--clean-accent)]/10 transition-colors"
+              title={locale === "he" ? "תזמון" : "Repeat"}
+              aria-label={locale === "he" ? "תזמון" : "Repeat"}
+            >
+              <Repeat className="w-4 h-4" strokeWidth={1.75} />
+            </button>
+            {repeatOpen && (
+              <>
+                <div className="fixed inset-0 z-[9998]" onClick={() => setRepeatOpen(false)} aria-hidden />
+                <div className="absolute right-0 top-full mt-1 z-[9999] min-w-[120px] rounded border border-[var(--clean-border)] bg-white shadow-lg py-1" style={{ position: "absolute" }}>
+                  {(["daily", "weekly", "monthly"] as const).map((freq) => (
+                    <button
+                      key={freq}
+                      type="button"
+                      onClick={() => {
+                        const isChange = checklist.frequency !== freq;
+                        updateChecklist(checklist.id, { frequency: freq });
+                        setRepeatOpen(false);
+                        if (isChange && currentUserIdForTask && isCreator) {
+                          const now = new Date();
+                          const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+                          addGivenTask({
+                            title: checklist.title,
+                            otherParty: "—",
+                            checklist: [],
+                            done: false,
+                            creatorId: currentUserIdForTask,
+                            priority: "low",
+                            dueDate: todayStart,
+                            recurringChecklistId: checklist.id,
+                            assigneeIds: checklist.assignedTo ? [checklist.assignedTo] : undefined,
+                            assigneeUserId: checklist.assignedTo,
+                          });
+                        }
+                      }}
+                      className={`w-full px-3 py-2 text-left text-[12px] font-medium transition-colors ${checklist.frequency === freq ? "text-[var(--clean-accent)] bg-[var(--clean-accent)]/10" : "text-[var(--clean-text)] hover:bg-gray-100"}`}
+                    >
+                      {freq === "daily" ? (locale === "he" ? "יומי" : "Daily") : freq === "weekly" ? (locale === "he" ? "שבועי" : "Weekly") : locale === "he" ? "חודשי" : "Monthly"}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+          {isCreator && (
+            <>
+              <button type="button" onClick={(e) => { e.stopPropagation(); setEditingTitle(true); }} className="p-1.5 rounded text-[var(--clean-text-secondary)] hover:text-[var(--clean-accent)] hover:bg-[var(--clean-accent)]/10 transition-colors" title={locale === "he" ? "ערוך" : "Edit"} aria-label="Edit">
+                <Pencil className="w-4 h-4" strokeWidth={1.75} />
+              </button>
+              <button type="button" onClick={(e) => { e.stopPropagation(); if (typeof window !== "undefined" && window.confirm(locale === "he" ? "למחוק את הרשימה?" : "Delete this checklist?")) removeChecklist(checklist.id); }} className="p-1.5 rounded text-[var(--clean-text-secondary)] hover:text-red-500 hover:bg-red-50 transition-colors" title={locale === "he" ? "מחק" : "Delete"} aria-label="Delete">
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </>
+          )}
         </div>
         {expanded ? (
           <ChevronUp className="w-5 h-5 text-[var(--clean-text-secondary)] shrink-0" strokeWidth={1.75} />
@@ -215,7 +309,7 @@ export function RecurringChecklistCard({
                     </span>
                   )}
                 </button>
-                {!commentsDisabled && canToggle && (
+                {!isReceived && !commentsDisabled && canToggle && (
                   <button
                     type="button"
                     onClick={() => openFeedbackTray(item)}
@@ -226,21 +320,25 @@ export function RecurringChecklistCard({
                     <MessageSquare className="w-4 h-4" strokeWidth={1.75} />
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => handlePing(item)}
-                  className="p-1 text-[var(--clean-text-secondary)] hover:text-[var(--clean-accent)] hover:bg-[var(--clean-accent)]/5 flex-shrink-0 transition-colors"
-                  title={locale === "he" ? "שלח תזכורת" : "Send reminder (ping)"}
-                  aria-label="Ping"
-                >
-                  <Bell className="w-4 h-4" />
-                </button>
-                <MediaToolbox
-                  onAddAttachment={(att) => handleAddAttachment(item, att)}
-                  locale={locale}
-                  disabled={!isCreator && !canToggle}
-                  count={(item.attachments ?? []).length}
-                />
+                {!isReceived && (
+                  <button
+                    type="button"
+                    onClick={() => handlePing(item)}
+                    className="p-1 text-[var(--clean-text-secondary)] hover:text-[var(--clean-accent)] hover:bg-[var(--clean-accent)]/5 flex-shrink-0 transition-colors"
+                    title={locale === "he" ? "שלח תזכורת" : "Send reminder (ping)"}
+                    aria-label="Ping"
+                  >
+                    <Bell className="w-4 h-4" />
+                  </button>
+                )}
+                {!isReceived && (
+                  <MediaToolbox
+                    onAddAttachment={(att) => handleAddAttachment(item, att)}
+                    locale={locale}
+                    disabled={!isCreator && !canToggle}
+                    count={(item.attachments ?? []).length}
+                  />
+                )}
                 {isCreator && (
                   <>
                     <button
@@ -320,19 +418,19 @@ export function RecurringChecklistCard({
             </>
           )}
           {isCreator && (
-          <div className="flex gap-2 pt-1">
+          <div className="flex gap-2 pt-3 border-t border-[var(--clean-border)] mt-2">
             <input
               type="text"
               value={newItemText}
               onChange={(e) => setNewItemText(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleAddItem()}
-              placeholder={locale === "he" ? "פריט חדש..." : "New item..."}
-              className="flex-1 px-2.5 py-1.5 rounded-sm border border-gray-200 text-sm"
+              placeholder={locale === "he" ? "הוסף פריט לרשימה..." : "Add item to checklist..."}
+              className="flex-1 min-w-0 px-3 py-2 rounded border border-[var(--clean-border)] bg-white text-[13px] font-medium text-[var(--clean-text)] placeholder-[var(--clean-text-secondary)] focus:border-[var(--clean-accent)] outline-none transition-colors"
             />
             <button
               type="button"
               onClick={handleAddItem}
-              className="px-2.5 py-1.5 rounded-sm bg-[#008080] text-white text-sm font-medium"
+              className="px-3 py-2 rounded bg-[var(--clean-accent)] text-white text-[13px] font-medium hover:bg-[var(--clean-accent-hover)] transition-colors shrink-0"
             >
               +
             </button>

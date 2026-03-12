@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import { t } from "@/lib/translations";
 import { generateUUID } from "@/lib/uuid";
@@ -28,7 +28,6 @@ import {
   Phone,
   FolderOpen,
   Plus,
-  FileText,
   MessageSquare,
   MessageCircleOff,
   Building2,
@@ -42,7 +41,9 @@ import {
   X,
   Clock,
   User,
+  Lock,
 } from "lucide-react";
+import { UserSelector, buildInternalUsers } from "./UserSelector";
 import { calculateTotalBalance, type OllinFinanceEntry } from "@/lib/finance-types";
 import type { TranslationKey } from "@/lib/translations";
 import type { BoardTask, TaskAttachment } from "@/lib/board-types";
@@ -109,10 +110,17 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
   const [quickAddPriority, setQuickAddPriority] = useState<"low" | "medium" | "high">("low");
   const [quickAddNoComments, setQuickAddNoComments] = useState(false);
   const [quickAddAttachments, setQuickAddAttachments] = useState<TaskAttachment[]>([]);
+  const [quickAddAssigneeIds, setQuickAddAssigneeIds] = useState<string[]>([]);
+  const [quickAddDueTime, setQuickAddDueTime] = useState<string>("09:00");
+  const [quickAddAttachMenuOpen, setQuickAddAttachMenuOpen] = useState(false);
+  const [quickAddUserPickerOpen, setQuickAddUserPickerOpen] = useState(false);
+  const [quickAddDuePickerOpen, setQuickAddDuePickerOpen] = useState(false);
+  const [quickAddChecklistMode, setQuickAddChecklistMode] = useState(false);
+  const [quickAddChecklistItems, setQuickAddChecklistItems] = useState<string[]>([""]);
+  const quickAddCardRef = useRef<HTMLDivElement>(null);
   const quickAddFileRef = useRef<HTMLInputElement>(null);
   const quickAddImageRef = useRef<HTMLInputElement>(null);
   const quickAddCameraRef = useRef<HTMLInputElement>(null);
-  const [checklistSubTab, setChecklistSubTab] = useState<"given" | "received">("given");
   const [newChecklistModalOpen, setNewChecklistModalOpen] = useState(false);
   const [newChecklistTitle, setNewChecklistTitle] = useState("");
   const [newChecklistFrequency, setNewChecklistFrequency] = useState<"daily" | "weekly" | "monthly" | "quarterly" | "yearly">("daily");
@@ -203,6 +211,19 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
   }, []);
   const totalBurn = calculateTotalBalance(liveEntries);
 
+  useEffect(() => {
+    const closePopovers = (e: MouseEvent) => {
+      const el = quickAddCardRef.current;
+      if (el && !el.contains(e.target as Node)) {
+        setQuickAddAttachMenuOpen(false);
+        setQuickAddUserPickerOpen(false);
+        setQuickAddDuePickerOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", closePopovers);
+    return () => document.removeEventListener("mousedown", closePopovers);
+  }, []);
+
   const addQuickAddAttachment = (file: File, type: TaskAttachment["type"]) => {
     const reader = new FileReader();
     reader.onload = () => {
@@ -215,33 +236,58 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
     reader.readAsDataURL(file);
   };
 
-  /** First line or full text is the task title */
+  const quickAddInternalUsers = useMemo(
+    () =>
+      buildInternalUsers(
+        profile ? { userId: profile.userId, name: profile.name, email: profile.email, profileImage: (profile as { profileImage?: string }).profileImage } : null,
+        contacts
+      ),
+    [profile, contacts]
+  );
+
+  /** Standard task: first line or full text is title. Checklist mode: title from first item, checklist from items. */
   const handleQuickAdd = (kind: "given" | "received") => {
-    const raw = quickAddText.trim();
-    if (!raw) return;
-    const title = raw.includes("\n") ? raw.split("\n")[0].trim() || raw : raw;
-    const dueDateMs = quickAddDueDate ? new Date(quickAddDueDate).getTime() : undefined;
+    let title: string;
+    let checklist: { id: string; label: string; done: boolean }[] = [];
+    if (quickAddChecklistMode) {
+      const nonEmpty = quickAddChecklistItems.map((s) => s.trim()).filter(Boolean);
+      if (nonEmpty.length === 0) return;
+      title = nonEmpty[0] || (locale === "he" ? "רשימה" : "Checklist");
+      checklist = nonEmpty.map((label) => ({ id: generateUUID(), label, done: false }));
+    } else {
+      const raw = quickAddText.trim();
+      if (!raw) return;
+      title = raw.includes("\n") ? raw.split("\n")[0].trim() || raw : raw;
+    }
+    let dueDateMs: number | undefined;
+    if (quickAddDueDate) {
+      const dateTimeStr = `${quickAddDueDate}T${quickAddDueTime || "09:00"}`;
+      dueDateMs = new Date(dateTimeStr).getTime();
+    }
     const payload = {
       title,
       otherParty: "—",
-      checklist: [],
+      checklist,
       done: false,
       creatorId: currentUserId,
       priority: quickAddPriority,
       ...(dueDateMs && { dueDate: dueDateMs }),
       ...(quickAddNoComments && { comments: [] }),
       ...(quickAddAttachments.length > 0 && { attachments: quickAddAttachments }),
+      ...(kind === "given" && quickAddAssigneeIds.length > 0 && { assigneeIds: quickAddAssigneeIds, assigneeUserId: quickAddAssigneeIds[0] }),
     };
     if (kind === "given") addGivenTask(payload);
     else addReceivedTask(payload);
     setQuickAddText("");
+    setQuickAddChecklistMode(false);
+    setQuickAddChecklistItems([""]);
     setQuickAddDueDate(null);
+    setQuickAddDueTime("09:00");
     setQuickAddPriority("low");
     setQuickAddNoComments(false);
     setQuickAddAttachments([]);
+    setQuickAddAssigneeIds([]);
   };
-
-  const [quickAddDatePickerOpen, setQuickAddDatePickerOpen] = useState(false);
 
   /** True if selected date falls within the next 7 days (for input border) */
   const isQuickAddDueNextWeek = quickAddDueDate
@@ -254,9 +300,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
       })()
     : false;
 
-  const givenChecklists = viewChecklists.filter((c) => c.createdBy === currentUserId);
-  const receivedChecklists = viewChecklists.filter((c) => c.assignedTo === currentUserId);
-  const viewChecklistsFiltered = checklistSubTab === "given" ? givenChecklists : receivedChecklists;
+  const viewChecklistsFiltered = viewChecklists;
 
   const handleCreateChecklist = () => {
     const title = newChecklistTitle.trim();
@@ -315,205 +359,271 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
       <div className="p-3 min-h-full bg-white">
         {mainTab === "tasks" && (
           <>
-            {/* Task sub-tabs: GIVEN | RECEIVED as text buttons with green underline */}
-            <div className="flex flex-wrap items-center gap-4 mb-4">
-              <div className="flex items-center gap-6">
-                <button
-                  type="button"
-                  onClick={() => setTaskSubTab("given")}
-                  className={`px-0 py-2 text-[13px] font-medium tracking-wide border-b-2 -mb-px transition-all duration-150 ${
-                    taskSubTab === "given"
-                      ? "border-[var(--clean-accent)] text-[var(--clean-text)] font-semibold"
-                      : "border-transparent text-[var(--clean-text-secondary)] hover:text-[var(--clean-text)]"
-                  }`}
-                >
-                  {t(locale, "board.tasksGiven")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTaskSubTab("received")}
-                  className={`px-0 py-2 text-[13px] font-medium tracking-wide border-b-2 -mb-px transition-all duration-150 ${
-                    taskSubTab === "received"
-                      ? "border-[var(--clean-accent)] text-[var(--clean-text)] font-semibold"
-                      : "border-transparent text-[var(--clean-text-secondary)] hover:text-[var(--clean-text)]"
-                  }`}
-                >
-                  {t(locale, "board.tasksReceived")}
-                </button>
-              </div>
+            {/* Task sub-tabs: GIVEN | RECEIVED | CHECKLISTS (text only) */}
+            <div className="flex flex-wrap items-center gap-6 mb-4">
+              <button
+                type="button"
+                onClick={() => setTaskSubTab("given")}
+                className={`px-0 py-2 text-[13px] font-medium tracking-wide border-b-2 -mb-px transition-all duration-150 ${
+                  taskSubTab === "given"
+                    ? "border-[var(--clean-accent)] text-[var(--clean-text)] font-semibold"
+                    : "border-transparent text-[var(--clean-text-secondary)] hover:text-[var(--clean-text)]"
+                }`}
+              >
+                {locale === "he" ? "נתתי" : "Given"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setTaskSubTab("received")}
+                className={`px-0 py-2 text-[13px] font-medium tracking-wide border-b-2 -mb-px transition-all duration-150 ${
+                  taskSubTab === "received"
+                    ? "border-[var(--clean-accent)] text-[var(--clean-text)] font-semibold"
+                    : "border-transparent text-[var(--clean-text-secondary)] hover:text-[var(--clean-text)]"
+                }`}
+              >
+                {locale === "he" ? "קיבלתי" : "Received"}
+              </button>
               <button
                 type="button"
                 onClick={() => setMainTab("checklists")}
-                className="flex items-center gap-1.5 px-3 py-2 border border-[var(--clean-border)] bg-white text-[var(--clean-text)] hover:border-[#E2E8F0] text-[13px] font-medium transition-all duration-150"
-                aria-label={locale === "he" ? "רשימות" : "Checklists"}
+                className="px-0 py-2 text-[13px] font-medium tracking-wide border-b-2 -mb-px border-transparent text-[var(--clean-text-secondary)] hover:text-[var(--clean-text)] transition-all duration-150"
               >
-                <ListTodo className="w-3.5 h-3.5" strokeWidth={1.75} />
-                <Plus className="w-3 h-3" strokeWidth={1.75} />
-                {locale === "he" ? "רשימות" : "Checklists"}
+                {locale === "he" ? "רשימות משימות" : "Checklists"}
               </button>
             </div>
 
-            {/* Clean task creation: white, 1px border, only Send green */}
+            {/* Task creation: content area (task or checklist mode) + clean bottom toolbar */}
             <div
-              className={`clean-card mb-4 overflow-hidden transition-all duration-150 ${
+              ref={quickAddCardRef}
+              className={`clean-card mb-4 overflow-visible transition-all duration-150 ${
                 isQuickAddDueNextWeek ? "border-amber-300" : ""
               }`}
             >
-              <textarea
-                value={quickAddText}
-                onChange={(e) => setQuickAddText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleQuickAdd(taskSubTab);
-                  }
-                }}
-                placeholder={locale === "he" ? "משימה חדשה..." : "New task..."}
-                rows={2}
-                className="w-full min-h-[48px] max-h-24 px-4 py-3 bg-white text-[var(--clean-text)] placeholder-[var(--clean-text-secondary)] text-[13px] font-medium resize-none border-0 focus:ring-0 focus:outline-none tracking-wide"
-              />
-              <div className="flex items-center justify-between gap-1 px-2 py-2 border-t border-[var(--clean-border)] bg-white">
-                <div className="flex items-center gap-0.5">
-                  {/* Priority dots: high=red, medium=amber, low=Ollin green (default) */}
-                  {(["high", "medium", "low"] as const).map((p) => (
+              {/* Content area: task textarea or checklist line items + Checklist link */}
+              {quickAddChecklistMode ? (
+                <div className="px-4 py-3 border-0 bg-white">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span className="text-[12px] font-medium text-[var(--clean-text-secondary)]">
+                      {locale === "he" ? "פריטי רשימה" : "List items"}
+                    </span>
                     <button
-                      key={p}
                       type="button"
-                      onClick={() => setQuickAddPriority(quickAddPriority === p ? "low" : p)}
-                      className={`w-5 h-5 flex items-center justify-center transition-all duration-150 border border-[var(--clean-border)] ${
-                        quickAddPriority === p
-                          ? p === "high"
-                            ? "bg-red-500 border-red-500"
-                            : p === "medium"
-                              ? "bg-amber-500 border-amber-500"
-                              : "bg-[var(--clean-accent)] border-[var(--clean-accent)]"
-                          : "bg-white hover:border-[#E2E8F0]"
-                      }`}
-                      title={p === "high" ? "High" : p === "medium" ? "Medium" : "Low"}
-                      aria-label={p === "high" ? "High priority" : p === "medium" ? "Medium priority" : "Low priority"}
+                      onClick={() => { setQuickAddChecklistMode(false); setQuickAddChecklistItems([""]); }}
+                      className="text-[12px] font-medium text-[var(--clean-accent)] hover:underline"
                     >
-                      <span className="sr-only">{p}</span>
+                      {locale === "he" ? "← משימה בודדת" : "← Single task"}
                     </button>
-                  ))}
-                  <span className="w-px h-4 bg-[var(--clean-border)] mx-1" aria-hidden />
+                  </div>
+                  <div className="space-y-2">
+                    {quickAddChecklistItems.map((item, i) => (
+                      <div key={i} className="flex gap-2">
+                        <input
+                          type="text"
+                          value={item}
+                          onChange={(e) => {
+                            const next = [...quickAddChecklistItems];
+                            next[i] = e.target.value;
+                            setQuickAddChecklistItems(next);
+                          }}
+                          placeholder={locale === "he" ? `פריט ${i + 1}` : `Item ${i + 1}`}
+                          className="flex-1 min-w-0 px-3 py-2 text-[13px] font-medium border border-[var(--clean-border)] rounded text-[var(--clean-text)] bg-white placeholder-[var(--clean-text-secondary)]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setQuickAddChecklistItems((prev) => (prev.length <= 1 ? [""] : prev.filter((_, j) => j !== i)))}
+                          className="p-2 text-[var(--clean-text-secondary)] hover:text-red-500 rounded border border-transparent hover:border-red-200"
+                          aria-label={locale === "he" ? "הסר" : "Remove"}
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setQuickAddChecklistItems((prev) => [...prev, ""])}
+                      className="w-full py-2 text-[12px] font-medium text-[var(--clean-accent)] border border-dashed border-[var(--clean-border)] rounded hover:bg-[var(--clean-accent)]/5"
+                    >
+                      + {locale === "he" ? "הוסף פריט" : "Add item"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <textarea
+                    value={quickAddText}
+                    onChange={(e) => setQuickAddText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleQuickAdd(taskSubTab);
+                      }
+                    }}
+                    placeholder={locale === "he" ? "משימה חדשה..." : "New task..."}
+                    rows={3}
+                    className="w-full min-h-[56px] max-h-32 px-4 py-3 bg-white text-[var(--clean-text)] placeholder-[var(--clean-text-secondary)] text-[13px] font-medium resize-none border-0 focus:ring-0 focus:outline-none tracking-wide"
+                  />
+                  <div className="px-4 pb-2">
+                    <button
+                      type="button"
+                      onClick={() => setQuickAddChecklistMode(true)}
+                      className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[var(--clean-text-secondary)] hover:text-[var(--clean-accent)] transition-colors"
+                    >
+                      <ClipboardList className="w-3.5 h-3.5" strokeWidth={1.75} />
+                      {locale === "he" ? "רשימת משימות" : "Checklist"}
+                    </button>
+                  </div>
+                </>
+              )}
+              {/* Bottom toolbar: + | Select Users | Due Date | Mute | Send */}
+              <div className="flex flex-wrap items-center gap-1 px-4 py-2.5 border-t border-[var(--clean-border)] bg-white">
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => { setQuickAddAttachMenuOpen((o) => !o); setQuickAddUserPickerOpen(false); setQuickAddDuePickerOpen(false); }}
+                    className={`p-2 rounded border border-[var(--clean-border)] transition-all duration-150 flex items-center justify-center ${
+                      quickAddAttachments.length > 0 ? "text-[var(--clean-accent)] bg-[var(--clean-accent)]/10 border-[var(--clean-accent)]/40" : "text-[var(--clean-text-secondary)] hover:text-[var(--clean-accent)] hover:border-[#E2E8F0] bg-white"
+                    }`}
+                    aria-expanded={quickAddAttachMenuOpen}
+                    aria-label={locale === "he" ? "צרף" : "Attach"}
+                  >
+                    <Plus className="w-4 h-4" strokeWidth={2} />
+                  </button>
+                  {quickAddAttachMenuOpen && (
+                    <div className="absolute bottom-full left-0 mb-1 flex gap-0.5 rounded border border-[var(--clean-border)] bg-white shadow-lg py-1 px-1 z-[9999]" style={{ position: "absolute" }}>
+                      <button type="button" onClick={() => { quickAddImageRef.current?.click(); setQuickAddAttachMenuOpen(false); }} className="flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-medium text-[var(--clean-text)] hover:bg-gray-100 rounded">
+                        <ImagePlus className="w-3.5 h-3.5" /> {locale === "he" ? "תמונה" : "Photo"}
+                      </button>
+                      <button type="button" onClick={() => { quickAddCameraRef.current?.click(); setQuickAddAttachMenuOpen(false); }} className="flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-medium text-[var(--clean-text)] hover:bg-gray-100 rounded">
+                        <Camera className="w-3.5 h-3.5" /> {locale === "he" ? "מצלמה" : "Camera"}
+                      </button>
+                      <button type="button" onClick={() => { quickAddFileRef.current?.click(); setQuickAddAttachMenuOpen(false); }} className="flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-medium text-[var(--clean-text)] hover:bg-gray-100 rounded">
+                        <Paperclip className="w-3.5 h-3.5" /> {locale === "he" ? "קובץ" : "File"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <input ref={quickAddFileRef} type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="hidden" multiple onChange={(e) => { const files = e.target.files; if (files) for (let i = 0; i < files.length; i++) addQuickAddAttachment(files[i], "file"); e.target.value = ""; }} />
+                <input ref={quickAddImageRef} type="file" accept="image/*" className="hidden" multiple onChange={(e) => { const files = e.target.files; if (files) for (let i = 0; i < files.length; i++) addQuickAddAttachment(files[i], "image"); e.target.value = ""; }} />
+                <input ref={quickAddCameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) addQuickAddAttachment(file, "camera"); e.target.value = ""; }} />
+                <span className="w-px h-5 bg-[var(--clean-border)]" aria-hidden />
+                {taskSubTab === "given" && (
                   <div className="relative">
                     <button
                       type="button"
-                      onClick={() => setQuickAddDatePickerOpen((o) => !o)}
-                      className={`p-1.5 transition-all duration-150 ${quickAddDueDate ? "text-[var(--clean-accent)]" : "text-[var(--clean-text-secondary)] hover:text-[var(--clean-accent)]"}`}
-                      title={locale === "he" ? "תאריך" : "Date"}
-                      aria-label="Pick date"
+                      onClick={() => { setQuickAddUserPickerOpen((o) => !o); setQuickAddAttachMenuOpen(false); setQuickAddDuePickerOpen(false); }}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-2 rounded border text-[12px] font-medium transition-all duration-150 ${
+                        quickAddAssigneeIds.length > 0
+                          ? "border-[var(--clean-accent)]/50 text-[var(--clean-accent)] bg-[var(--clean-accent)]/5"
+                          : "border-[var(--clean-border)] text-[var(--clean-text-secondary)] hover:text-[var(--clean-text)] hover:border-[#E2E8F0] bg-white"
+                      }`}
+                      aria-expanded={quickAddUserPickerOpen}
                     >
-                      <Calendar className="w-4 h-4" />
+                      {quickAddAssigneeIds.length > 0 ? (
+                        <span className="flex items-center -space-x-1.5">
+                          {quickAddInternalUsers
+                            .filter((u) => quickAddAssigneeIds.includes(u.userId))
+                            .map((u) => (
+                              <UserAvatar
+                                key={u.userId}
+                                name={u.name}
+                                email={u.email}
+                                imageUrl={u.avatar}
+                                size="sm"
+                                className="ring-2 ring-white"
+                              />
+                            ))}
+                        </span>
+                      ) : (
+                        <>
+                          <User className="w-3.5 h-3.5" />
+                          {locale === "he" ? "משתמש" : "Select User"}
+                        </>
+                      )}
                     </button>
-                    {quickAddDatePickerOpen && (
-                      <>
-                        <div className="fixed inset-0 z-10" onClick={() => setQuickAddDatePickerOpen(false)} aria-hidden />
-                        <div className="absolute left-0 bottom-full mb-1 z-20 p-2 bg-white border border-[var(--clean-border)]">
-                          <input
-                            type="date"
-                            value={quickAddDueDate ?? ""}
-                            onChange={(e) => {
-                              setQuickAddDueDate(e.target.value || null);
-                              setQuickAddDatePickerOpen(false);
-                            }}
-                            className="text-[13px] font-medium border border-[var(--clean-border)] px-2 py-1.5 text-[var(--clean-text)]"
-                          />
-                        </div>
-                      </>
+                    {quickAddUserPickerOpen && (
+                      <div className="absolute bottom-full left-0 mb-1 w-64 rounded border border-[var(--clean-border)] bg-white shadow-lg p-2 z-[9999]" style={{ position: "absolute" }}>
+                        <UserSelector
+                          users={quickAddInternalUsers}
+                          multiple
+                          multipleValue={quickAddAssigneeIds}
+                          onMultipleChange={setQuickAddAssigneeIds}
+                          onChange={() => {}}
+                          locale={locale}
+                          placeholder={locale === "he" ? "בחר צוות" : "Select team members"}
+                        />
+                        <button type="button" onClick={() => setQuickAddUserPickerOpen(false)} className="mt-2 w-full py-1.5 text-[12px] font-medium text-[var(--clean-accent)] border border-[var(--clean-border)] rounded">
+                          {locale === "he" ? "סגור" : "Done"}
+                        </button>
+                      </div>
                     )}
                   </div>
+                )}
+                {taskSubTab === "given" && <span className="w-px h-5 bg-[var(--clean-border)]" aria-hidden />}
+                {/* Due Date (slim, in toolbar) */}
+                <div className="relative">
                   <button
                     type="button"
-                    onClick={() => quickAddFileRef.current?.click()}
-                    className={`p-1.5 transition-all duration-150 ${quickAddAttachments.some((a) => a.type === "file") ? "text-[var(--clean-accent)]" : "text-[var(--clean-text-secondary)] hover:text-[var(--clean-accent)]"}`}
-                    title={locale === "he" ? "מסמכים" : "Documents"}
-                    aria-label="Attach document"
+                    onClick={() => { setQuickAddDuePickerOpen((o) => !o); setQuickAddAttachMenuOpen(false); setQuickAddUserPickerOpen(false); }}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded border border-[var(--clean-border)] text-[12px] font-medium text-[var(--clean-text-secondary)] hover:text-[var(--clean-text)] hover:border-[#E2E8F0] bg-white transition-all duration-150"
+                    aria-expanded={quickAddDuePickerOpen}
                   >
-                    <Paperclip className="w-4 h-4" />
+                    <Calendar className="w-3.5 h-3.5" strokeWidth={1.75} />
+                    {quickAddDueDate && quickAddDueTime
+                      ? (() => {
+                          const d = new Date(`${quickAddDueDate}T${quickAddDueTime}`);
+                          const today = new Date();
+                          const isToday = d.toDateString() === today.toDateString();
+                          return isToday
+                            ? (locale === "he" ? "היום" : "Today") + " " + d.toLocaleTimeString(locale === "he" ? "he-IL" : "en-US", { hour: "numeric", minute: "2-digit" })
+                            : d.toLocaleDateString(locale === "he" ? "he-IL" : "en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+                        })()
+                      : locale === "he"
+                        ? "תאריך"
+                        : "Due"}
                   </button>
-                  <input
-                    ref={quickAddFileRef}
-                    type="file"
-                    accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                    className="hidden"
-                    multiple
-                    onChange={(e) => {
-                      const files = e.target.files;
-                      if (files) for (let i = 0; i < files.length; i++) addQuickAddAttachment(files[i], "file");
-                      e.target.value = "";
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => quickAddImageRef.current?.click()}
-                    className={`p-1.5 transition-all duration-150 ${quickAddAttachments.some((a) => a.type === "image") ? "text-[var(--clean-accent)]" : "text-[var(--clean-text-secondary)] hover:text-[var(--clean-accent)]"}`}
-                    title={locale === "he" ? "תמונה" : "Image"}
-                    aria-label="Attach image"
-                  >
-                    <ImagePlus className="w-4 h-4" />
-                  </button>
-                  <input
-                    ref={quickAddImageRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    multiple
-                    onChange={(e) => {
-                      const files = e.target.files;
-                      if (files) for (let i = 0; i < files.length; i++) addQuickAddAttachment(files[i], "image");
-                      e.target.value = "";
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => quickAddCameraRef.current?.click()}
-                    className={`p-1.5 transition-all duration-150 ${quickAddAttachments.some((a) => a.type === "camera") ? "text-[var(--clean-accent)]" : "text-[var(--clean-text-secondary)] hover:text-[var(--clean-accent)]"}`}
-                    title={locale === "he" ? "מצלמה" : "Camera"}
-                    aria-label="Take photo"
-                  >
-                    <Camera className="w-4 h-4" />
-                  </button>
-                  <input
-                    ref={quickAddCameraRef}
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) addQuickAddAttachment(file, "camera");
-                      e.target.value = "";
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {}}
-                    className="p-1.5 text-[var(--clean-text-secondary)] hover:text-[var(--clean-accent)] transition-all duration-150"
-                    title={locale === "he" ? "קול" : "Voice"}
-                    aria-label="Voice"
-                  >
-                    <Mic className="w-4 h-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setQuickAddNoComments((c) => !c)}
-                    className={`p-1.5 transition-all duration-150 rounded ${
-                      quickAddNoComments
-                        ? "bg-red-500 text-white ring-2 ring-red-400"
-                        : "text-[var(--clean-text-secondary)] hover:text-[var(--clean-accent)]"
-                    }`}
-                    title={locale === "he" ? "ביטול הודעות — תגובות נעולות" : "Disable comments — comments locked"}
-                    aria-label={locale === "he" ? "ביטול הודעות" : "Disable comments"}
-                    aria-pressed={quickAddNoComments}
-                  >
-                    <MessageCircleOff className="w-4 h-4" />
-                  </button>
+                  {quickAddDuePickerOpen && (
+                    <div className="absolute bottom-full left-0 mb-1 flex items-center gap-1 rounded border border-[var(--clean-border)] bg-white shadow-lg p-2 z-[9999]" style={{ position: "absolute" }}>
+                      <input
+                        type="datetime-local"
+                        value={quickAddDueDate ? `${quickAddDueDate}T${quickAddDueTime || "09:00"}` : ""}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v) {
+                            const [datePart, timePart] = v.split("T");
+                            setQuickAddDueDate(datePart || null);
+                            setQuickAddDueTime(timePart || "09:00");
+                          } else {
+                            setQuickAddDueDate(null);
+                            setQuickAddDueTime("09:00");
+                          }
+                        }}
+                        className="text-[12px] font-medium border border-[var(--clean-border)] px-2 py-1 rounded text-[var(--clean-text)] bg-white"
+                      />
+                      <button type="button" onClick={() => setQuickAddDuePickerOpen(false)} className="p-1.5 text-[var(--clean-text-secondary)] hover:text-[var(--clean-text)] rounded" aria-label="Close">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
                 </div>
+                <span className="flex-1 min-w-2" aria-hidden />
+                <button
+                  type="button"
+                  onClick={() => setQuickAddNoComments((c) => !c)}
+                  className={`p-2 rounded border transition-all duration-150 flex items-center justify-center ${
+                    quickAddNoComments
+                      ? "bg-red-600 text-white border-red-600 ring-2 ring-red-500/50"
+                      : "border-[var(--clean-border)] text-[var(--clean-text-secondary)] hover:text-[var(--clean-accent)] hover:border-[#E2E8F0] bg-white"
+                  }`}
+                  title={locale === "he" ? "ביטול הודעות — תגובות נעולות" : "Disable comments — comments locked"}
+                  aria-label={locale === "he" ? "ביטול הודעות" : "Disable comments"}
+                  aria-pressed={quickAddNoComments}
+                >
+                  {quickAddNoComments ? <Lock className="w-4 h-4" /> : <MessageCircleOff className="w-4 h-4" />}
+                </button>
                 <button
                   type="button"
                   onClick={() => handleQuickAdd(taskSubTab)}
-                  className="p-2 bg-[var(--clean-accent)] text-white hover:bg-[var(--clean-accent-hover)] transition-all duration-150 flex items-center justify-center border-0"
+                  className="p-2 bg-[var(--clean-accent)] text-white hover:bg-[var(--clean-accent-hover)] transition-all duration-150 flex items-center justify-center border-0 rounded"
                   aria-label={locale === "he" ? "שלח משימה" : "Add task"}
                 >
                   <Send className="w-4 h-4" strokeWidth={2.5} />
@@ -559,16 +669,6 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                   </div>
                 ))}
             </div>
-
-            <div className="mt-4">
-              <Link
-                href="/dashboard/summary"
-                className="inline-flex items-center gap-2 px-4 py-2 border border-[var(--clean-border)] bg-white text-[var(--clean-text)] text-[13px] font-medium hover:border-[#E2E8F0]"
-              >
-                <FileText className="w-4 h-4" />
-                {locale === "he" ? "סיכום" : "Summarize"}
-              </Link>
-            </div>
           </>
         )}
 
@@ -604,49 +704,22 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
 
         {mainTab === "checklists" && (
           <div className="space-y-4">
-            <button
-              type="button"
-              onClick={() => setMainTab("tasks")}
-              className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-[#008080] font-medium mb-2"
-            >
-              <ChevronLeft className="w-4 h-4" />
-              {locale === "he" ? "חזרה למשימות" : "Back to Tasks"}
-            </button>
-            {/* GIVEN / RECEIVED: text buttons with green underline */}
-            <div className="flex flex-wrap items-center gap-4">
-              <div className="flex items-center gap-6">
-                <button
-                  type="button"
-                  onClick={() => setChecklistSubTab("given")}
-                  className={`px-0 py-2 text-[13px] font-medium tracking-wide border-b-2 -mb-px transition-all duration-150 ${
-                    checklistSubTab === "given"
-                      ? "border-[var(--clean-accent)] text-[var(--clean-text)] font-semibold"
-                      : "border-transparent text-[var(--clean-text-secondary)] hover:text-[var(--clean-text)]"
-                  }`}
-                >
-                  {t(locale, "board.tasksGiven")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setChecklistSubTab("received")}
-                  className={`px-0 py-2 text-[13px] font-medium tracking-wide border-b-2 -mb-px transition-all duration-150 ${
-                    checklistSubTab === "received"
-                      ? "border-[var(--clean-accent)] text-[var(--clean-text)] font-semibold"
-                      : "border-transparent text-[var(--clean-text-secondary)] hover:text-[var(--clean-text)]"
-                  }`}
-                >
-                  {t(locale, "board.tasksReceived")}
-                </button>
-              </div>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+              <button
+                type="button"
+                onClick={() => setMainTab("tasks")}
+                className="flex items-center gap-1.5 text-[13px] text-[var(--clean-text-secondary)] hover:text-[var(--clean-accent)] font-medium"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                {locale === "he" ? "חזרה למשימות" : "Back to Tasks"}
+              </button>
               <button
                 type="button"
                 onClick={() => setNewChecklistModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-2 border border-[var(--clean-border)] bg-white text-[var(--clean-text)] hover:border-[#E2E8F0] text-[13px] font-medium transition-all duration-150"
+                className="text-[13px] font-medium text-[var(--clean-accent)] hover:underline"
                 aria-label={locale === "he" ? "רשימה חדשה" : "New checklist"}
               >
-                <ListTodo className="w-3.5 h-3.5" strokeWidth={1.75} />
-                <Plus className="w-3 h-3" strokeWidth={1.75} />
-                {locale === "he" ? "רשימה חדשה" : "New Checklist"}
+                + {locale === "he" ? "רשימה חדשה" : "Add New Checklist"}
               </button>
             </div>
             {/* New Checklist modal - clean, 1px border */}
@@ -877,10 +950,8 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
             })()}
             <div className="space-y-4">
               {viewChecklistsFiltered.length === 0 ? (
-                <p className="text-sm text-gray-500 py-4">
-                  {checklistSubTab === "given"
-                    ? (locale === "he" ? "אין רשימות שיצרת." : "No checklists you created.")
-                    : (locale === "he" ? "אין רשימות שהוקצו אליך." : "No checklists assigned to you.")}
+                <p className="text-sm text-[var(--clean-text-secondary)] py-6">
+                  {locale === "he" ? "אין רשימות. הוסף רשימה חדשה למעלה." : "No checklists. Add a new one above."}
                 </p>
               ) : (
                 <>
