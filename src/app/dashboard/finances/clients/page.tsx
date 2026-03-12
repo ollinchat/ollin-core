@@ -12,10 +12,15 @@ import { AddClientModal } from "@/components/finances/AddClientModal";
 const TEAL = "#008080";
 
 export default function ClientsPage() {
+  const router = useRouter();
   const { clients: billingClients, addClient } = useBilling();
   const { contacts } = useContacts();
   const { getConversationsWithMeta, currentUserId } = useInternalMessages();
   const [showAddModal, setShowAddModal] = useState(false);
+
+  const goToProfile = useCallback((clientId: string) => {
+    router.push(`/dashboard/finances/clients/${encodeURIComponent(clientId)}`);
+  }, [router]);
 
   const chatList = useMemo(() => getConversationsWithMeta(currentUserId), [getConversationsWithMeta, currentUserId]);
 
