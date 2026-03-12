@@ -23,7 +23,8 @@ export async function POST(request: Request) {
     const to = String(body.to ?? "").trim();
     const subject = String(body.subject ?? "").trim();
     const text = String(body.body ?? body.text ?? "").trim();
-    const replyToMessageId = body.replyToMessageId ? String(body.replyToMessageId) : null;
+    const contentType = String(body.contentType ?? "text/plain").toLowerCase();
+    const isHtml = contentType === "text/html";
     const references = body.references ? String(body.references) : "";
     const inReplyTo = body.inReplyTo ? String(body.inReplyTo) : "";
 
@@ -32,12 +33,15 @@ export async function POST(request: Request) {
     }
 
     const fromEmail = (session?.user?.email as string) ?? "noreply@localhost";
+    const ctLine = isHtml
+      ? "Content-Type: text/html; charset=utf-8"
+      : "Content-Type: text/plain; charset=utf-8";
     const lines = [
       `From: ${fromEmail}`,
       `To: ${to}`,
       `Subject: ${subject.replace(/\r?\n/g, " ")}`,
       "MIME-Version: 1.0",
-      "Content-Type: text/plain; charset=utf-8",
+      ctLine,
       ...(inReplyTo ? [`In-Reply-To: ${inReplyTo}`] : []),
       ...(references ? [`References: ${references}`] : []),
       "",

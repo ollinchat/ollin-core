@@ -5,7 +5,7 @@ import { useLocale } from "@/contexts/LocaleContext";
 import { useFolders } from "@/contexts/FoldersContext";
 import { StickyNote, MessageSquare, Archive, FolderOpen } from "lucide-react";
 import { NotebookPanel } from "@/components/board/NotebookPanel";
-import { InternalChatPanel } from "@/components/InternalChatPanel";
+import InternalChatPanel from "@/components/InternalChatPanel";
 import { PanelWrapper } from "@/components/dashboard/PanelWrapper";
 
 /** System folder IDs — pinned, locked, cannot be deleted */
