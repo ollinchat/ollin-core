@@ -117,7 +117,10 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
   const [quickAddDuePickerOpen, setQuickAddDuePickerOpen] = useState(false);
   const [quickAddChecklistMode, setQuickAddChecklistMode] = useState(false);
   const [quickAddChecklistItems, setQuickAddChecklistItems] = useState<string[]>([""]);
+  const [quickAddExpanded, setQuickAddExpanded] = useState(false);
+  const [quickAddPlaceholderStep, setQuickAddPlaceholderStep] = useState(0);
   const quickAddCardRef = useRef<HTMLDivElement>(null);
+  const quickAddTextareaRef = useRef<HTMLTextAreaElement>(null);
   const quickAddFileRef = useRef<HTMLInputElement>(null);
   const quickAddImageRef = useRef<HTMLInputElement>(null);
   const quickAddCameraRef = useRef<HTMLInputElement>(null);
@@ -224,6 +227,33 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
     return () => document.removeEventListener("mousedown", closePopovers);
   }, []);
 
+  useEffect(() => {
+    if (quickAddExpanded && quickAddTextareaRef.current) {
+      const t = setTimeout(() => quickAddTextareaRef.current?.focus(), 80);
+      return () => clearTimeout(t);
+    }
+  }, [quickAddExpanded]);
+
+  useEffect(() => {
+    if (quickAddExpanded) return;
+    const id = setInterval(() => {
+      setQuickAddPlaceholderStep((s) => (s + 1) % 3);
+    }, 500);
+    return () => clearInterval(id);
+  }, [quickAddExpanded]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const el = quickAddCardRef.current;
+      if (!el || !quickAddExpanded) return;
+      if (!el.contains(e.target as Node) && !quickAddText.trim()) {
+        setQuickAddExpanded(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [quickAddExpanded, quickAddText]);
+
   const addQuickAddAttachment = (file: File, type: TaskAttachment["type"]) => {
     const reader = new FileReader();
     reader.onload = () => {
@@ -281,6 +311,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
     setQuickAddText("");
     setQuickAddChecklistMode(false);
     setQuickAddChecklistItems([""]);
+    setQuickAddExpanded(false);
     setQuickAddDueDate(null);
     setQuickAddDueTime("09:00");
     setQuickAddPriority("low");
@@ -392,15 +423,48 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
               </button>
             </div>
 
-            {/* Task creation: content area (task or checklist mode) + clean bottom toolbar */}
+            {/* Task creation: elegant minimalist preview → smooth expansion to full block */}
             <div
               ref={quickAddCardRef}
-              className={`clean-card mb-4 overflow-visible transition-all duration-150 ${
-                isQuickAddDueNextWeek ? "border-amber-300" : ""
-              }`}
+              className={`mb-4 overflow-visible rounded-xl transition-all duration-300 ease-out ${
+                quickAddExpanded
+                  ? "bg-white border border-[var(--clean-border)] shadow-sm"
+                  : "bg-[var(--clean-border)]/30 border border-[var(--clean-border)]/50"
+              } ${isQuickAddDueNextWeek ? "border-amber-300" : ""}`}
             >
-              {/* Content area: task textarea or checklist line items + Checklist link */}
-              {quickAddChecklistMode ? (
+              {/* Collapsed: clear frame, left-aligned placeholder, subtle and quiet */}
+              <button
+                type="button"
+                onClick={() => setQuickAddExpanded(true)}
+                className={`w-full text-left flex items-center min-h-[52px] px-4 py-3 text-[var(--clean-text-secondary)] hover:text-[var(--clean-text)] hover:bg-[var(--clean-border)]/20 border-0 bg-transparent transition-colors duration-200 ${!quickAddExpanded ? "rounded-xl" : "hidden"}`}
+                aria-expanded={quickAddExpanded}
+                aria-label={locale === "he" ? "משימה חדשה" : "New task"}
+              >
+                <span className="text-[13px] font-normal tracking-wide inline-block min-w-[10ch] transition-opacity duration-300">
+                  {locale === "he"
+                    ? (["משימה חדשה.", "משימה חדשה..", "משימה חדשה..."] as const)[quickAddPlaceholderStep]
+                    : (["New Task.", "New Task..", "New Task..."] as const)[quickAddPlaceholderStep]}
+                </span>
+              </button>
+              {/* Expanded: full form — same radius for seamless transition */}
+              <div
+                className="overflow-hidden transition-all duration-300 ease-out rounded-b-xl"
+                style={{ maxHeight: quickAddExpanded ? "900px" : "0", opacity: quickAddExpanded ? 1 : 0 }}
+              >
+                {quickAddExpanded && (
+                  <>
+                    <div className="flex items-center justify-end px-2 pt-1.5 pb-0">
+                      <button
+                        type="button"
+                        onClick={() => setQuickAddExpanded(false)}
+                        className="p-1.5 text-[var(--clean-text-secondary)] hover:text-[var(--clean-text)] rounded transition-colors"
+                        aria-label={locale === "he" ? "סגור" : "Close"}
+                      >
+                        <ChevronLeft className="w-4 h-4 rotate-90" />
+                      </button>
+                    </div>
+                    {/* Content area: task textarea or checklist line items + Checklist link */}
+                    {quickAddChecklistMode ? (
                 <div className="px-4 py-3 border-0 bg-white">
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <span className="text-[12px] font-medium text-[var(--clean-text-secondary)]">
@@ -450,6 +514,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
               ) : (
                 <>
                   <textarea
+                    ref={quickAddTextareaRef}
                     value={quickAddText}
                     onChange={(e) => setQuickAddText(e.target.value)}
                     onKeyDown={(e) => {
@@ -460,7 +525,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                     }}
                     placeholder={locale === "he" ? "משימה חדשה..." : "New task..."}
                     rows={3}
-                    className="w-full min-h-[56px] max-h-32 px-4 py-3 bg-white text-[var(--clean-text)] placeholder-[var(--clean-text-secondary)] text-[13px] font-medium resize-none border-0 focus:ring-0 focus:outline-none tracking-wide"
+                    className="w-full min-h-[56px] max-h-32 px-4 py-3 bg-transparent text-[var(--clean-text)] placeholder-[var(--clean-text-secondary)] text-[13px] font-medium resize-none border-0 focus:ring-0 focus:outline-none tracking-wide"
                   />
                   <div className="px-4 pb-2">
                     <button
@@ -628,6 +693,9 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                 >
                   <Send className="w-4 h-4" strokeWidth={2.5} />
                 </button>
+              </div>
+                  </>
+                )}
               </div>
             </div>
 

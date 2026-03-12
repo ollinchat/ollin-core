@@ -19,7 +19,6 @@ import {
   Plus,
   BarChart2,
   CalendarDays,
-  Users,
   FileOutput,
   Send,
   ListTodo,
@@ -43,7 +42,7 @@ type FeatureItem = {
   labelHe: string;
   icon: typeof ScanLine;
   href?: string;
-  action?: "scanner" | "meetings" | "converter" | "poll";
+  action?: "scanner" | "converter" | "poll";
 };
 
 const FEATURE_GRID: FeatureItem[] = [
@@ -52,8 +51,6 @@ const FEATURE_GRID: FeatureItem[] = [
   { key: "files", labelEn: "Files", labelHe: "קבצים", icon: FileStack, href: "/dashboard/folders" },
   { key: "sign", labelEn: "Sign Docs", labelHe: "חתימת מסמכים", icon: PenLine, href: "/dashboard/documents/sign" },
   { key: "poll", labelEn: "Create Poll", labelHe: "סקרים", icon: BarChart2, action: "poll" },
-  { key: "events", labelEn: "Events", labelHe: "אירועים", icon: CalendarDays, href: "/dashboard/events/new" },
-  { key: "meetings", labelEn: "Meetings", labelHe: "פגישות", icon: Users, action: "meetings" },
   { key: "converter", labelEn: "File Converter", labelHe: "המרת קבצים", icon: FileOutput, action: "converter" },
 ];
 
@@ -300,18 +297,6 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
                       key={key}
                       type="button"
                       onClick={onOpenScanner}
-                      className={tileClass}
-                    >
-                      {tileContent}
-                    </button>
-                  );
-                }
-                if (action === "meetings") {
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => setMeetingModalOpen(true)}
                       className={tileClass}
                     >
                       {tileContent}
