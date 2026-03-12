@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useLayoutEffect } from "react";
 import Link from "next/link";
+import { createPortal } from "react-dom";
 import { useLocale } from "@/contexts/LocaleContext";
 import { useContacts } from "@/contexts/ContactsContext";
 import { useInternalMessages } from "@/contexts/ChatEngineContext";
@@ -108,6 +109,9 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
   const [activeChannel, setActiveChannel] = useState<ChannelId>("ollin_chat");
   const [pinnedChannels, setPinnedChannels] = useState<ChannelId[]>([]);
   const [addChannelMenuOpen, setAddChannelMenuOpen] = useState(false);
+  const addButtonRef = useRef<HTMLButtonElement | null>(null);
+  const addMenuRef = useRef<HTMLDivElement | null>(null);
+  const [addMenuPos, setAddMenuPos] = useState<{ top: number; left: number } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [input, setInput] = useState("");
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
@@ -258,13 +262,104 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
   });
   const isHe = locale === "he";
 
+  useLayoutEffect(() => {
+    if (!addChannelMenuOpen) return;
+    const btn = addButtonRef.current;
+    if (!btn) return;
+    const rect = btn.getBoundingClientRect();
+    const width = 280;
+    const left = Math.max(8, rect.right + window.scrollX - width);
+    const top = rect.bottom + window.scrollY + 8;
+    setAddMenuPos({ top, left });
+  }, [addChannelMenuOpen]);
+
+  useEffect(() => {
+    if (!addChannelMenuOpen) return;
+    const onPointerDown = (e: MouseEvent) => {
+      const t = e.target as Node | null;
+      if (!t) return;
+      if (addButtonRef.current?.contains(t)) return;
+      if (addMenuRef.current?.contains(t)) return;
+      setAddChannelMenuOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setAddChannelMenuOpen(false);
+    };
+    window.addEventListener("mousedown", onPointerDown);
+    window.addEventListener("touchstart", onPointerDown, { passive: true });
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("touchstart", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [addChannelMenuOpen]);
+
   return (
     <div className="flex flex-col h-full min-h-0 bg-[#f8f9fa] overflow-hidden">
       <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
+      {addChannelMenuOpen &&
+        addMenuPos &&
+        createPortal(
+          <div
+            ref={addMenuRef}
+            className="fixed z-[9999] w-[280px] p-3 rounded-2xl bg-[#f8f9fa] border border-gray-200/90 shadow-xl shadow-gray-200/50"
+            style={{ top: addMenuPos.top, left: addMenuPos.left }}
+            role="dialog"
+            aria-label={isHe ? "הוסף ערוץ" : "Add channel"}
+          >
+            <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wider mb-3 px-0.5">
+              {isHe ? "הוסף ערוץ" : "Add channel"}
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              {ADDABLE_CHANNELS.map(({ id: addId, labelEn, labelHe, icon: addIcon }) => {
+                const isAdded = pinnedChannels.includes(addId);
+                return (
+                  <button
+                    key={addId}
+                    type="button"
+                    disabled={isAdded}
+                    onClick={() => {
+                      if (isAdded) return;
+                      setPinnedChannels((prev) => (prev.includes(addId) ? prev : [...prev, addId]));
+                      setActiveChannel(addId);
+                      setAddChannelMenuOpen(false);
+                    }}
+                    className={`flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded-xl border transition-all duration-200 ${
+                      isAdded
+                        ? "bg-gray-100/80 border-gray-200/60 cursor-not-allowed opacity-70"
+                        : "bg-white border-gray-200/80 hover:bg-white hover:border-[#008080]/30 hover:shadow-md hover:scale-[1.03] active:scale-[0.98]"
+                    }`}
+                    aria-label={isHe ? labelHe : labelEn}
+                    aria-disabled={isAdded}
+                  >
+                    <span className="relative flex items-center justify-center w-10 h-10 shrink-0 [&>svg]:w-10 [&>svg]:h-10 [&>img]:w-10 [&>img]:h-10">
+                      {addIcon}
+                      {isAdded && (
+                        <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-[#008080] flex items-center justify-center" aria-hidden>
+                          <CheckCheck className="w-2.5 h-2.5 text-white" strokeWidth={2.5} />
+                        </span>
+                      )}
+                    </span>
+                    <span className={`text-[11px] font-medium truncate w-full text-center ${isAdded ? "text-gray-400" : "text-gray-700"}`}>
+                      {isHe ? labelHe : labelEn}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            {ADDABLE_CHANNELS.every(({ id }) => pinnedChannels.includes(id)) && (
+              <p className="mt-2 pt-2 border-t border-gray-200/80 text-[11px] text-gray-500 text-center">
+                {isHe ? "כל הערוצים מתווספים" : "All channels added."}
+              </p>
+            )}
+          </div>,
+          document.body,
+        )}
       {!threadOnly && (
         <>
           {/* Row 1: Fixed tabs (Ollin Chat, Ollin Calls, Gmail) + pinned channels + Add (+) */}
-          <div className="flex-shrink-0 w-full bg-[#f8f9fa] rounded-t-xl overflow-hidden">
+          <div className="flex-shrink-0 w-full bg-[#f8f9fa] rounded-t-xl">
             <div className="flex items-center gap-1 overflow-x-auto overflow-y-hidden py-1.5 px-1.5 min-h-[2.5rem] scrollbar-hide">
               {[
                 ...FIXED_TABS,
@@ -302,6 +397,7 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
               <div className="relative flex-shrink-0 ml-0.5">
                 <button
                   type="button"
+                  ref={addButtonRef}
                   onClick={() => setAddChannelMenuOpen((o) => !o)}
                   className="flex items-center justify-center w-9 h-8 rounded-xl text-gray-500 bg-gray-100/80 hover:bg-gray-200/90 hover:text-[#008080] border border-gray-200/50 transition-colors"
                   aria-label={isHe ? "הוסף ערוץ" : "Add channel"}
@@ -309,33 +405,6 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
                 >
                   <Plus className="w-4 h-4" strokeWidth={2.5} />
                 </button>
-                {addChannelMenuOpen && (
-                  <>
-                    <div className="fixed inset-0 z-30" onClick={() => setAddChannelMenuOpen(false)} aria-hidden />
-                    <div className="absolute right-0 top-full mt-1 z-40 min-w-[200px] py-1 rounded-xl bg-white border border-gray-200 shadow-lg">
-                      {ADDABLE_CHANNELS.filter(({ id: addId }) => !pinnedChannels.includes(addId)).map(({ id: addId, labelEn, labelHe, icon: addIcon }) => (
-                        <button
-                          key={addId}
-                          type="button"
-                          onClick={() => {
-                            setPinnedChannels((prev) => (prev.includes(addId) ? prev : [...prev, addId]));
-                            setActiveChannel(addId);
-                            setAddChannelMenuOpen(false);
-                          }}
-                          className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-xs font-medium text-gray-700 hover:bg-[#008080]/10 hover:text-[#008080] transition-colors"
-                        >
-                          <span className="w-5 h-5 shrink-0 flex items-center justify-center [&>svg]:w-5 [&>svg]:h-5 [&>img]:w-5 [&>img]:h-5">
-                            {addIcon}
-                          </span>
-                          {isHe ? labelHe : labelEn}
-                        </button>
-                      ))}
-                      {ADDABLE_CHANNELS.every(({ id }) => pinnedChannels.includes(id)) && (
-                        <p className="px-3 py-2 text-[11px] text-gray-500">{isHe ? "כל הערוצים מתווספים" : "All channels added."}</p>
-                      )}
-                    </div>
-                  </>
-                )}
               </div>
             </div>
           </div>
