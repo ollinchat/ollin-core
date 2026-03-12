@@ -35,6 +35,8 @@ type DocumentCardProps = {
   effectiveStatus?: string;
   date: string;
   dueDate?: string;
+  /** Document title (subject) – shown prominently when provided */
+  title?: string;
   borderAccent?: "teal" | "amber" | "gold" | "slate";
   onView?: () => void;
   onSendToClient?: () => void;
@@ -57,6 +59,7 @@ export function DocumentCard({
   effectiveStatus,
   date,
   dueDate,
+  title: docTitle,
   borderAccent = "teal",
   onView,
   onSendToClient,
@@ -106,7 +109,10 @@ export function DocumentCard({
                 {badge}
               </span>
             </div>
-            <p className="font-semibold text-gray-900 mt-1">#{number}</p>
+            {docTitle != null && docTitle.trim() ? (
+              <p className="font-semibold text-gray-900 mt-1 truncate" title={docTitle}>{docTitle}</p>
+            ) : null}
+            <p className={`font-medium text-gray-700 ${docTitle != null && docTitle.trim() ? "text-xs mt-0.5" : "mt-1"}`}>#{number}</p>
             <p className="text-sm text-gray-600 truncate">{clientName}</p>
             <p className="text-sm font-medium text-gray-900 mt-0.5">
               {typeof total === "number" ? total.toFixed(2) : total}

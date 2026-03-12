@@ -45,7 +45,7 @@ type BillingContextType = {
   expenses: BillingExpense[];
   addExpense: (e: Omit<BillingExpense, "id" | "createdAt">) => BillingExpense | null;
   removeExpense: (id: string) => void;
-  createDraft: (client: BillingClient, items?: BillingLineItem[], notes?: string, title?: string) => BillingDocument | null;
+  createDraft: (client: BillingClient, items?: BillingLineItem[], notes?: string, title?: string, documentLanguage?: "he" | "en" | "bilingual") => BillingDocument | null;
   convertToQuote: (draftId: string) => BillingDocument | null;
   convertQuoteToInvoice: (quoteId: string) => BillingDocument | null;
   createInvoiceFromQuoteWithData: (quoteId: string, data: documentService.InvoiceFromSourceData) => BillingDocument | null;
@@ -344,7 +344,7 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
   );
 
   const createDraft = useCallback(
-    (client: BillingClient, items?: BillingLineItem[], notes?: string, title?: string) => {
+    (client: BillingClient, items?: BillingLineItem[], notes?: string, title?: string, documentLanguage?: "he" | "en" | "bilingual") => {
       if (!userId) return null;
       const doc = documentService.createDraft(
         userId,
@@ -356,7 +356,8 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
         client.taxId,
         items,
         notes,
-        title
+        title,
+        documentLanguage
       );
       refreshDocuments();
       return doc;
@@ -405,7 +406,7 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
   );
 
   const createDeliveryNote = useCallback(
-    (client: BillingClient, items?: BillingLineItem[], notes?: string, title?: string) => {
+    (client: BillingClient, items?: BillingLineItem[], notes?: string, title?: string, documentLanguage?: "he" | "en" | "bilingual") => {
       if (!userId) return null;
       const doc = documentService.createDeliveryNote(
         userId,
@@ -417,7 +418,8 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
         client.taxId,
         items,
         notes,
-        title
+        title,
+        documentLanguage
       );
       refreshDocuments();
       return doc;

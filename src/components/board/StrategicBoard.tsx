@@ -6,7 +6,6 @@ import { t } from "@/lib/translations";
 import { generateUUID } from "@/lib/uuid";
 import { PanelWrapper } from "@/components/dashboard/PanelWrapper";
 import { useBoard } from "@/contexts/BoardContext";
-import { useFolders } from "@/contexts/FoldersContext";
 import { useContacts } from "@/contexts/ContactsContext";
 import { useChecklists } from "@/contexts/ChecklistsContext";
 import { useProfile } from "@/contexts/ProfileContext";
@@ -33,12 +32,8 @@ import {
   MessageSquare,
   MessageCircleOff,
   Building2,
-  Archive,
-  StickyNote,
   Search,
   ChevronLeft,
-  LayoutGrid,
-  List,
   Mic,
   ImagePlus,
   Send,
@@ -50,20 +45,12 @@ import {
 } from "lucide-react";
 import { calculateTotalBalance, type OllinFinanceEntry } from "@/lib/finance-types";
 import type { TranslationKey } from "@/lib/translations";
-import type { TaskAttachment } from "@/lib/board-types";
+import type { BoardTask, TaskAttachment } from "@/lib/board-types";
 
-type MainCategory = "tasks" | "calendar" | "meetings" | "checklists" | "events" | "finances" | "folders";
+type MainCategory = "tasks" | "calendar" | "meetings" | "checklists" | "events";
 type TaskSubTab = "given" | "received";
 
-/** System folders: pinned, locked (no delete/rename/move). Content inside is fully manageable. */
-type SystemFolderId = "notes" | "calls" | "archive";
-const SYSTEM_FOLDERS: { id: SystemFolderId; labelEn: string; labelHe: string; icon: typeof StickyNote }[] = [
-  { id: "notes", labelEn: "Notes", labelHe: "הערות", icon: StickyNote },
-  { id: "calls", labelEn: "Calls", labelHe: "שיחות", icon: Phone },
-  { id: "archive", labelEn: "Archive", labelHe: "ארכיון", icon: Archive },
-];
-
-const MAIN_CATEGORY_IDS: MainCategory[] = ["tasks", "calendar", "meetings", "checklists", "events", "finances", "folders"];
+const MAIN_CATEGORY_IDS: MainCategory[] = ["tasks", "calendar", "meetings", "checklists", "events"];
 function isValidMainCategory(t: string | null | undefined): t is MainCategory {
   return t != null && MAIN_CATEGORY_IDS.includes(t as MainCategory);
 }
@@ -74,24 +61,48 @@ type StrategicBoardProps = {
   initialMainTab?: string | null;
 };
 
-/** Notes, Calls, Archive moved into Folders as system folders (pinned at top of sidebar). */
 const MAIN_CATEGORIES: { id: MainCategory; labelKey: TranslationKey; icon: typeof ListTodo }[] = [
   { id: "tasks", labelKey: "board.tasks", icon: ListTodo },
   { id: "calendar", labelKey: "board.calendar", icon: Calendar },
   { id: "meetings", labelKey: "board.meetings", icon: Users },
   { id: "checklists", labelKey: "board.checklists", icon: ClipboardList },
   { id: "events", labelKey: "board.events", icon: CalendarDays },
-  { id: "finances", labelKey: "board.finances", icon: Wallet },
-  { id: "folders", labelKey: "board.folders", icon: FolderOpen },
 ];
+
+/** Task date key for grouping: "today" | "yesterday" | ISO date string */
+function getTaskDateKey(task: BoardTask): string {
+  const ts = task.dueDate ?? task.createdAt;
+  const d = new Date(ts);
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const yesterdayStart = todayStart - 24 * 60 * 60 * 1000;
+  const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  if (dayStart === todayStart) return "today";
+  if (dayStart === yesterdayStart) return "yesterday";
+  return d.toISOString().slice(0, 10);
+}
+
+function getTaskDateLabel(key: string, locale: "en" | "he"): string {
+  if (key === "today") return locale === "he" ? "היום" : "Today";
+  if (key === "yesterday") return locale === "he" ? "אתמול" : "Yesterday";
+  const d = new Date(key);
+  return d.toLocaleDateString(locale === "he" ? "he-IL" : "en-GB", { day: "numeric", month: "short", year: d.getFullYear() !== new Date().getFullYear() ? "numeric" : undefined });
+}
+
+/** Order date keys: today first, yesterday, then chronological */
+function orderDateKeys(keys: string[]): string[] {
+  const rest = keys.filter((k) => k !== "today" && k !== "yesterday").sort();
+  const out: string[] = [];
+  if (keys.includes("today")) out.push("today");
+  if (keys.includes("yesterday")) out.push("yesterday");
+  return [...out, ...rest];
+}
 
 export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoardProps) {
   const [mainTab, setMainTab] = useState<MainCategory>(() => (isValidMainCategory(initialMainTab) ? initialMainTab : "tasks"));
   useEffect(() => {
     if (isValidMainCategory(initialMainTab)) setMainTab(initialMainTab);
   }, [initialMainTab]);
-  const [folderSearchQuery, setFolderSearchQuery] = useState("");
-  const [insideFolderId, setInsideFolderId] = useState<SystemFolderId | string | null>(null);
   const [taskSubTab, setTaskSubTab] = useState<TaskSubTab>("given");
   const [quickAddText, setQuickAddText] = useState("");
   const [quickAddDueDate, setQuickAddDueDate] = useState<string | null>(null);
@@ -101,9 +112,6 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
   const quickAddFileRef = useRef<HTMLInputElement>(null);
   const quickAddImageRef = useRef<HTMLInputElement>(null);
   const quickAddCameraRef = useRef<HTMLInputElement>(null);
-  const [createFolderModalOpen, setCreateFolderModalOpen] = useState(false);
-  const [modalFolderName, setModalFolderName] = useState("");
-  const [modalSharedWithIds, setModalSharedWithIds] = useState<string[]>([]);
   const [checklistSubTab, setChecklistSubTab] = useState<"given" | "received">("given");
   const [newChecklistModalOpen, setNewChecklistModalOpen] = useState(false);
   const [newChecklistTitle, setNewChecklistTitle] = useState("");
@@ -117,7 +125,6 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
   const [newChecklistAssignPickerOpen, setNewChecklistAssignPickerOpen] = useState(false);
   const [newChecklistAssignSearch, setNewChecklistAssignSearch] = useState("");
   const [meetingEventModal, setMeetingEventModal] = useState<"meeting" | "event" | null>(null);
-  const [folderViewMode, setFolderViewMode] = useState<"grid" | "list">("list");
 
   const {
     loading: boardLoading,
@@ -137,13 +144,45 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
 
   const activeGiven = given.filter((t) => !t.archived);
   const activeReceived = received.filter((t) => !t.archived);
+
+  const sortedGiven = React.useMemo(() => {
+    return [...activeGiven].sort((a, b) => {
+      if (a.done !== b.done) return a.done ? 1 : -1;
+      return (a.dueDate ?? a.createdAt) - (b.dueDate ?? b.createdAt);
+    });
+  }, [activeGiven]);
+  const sortedReceived = React.useMemo(() => {
+    return [...activeReceived].sort((a, b) => {
+      if (a.done !== b.done) return a.done ? 1 : -1;
+      return (a.dueDate ?? a.createdAt) - (b.dueDate ?? b.createdAt);
+    });
+  }, [activeReceived]);
+
+  const groupedGiven = React.useMemo(() => {
+    const map = new Map<string, BoardTask[]>();
+    for (const task of sortedGiven) {
+      const key = getTaskDateKey(task);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(task);
+    }
+    return orderDateKeys([...map.keys()]).map((key) => ({ key, label: getTaskDateLabel(key, locale), tasks: map.get(key)! }));
+  }, [sortedGiven, locale]);
+  const groupedReceived = React.useMemo(() => {
+    const map = new Map<string, BoardTask[]>();
+    for (const task of sortedReceived) {
+      const key = getTaskDateKey(task);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(task);
+    }
+    return orderDateKeys([...map.keys()]).map((key) => ({ key, label: getTaskDateLabel(key, locale), tasks: map.get(key)! }));
+  }, [sortedReceived, locale]);
+
   const activeMeetings = meetings.filter((m) => !m.archived);
   const activeEvents = events.filter((e) => !e.archived);
   const archivedGiven = given.filter((t) => t.archived);
   const archivedReceived = received.filter((t) => t.archived);
   const archivedMeetings = meetings.filter((m) => m.archived);
   const archivedEvents = events.filter((e) => e.archived);
-  const { userFolders, createFolder } = useFolders();
   const { contacts } = useContacts();
   const { profile } = useProfile();
   const { getChecklistsForView, addChecklist } = useChecklists();
@@ -215,21 +254,6 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
       })()
     : false;
 
-  const handleCreateFolderFromModal = () => {
-    const name = modalFolderName.trim();
-    if (!name) return;
-    createFolder(name);
-    setModalFolderName("");
-    setModalSharedWithIds([]);
-    setCreateFolderModalOpen(false);
-  };
-
-  const toggleModalShareContact = (contactId: string) => {
-    setModalSharedWithIds((prev) =>
-      prev.includes(contactId) ? prev.filter((id) => id !== contactId) : [...prev, contactId]
-    );
-  };
-
   const givenChecklists = viewChecklists.filter((c) => c.createdBy === currentUserId);
   const receivedChecklists = viewChecklists.filter((c) => c.assignedTo === currentUserId);
   const viewChecklistsFiltered = checklistSubTab === "given" ? givenChecklists : receivedChecklists;
@@ -266,18 +290,6 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
 
   const boardHeader = (
     <>
-      <div className="px-3 py-2 border-b border-[var(--clean-border)] bg-white">
-        <div className="flex items-center gap-2 max-w-md mx-auto pl-3 pr-3 py-2.5 min-h-[40px] bg-white border border-[var(--clean-border)]">
-          <Search className="w-4 h-4 shrink-0 text-[var(--clean-text-secondary)]" strokeWidth={1.75} />
-          <input
-            type="text"
-            value={folderSearchQuery}
-            onChange={(e) => setFolderSearchQuery(e.target.value)}
-            placeholder={locale === "he" ? "חיפוש בלוח..." : "Search board..."}
-            className="flex-1 min-w-0 bg-transparent text-[13px] font-medium text-[var(--clean-text)] placeholder-[var(--clean-text-secondary)] outline-none tracking-wide"
-          />
-        </div>
-      </div>
       <div className="flex gap-0 border-b border-[var(--clean-border)] bg-white overflow-x-auto scrollbar-hide">
         {MAIN_CATEGORIES.filter((c) => c.id !== "checklists").map(({ id, labelKey, icon: Icon }) => (
           <button
@@ -486,9 +498,13 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                   <button
                     type="button"
                     onClick={() => setQuickAddNoComments((c) => !c)}
-                    className={`p-1.5 transition-all duration-150 ${quickAddNoComments ? "text-[var(--clean-accent)]" : "text-[var(--clean-text-secondary)] hover:text-[var(--clean-accent)]"}`}
-                    title={locale === "he" ? "ללא תגובות" : "No comments"}
-                    aria-label="No comments"
+                    className={`p-1.5 transition-all duration-150 rounded ${
+                      quickAddNoComments
+                        ? "bg-red-500 text-white ring-2 ring-red-400"
+                        : "text-[var(--clean-text-secondary)] hover:text-[var(--clean-accent)]"
+                    }`}
+                    title={locale === "he" ? "ביטול הודעות — תגובות נעולות" : "Disable comments — comments locked"}
+                    aria-label={locale === "he" ? "ביטול הודעות" : "Disable comments"}
                     aria-pressed={quickAddNoComments}
                   >
                     <MessageCircleOff className="w-4 h-4" />
@@ -505,31 +521,43 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
               </div>
             </div>
 
-            <div className="space-y-3">
-              {taskSubTab === "given" &&
-                activeGiven.map((task) => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    kind="given"
-                    contacts={contacts}
-                  />
-                ))}
-              {taskSubTab === "received" &&
-                activeReceived.map((task) => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    kind="received"
-                    contacts={contacts}
-                  />
-                ))}
+            <div className="space-y-4">
               {taskSubTab === "given" && activeGiven.length === 0 && (
                 <p className="text-[13px] text-[var(--clean-text-secondary)] py-4">{locale === "he" ? "אין משימות שנתתי." : "No tasks given."}</p>
               )}
               {taskSubTab === "received" && activeReceived.length === 0 && (
                 <p className="text-[13px] text-[var(--clean-text-secondary)] py-4">{locale === "he" ? "אין משימות שקיבלתי." : "No tasks received."}</p>
               )}
+              {taskSubTab === "given" &&
+                groupedGiven.map(({ key: dateKey, label, tasks }) => (
+                  <div key={dateKey} className="space-y-2">
+                    <div className="sticky top-0 z-10 py-1.5 px-1 bg-white border-b border-[var(--clean-border)]">
+                      <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--clean-text-secondary)]">
+                        {label}
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      {tasks.map((task) => (
+                        <TaskCard key={task.id} task={task} kind="given" contacts={contacts} />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              {taskSubTab === "received" &&
+                groupedReceived.map(({ key: dateKey, label, tasks }) => (
+                  <div key={dateKey} className="space-y-2">
+                    <div className="sticky top-0 z-10 py-1.5 px-1 bg-white border-b border-[var(--clean-border)]">
+                      <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--clean-text-secondary)]">
+                        {label}
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      {tasks.map((task) => (
+                        <TaskCard key={task.id} task={task} kind="received" contacts={contacts} />
+                      ))}
+                    </div>
+                  </div>
+                ))}
             </div>
 
             <div className="mt-4">
@@ -930,243 +958,6 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
           </div>
         )}
 
-        {mainTab === "finances" && (
-          <div className="space-y-3">
-            <Link
-              href="/dashboard/finances/documents"
-              className="flex items-center gap-3 w-full px-4 py-3 rounded-sm bg-white border border-gray-100 text-left hover:bg-gray-50/80"
-            >
-              <Wallet className="w-5 h-5 text-[#008080] shrink-0" />
-              <span className="font-medium text-gray-900">{locale === "he" ? "חשבוניות" : "Invoices"}</span>
-            </Link>
-            <Link
-              href="/dashboard/finances/clients"
-              className="flex items-center gap-3 w-full px-4 py-3 rounded-sm bg-white border border-gray-100 text-left hover:bg-gray-50/80"
-            >
-              <Users className="w-5 h-5 text-[#008080] shrink-0" />
-              <span className="font-medium text-gray-900">{locale === "he" ? "לקוחות / ח.פ" : "Clients / H.P"}</span>
-            </Link>
-            <Link
-              href="/dashboard/finances/company-profile"
-              className="flex items-center gap-3 w-full px-4 py-3 rounded-sm bg-white border border-gray-100 text-left hover:bg-gray-50/80"
-            >
-              <Building2 className="w-5 h-5 text-[#008080] shrink-0" />
-              <span className="font-medium text-gray-900">{locale === "he" ? "פרופיל חברה" : "Company Profile"}</span>
-            </Link>
-          </div>
-        )}
-
-        {mainTab === "folders" && (
-          <div className="flex-1 min-h-0 overflow-auto flex flex-col">
-            {insideFolderId === null ? (
-              /* Folders: search bar + New Folder button; system first (pinned, locked). List view with slate icons. */
-              <>
-                <div className="flex items-center gap-2 p-3 border-b border-gray-100 bg-white">
-                  <div className="flex-1 min-w-0 flex items-center gap-2 bg-white border border-gray-100 rounded-sm pl-3 pr-3 py-2.5 min-h-[40px]">
-                    <Search className="w-4 h-4 text-gray-400 shrink-0" strokeWidth={2} />
-                    <input
-                      type="text"
-                      value={folderSearchQuery}
-                      onChange={(e) => setFolderSearchQuery(e.target.value)}
-                      placeholder={locale === "he" ? "חיפוש תיקיות..." : "Search folders..."}
-                      className="flex-1 min-w-0 bg-transparent text-gray-900 placeholder-gray-500 text-sm outline-none"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setCreateFolderModalOpen(true)}
-                    className="flex items-center justify-center w-10 h-10 rounded-sm bg-[#008080] text-white hover:bg-[#006666] transition-all duration-150 shrink-0"
-                    title={locale === "he" ? "תיקייה חדשה" : "New Folder"}
-                    aria-label={locale === "he" ? "תיקייה חדשה" : "New Folder"}
-                  >
-                    <Plus className="w-5 h-5" strokeWidth={2.5} />
-                  </button>
-                  <div className="flex items-center rounded-sm border border-gray-100 bg-white p-0.5 shrink-0" role="group" aria-label={locale === "he" ? "מצב תצוגה" : "View mode"}>
-                    <button
-                      type="button"
-                      onClick={() => setFolderViewMode("grid")}
-                      className={`p-2 rounded-sm transition-all duration-150 ${folderViewMode === "grid" ? "bg-slate-600 text-white" : "text-gray-500 hover:bg-gray-100"}`}
-                      title={locale === "he" ? "תצוגת רשת" : "Grid view"}
-                      aria-pressed={folderViewMode === "grid"}
-                    >
-                      <LayoutGrid className="w-4 h-4" strokeWidth={2} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFolderViewMode("list")}
-                      className={`p-2 rounded-sm transition-all duration-150 ${folderViewMode === "list" ? "bg-slate-600 text-white" : "text-gray-500 hover:bg-gray-100"}`}
-                      title={locale === "he" ? "תצוגת רשימה" : "List view"}
-                      aria-pressed={folderViewMode === "list"}
-                    >
-                      <List className="w-4 h-4" strokeWidth={2} />
-                    </button>
-                  </div>
-                </div>
-                {folderViewMode === "grid" ? (
-                  <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                    {SYSTEM_FOLDERS.filter((f) => !folderSearchQuery.trim() || (locale === "he" ? f.labelHe : f.labelEn).toLowerCase().includes(folderSearchQuery.trim().toLowerCase())).map(({ id, labelEn, labelHe, icon: Icon }) => (
-                      <button
-                        key={id}
-                        type="button"
-                        onClick={() => setInsideFolderId(id)}
-                        className="flex flex-col items-center justify-center p-4 rounded-sm bg-white hover:bg-gray-50 transition-all duration-150 border border-gray-100"
-                        title={locale === "he" ? "תיקיית מערכת (נעולה)" : "System folder (locked)"}
-                      >
-                        <div className="w-12 h-12 rounded-sm bg-slate-600 flex items-center justify-center mb-2">
-                          <Icon className="w-6 h-6 text-white" strokeWidth={2} />
-                        </div>
-                        <span className="text-xs font-medium text-gray-800 truncate w-full text-center">{locale === "he" ? labelHe : labelEn}</span>
-                      </button>
-                    ))}
-                    {userFolders.filter((f) => !folderSearchQuery.trim() || f.name.toLowerCase().includes(folderSearchQuery.trim().toLowerCase())).map((f) => (
-                      <button
-                        key={f.id}
-                        type="button"
-                        onClick={() => setInsideFolderId(f.id)}
-                        className="flex flex-col items-center justify-center p-4 rounded-sm bg-white hover:bg-gray-50 transition-all duration-150 border border-gray-100"
-                      >
-                        <div className="w-12 h-12 rounded-sm bg-slate-600 flex items-center justify-center mb-2">
-                          <FolderOpen className="w-6 h-6 text-white" strokeWidth={2} />
-                        </div>
-                        <span className="text-xs font-medium text-gray-800 truncate w-full text-center">{f.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <ul className="flex-1 min-h-0 overflow-auto divide-y divide-gray-100">
-                    {SYSTEM_FOLDERS.filter((f) => !folderSearchQuery.trim() || (locale === "he" ? f.labelHe : f.labelEn).toLowerCase().includes(folderSearchQuery.trim().toLowerCase())).map(({ id, labelEn, labelHe, icon: Icon }) => (
-                      <li key={id}>
-                        <button
-                          type="button"
-                          onClick={() => setInsideFolderId(id)}
-                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left"
-                          title={locale === "he" ? "תיקיית מערכת (נעולה)" : "System folder (locked)"}
-                        >
-                          <div className="w-9 h-9 rounded-sm bg-slate-600 flex items-center justify-center shrink-0">
-                            <Icon className="w-4 h-4 text-white" strokeWidth={2} />
-                          </div>
-                          <span className="flex-1 min-w-0 text-sm font-medium text-gray-900 truncate">{locale === "he" ? labelHe : labelEn}</span>
-                          <span className="text-xs text-gray-400 shrink-0">—</span>
-                        </button>
-                      </li>
-                    ))}
-                    {userFolders.filter((f) => !folderSearchQuery.trim() || f.name.toLowerCase().includes(folderSearchQuery.trim().toLowerCase())).map((f) => (
-                      <li key={f.id}>
-                        <button
-                          type="button"
-                          onClick={() => setInsideFolderId(f.id)}
-                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left"
-                        >
-                          <div className="w-9 h-9 rounded-sm bg-slate-600 flex items-center justify-center shrink-0">
-                            <FolderOpen className="w-4 h-4 text-white" strokeWidth={2} />
-                          </div>
-                          <span className="flex-1 min-w-0 text-sm font-medium text-gray-900 truncate">{f.name}</span>
-                          <span className="text-xs text-gray-500 shrink-0">
-                            {new Date(f.createdAt).toLocaleDateString(locale === "he" ? "he-IL" : "en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </>
-            ) : (
-              /* Inside folder: full-page content + Back button */
-              <>
-                <div className="flex-shrink-0 flex items-center gap-2 px-3 py-2 border-b border-gray-200 bg-white">
-                  <button
-                    type="button"
-                    onClick={() => setInsideFolderId(null)}
-                    className="p-2 rounded-sm text-slate-500 hover:text-gray-900 hover:bg-gray-50 flex items-center gap-1 transition-all duration-150"
-                    aria-label={locale === "he" ? "חזרה" : "Back"}
-                  >
-                    <ChevronLeft className="w-5 h-5" />
-                    <span className="text-sm font-medium">{locale === "he" ? "חזרה" : "Back"}</span>
-                  </button>
-                </div>
-                <div className="flex-1 min-h-0 overflow-auto p-3">
-                  {insideFolderId === "notes" && (
-                    <div className="min-h-[320px]">
-                      <NotebookPanel locale={locale} />
-                    </div>
-                  )}
-                  {insideFolderId === "calls" && (
-                    <div className="space-y-3">
-                      <p className="text-xs text-gray-600">{locale === "he" ? "שיחות והודעות — מרכז תקשורת." : "Calls and messages — communication hub."}</p>
-                      <Link href="/dashboard/messages" className="inline-flex items-center gap-2 px-3 py-2 rounded-sm bg-[#008080] text-white text-xs font-bold">
-                        <MessageSquare className="w-3.5 h-3.5" />
-                        {locale === "he" ? "הודעות" : "Messages"}
-                      </Link>
-                    </div>
-                  )}
-                  {insideFolderId === "archive" && (
-                    <div className="space-y-4">
-                      <p className="text-xs text-gray-600">{locale === "he" ? "פריטים בארכיון. לחץ 'החזר' להצגה בלוח." : "Archived items. Click Restore to show on board again."}</p>
-                      {archivedGiven.length > 0 && (
-                        <section>
-                          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">{t(locale, "board.tasksGiven")}</h3>
-                          <ul className="space-y-2">
-                            {archivedGiven.map((task) => (
-                              <li key={task.id} className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-sm bg-white border border-gray-100">
-                                <span className="text-sm font-semibold text-gray-900 truncate">{task.title || "—"}</span>
-                                <button type="button" onClick={() => unarchiveGivenTask(task.id)} className="px-2.5 py-1.5 rounded-sm text-xs font-semibold bg-[#008080] text-white hover:bg-[#006666]">{locale === "he" ? "החזר" : "Restore"}</button>
-                              </li>
-                            ))}
-                          </ul>
-                        </section>
-                      )}
-                      {archivedReceived.length > 0 && (
-                        <section>
-                          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">{t(locale, "board.tasksReceived")}</h3>
-                          <ul className="space-y-2">
-                            {archivedReceived.map((task) => (
-                              <li key={task.id} className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-sm bg-white border border-gray-100">
-                                <span className="text-sm font-semibold text-gray-900 truncate">{task.title || "—"}</span>
-                                <button type="button" onClick={() => unarchiveReceivedTask(task.id)} className="px-2.5 py-1.5 rounded-sm text-xs font-semibold bg-[#008080] text-white hover:bg-[#006666]">{locale === "he" ? "החזר" : "Restore"}</button>
-                              </li>
-                            ))}
-                          </ul>
-                        </section>
-                      )}
-                      {archivedMeetings.length > 0 && (
-                        <section>
-                          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">{t(locale, "board.meetings")}</h3>
-                          <ul className="space-y-2">
-                            {archivedMeetings.map((m) => (
-                              <li key={m.id} className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-sm bg-white border border-gray-100">
-                                <span className="text-sm font-semibold text-gray-900 truncate">{m.title}</span>
-                                <button type="button" onClick={() => unarchiveMeeting(m.id)} className="px-2.5 py-1.5 rounded-sm text-xs font-semibold bg-[#008080] text-white hover:bg-[#006666]">{locale === "he" ? "החזר" : "Restore"}</button>
-                              </li>
-                            ))}
-                          </ul>
-                        </section>
-                      )}
-                      {archivedEvents.length > 0 && (
-                        <section>
-                          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">{t(locale, "board.events")}</h3>
-                          <ul className="space-y-2">
-                            {archivedEvents.map((e) => (
-                              <li key={e.id} className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-sm bg-white border border-gray-100">
-                                <span className="text-sm font-semibold text-gray-900 truncate">{e.title}</span>
-                                <button type="button" onClick={() => unarchiveEvent(e.id)} className="px-2.5 py-1.5 rounded-sm text-xs font-semibold bg-[#008080] text-white hover:bg-[#006666]">{locale === "he" ? "החזר" : "Restore"}</button>
-                              </li>
-                            ))}
-                          </ul>
-                        </section>
-                      )}
-                      {archivedGiven.length === 0 && archivedReceived.length === 0 && archivedMeetings.length === 0 && archivedEvents.length === 0 && (
-                        <p className="text-sm text-gray-500 py-4">{locale === "he" ? "אין פריטים בארכיון." : "No archived items."}</p>
-                      )}
-                    </div>
-                  )}
-                  {insideFolderId && insideFolderId !== "notes" && insideFolderId !== "calls" && insideFolderId !== "archive" && (
-                    <div className="py-4 text-sm text-gray-500">{locale === "he" ? "תוכן תיקייה" : "Folder content"}</div>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-        )}
       </div>
       {meetingEventModal && (
         <MeetingEventFormModal
@@ -1181,75 +972,6 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
         />
       )}
 
-      {/* Create Folder Modal */}
-      {createFolderModalOpen && (
-        <>
-          <div className="fixed inset-0 z-40 bg-black/20" aria-hidden onClick={() => setCreateFolderModalOpen(false)} />
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div
-              className="clean-modal w-full max-w-md overflow-hidden bg-white"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="px-5 py-4 border-b border-[var(--clean-border)]">
-                <h2 className="text-lg font-semibold text-[var(--clean-text)] tracking-wide">{locale === "he" ? "תיקייה חדשה" : "New Folder"}</h2>
-              </div>
-              <div className="p-5 space-y-4">
-                <div>
-                  <label className="block text-[13px] font-medium text-[var(--clean-text)] mb-1.5">{locale === "he" ? "שם תיקייה" : "Folder name"}</label>
-                  <input
-                    type="text"
-                    value={modalFolderName}
-                    onChange={(e) => setModalFolderName(e.target.value)}
-                    placeholder={locale === "he" ? "הזן שם תיקייה" : "Enter folder name"}
-                    className="w-full px-4 py-2.5 border border-[var(--clean-border)] bg-white text-[var(--clean-text)] placeholder-[var(--clean-text-secondary)] text-[13px] font-medium focus:border-[var(--clean-accent)] outline-none"
-                    autoFocus
-                  />
-                </div>
-                <div>
-                  <label className="block text-[13px] font-medium text-[var(--clean-text)] mb-1.5">{locale === "he" ? "שתף עם..." : "Share with..."}</label>
-                  <div className="max-h-32 overflow-y-auto border border-[var(--clean-border)] bg-white p-2 space-y-1">
-                    {contacts.length === 0 ? (
-                      <p className="text-xs text-[var(--clean-text-secondary)] py-2 px-2">{locale === "he" ? "אין אנשי קשר. הוסף אנשי קשר להזמנה." : "No contacts. Add contacts to invite."}</p>
-                    ) : (
-                      contacts.map((c) => (
-                        <label
-                          key={c.id}
-                          className="flex items-center gap-2 py-2 px-2 hover:bg-[var(--clean-border)] cursor-pointer"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={modalSharedWithIds.includes(c.id)}
-                            onChange={() => toggleModalShareContact(c.id)}
-                            className="border-[var(--clean-border)] text-[var(--clean-accent)] focus:ring-0 w-4 h-4"
-                          />
-                          <span className="text-[13px] font-medium text-[var(--clean-text)] truncate">{c.name || c.email || c.id}</span>
-                        </label>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </div>
-              <div className="px-5 py-4 border-t border-[var(--clean-border)] flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setCreateFolderModalOpen(false)}
-                  className="px-4 py-2.5 text-[13px] font-medium text-[var(--clean-text-secondary)] hover:text-[var(--clean-text)] border border-[var(--clean-border)] hover:bg-[var(--clean-border)]"
-                >
-                  {locale === "he" ? "ביטול" : "Cancel"}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleCreateFolderFromModal}
-                  disabled={!modalFolderName.trim()}
-                  className="px-4 py-2.5 bg-[var(--clean-accent)] text-white text-[13px] font-medium hover:bg-[var(--clean-accent-hover)] disabled:opacity-50 disabled:pointer-events-none"
-                >
-                  {locale === "he" ? "צור" : "Create"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
     </PanelWrapper>
   );
 }

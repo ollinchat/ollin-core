@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import type { Contact } from "@/contexts/ContactsContext";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Search } from "lucide-react";
 
 export type InternalUser = {
   id: string;
@@ -42,6 +42,18 @@ export function UserSelector({
   disabled,
 }: UserSelectorProps) {
   const [open, setOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredUsers = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return users;
+    return users.filter(
+      (u) =>
+        (u.name || "").toLowerCase().includes(q) ||
+        (u.email || "").toLowerCase().includes(q) ||
+        (u.userId || "").toLowerCase().includes(q)
+    );
+  }, [users, searchQuery]);
 
   const selectedUser = value ? users.find((u) => u.userId === value) : null;
   const selectedUsers = multiple ? users.filter((u) => multipleValue.includes(u.userId)) : [];
@@ -97,38 +109,59 @@ export function UserSelector({
       </button>
       {open && (
         <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} aria-hidden />
-          <div className="absolute top-full left-0 mt-1 z-20 min-w-[180px] rounded-sm border border-gray-200 bg-white shadow-lg py-1 max-h-60 overflow-auto">
-            {users.length === 0 ? (
-              <p className="px-3 py-2 text-xs text-gray-500">{locale === "he" ? "הוסף אנשי קשר עם מזהה Ollin" : "Add contacts with Ollin ID"}</p>
-            ) : (
-              users.map((u) => {
-                const selected = multiple ? multipleValue.includes(u.userId) : value === u.userId;
-                return (
-                  <button
-                    key={u.userId}
-                    type="button"
-                    onClick={() => {
-                      if (multiple && onMultipleChange) toggleMulti(u.userId);
-                      else {
-                        onChange(u.userId);
-                        setOpen(false);
-                      }
-                    }}
-                    className={`w-full flex items-center gap-2 px-3 py-2 text-left rounded-none border-0 border-b border-gray-100 last:border-b-0 hover:bg-[#008080]/10 ${
-                      selected ? "bg-[#008080]/10 text-[#006666]" : "text-gray-900"
-                    }`}
-                  >
-                    <UserAvatar name={u.name} email={u.email} imageUrl={u.avatar} size="sm" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate">{u.name}</p>
-                      {u.role && <p className="text-[10px] text-gray-500">{u.role}</p>}
-                    </div>
-                    {multiple && selected && <span className="text-[#008080] text-xs">✓</span>}
-                  </button>
-                );
-              })
-            )}
+          <div className="fixed inset-0 z-10" onClick={() => { setOpen(false); setSearchQuery(""); }} aria-hidden />
+          <div className="absolute top-full left-0 mt-1 z-20 min-w-[220px] rounded-sm border border-gray-200 bg-white shadow-lg overflow-hidden">
+            <div className="p-2 border-b border-gray-100 bg-gray-50/50">
+              <div className="flex items-center gap-2 px-2 py-1.5 bg-white border border-gray-200 rounded-sm">
+                <Search className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={locale === "he" ? "חיפוש משתמש..." : "Search users..."}
+                  className="flex-1 min-w-0 text-sm outline-none placeholder:text-gray-400"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <div className="py-1 max-h-60 overflow-auto">
+              {filteredUsers.length === 0 ? (
+                <p className="px-3 py-2 text-xs text-gray-500">
+                  {searchQuery.trim() ? (locale === "he" ? "לא נמצאו תוצאות" : "No matches") : (locale === "he" ? "הוסף אנשי קשר עם מזהה Ollin" : "Add contacts with Ollin ID")}
+                </p>
+              ) : (
+                filteredUsers.map((u) => {
+                  const selected = multiple ? multipleValue.includes(u.userId) : value === u.userId;
+                  return (
+                    <button
+                      key={u.userId}
+                      type="button"
+                      onClick={() => {
+                        if (multiple && onMultipleChange) toggleMulti(u.userId);
+                        else {
+                          onChange(u.userId);
+                          setOpen(false);
+                        }
+                      }}
+                      className={`w-full flex items-center gap-2 px-3 py-2 text-left rounded-none border-0 border-b border-gray-100 last:border-b-0 hover:bg-[#008080]/10 ${
+                        selected ? "bg-[#008080]/10 text-[#006666]" : "text-gray-900"
+                      }`}
+                    >
+                      {multiple && (
+                        <span className="flex-shrink-0 w-4 h-4 flex items-center justify-center border border-gray-300 rounded-sm">
+                          {selected && <span className="text-[#008080] text-xs font-bold">✓</span>}
+                        </span>
+                      )}
+                      <UserAvatar name={u.name} email={u.email} imageUrl={u.avatar} size="sm" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate">{u.name}</p>
+                        {u.role && <p className="text-[10px] text-gray-500">{u.role}</p>}
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
           </div>
         </>
       )}

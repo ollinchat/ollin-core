@@ -23,7 +23,8 @@ function DashboardPageInner() {
   const { profile } = useProfile();
   const searchParams = useSearchParams();
   const cardSlug = profile?.username ? slugFromUsername(profile.username) : "card";
-  const paymentsTabFromUrl = searchParams.get("paymentsTab") as "overview" | "payments" | "finance" | "invoices" | null;
+  const paymentsTabRaw = searchParams.get("paymentsTab");
+  const paymentsTabFromUrl = (paymentsTabRaw === "finance" ? "invoices" : paymentsTabRaw) as "overview" | "payments" | "invoices" | null;
   const [panelIndex, setPanelIndex] = useState(2);
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);

@@ -1,15 +1,15 @@
 "use client";
 
 import React, { useState, useRef, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useLocale } from "@/contexts/LocaleContext";
 import { useBills } from "@/contexts/BillsContext";
 import { useBoard } from "@/contexts/BoardContext";
 import { useArchitect } from "@/contexts/ArchitectContext";
 import type { BillCategory } from "@/contexts/BillsContext";
 import { parseBillFromFile, type BillExtraction } from "@/lib/bill-parser";
-import { Wallet, Plus, Image as ImageIcon, Calendar, Sparkles, ListTodo, Check, X, BarChart3, Receipt, FileText } from "lucide-react";
+import { Wallet, Plus, Image as ImageIcon, Calendar, Sparkles, ListTodo, Check, X, BarChart3, FileText } from "lucide-react";
 import { PanelWrapper } from "@/components/dashboard/PanelWrapper";
-import { FinanceTabContent } from "@/components/dashboard/FinanceTabContent";
 
 const CATEGORIES: { value: BillCategory; labelEn: string; labelHe: string }[] = [
   { value: "electricity", labelEn: "Electricity", labelHe: "חשמל" },
@@ -20,7 +20,7 @@ const CATEGORIES: { value: BillCategory; labelEn: string; labelHe: string }[] = 
   { value: "other", labelEn: "Other", labelHe: "אחר" },
 ];
 
-export type PaymentsTabId = "overview" | "payments" | "finance" | "invoices";
+export type PaymentsTabId = "overview" | "payments" | "invoices";
 
 type PaymentsPanelProps = {
   onOpenBoard?: () => void;
@@ -28,6 +28,7 @@ type PaymentsPanelProps = {
 };
 
 export function PaymentsPanel({ onOpenBoard, initialTab }: PaymentsPanelProps) {
+  const router = useRouter();
   const { locale } = useLocale();
   const { bills, addBill, updateBill, removeBill } = useBills();
   const { addGivenTask } = useBoard();
@@ -50,6 +51,10 @@ export function PaymentsPanel({ onOpenBoard, initialTab }: PaymentsPanelProps) {
   useEffect(() => {
     if (initialTab) setActiveTab(initialTab);
   }, [initialTab]);
+
+  useEffect(() => {
+    if (activeTab === "invoices") router.push("/dashboard/finances/documents");
+  }, [activeTab, router]);
 
   const isHe = locale === "he";
 
@@ -177,7 +182,6 @@ export function PaymentsPanel({ onOpenBoard, initialTab }: PaymentsPanelProps) {
   const tabLabels: { id: PaymentsTabId; labelEn: string; labelHe: string }[] = [
     { id: "overview", labelEn: "Overview", labelHe: "סקירה" },
     { id: "payments", labelEn: "Payments", labelHe: "תשלומים" },
-    { id: "finance", labelEn: "Finance", labelHe: "כספים" },
     { id: "invoices", labelEn: "Invoices", labelHe: "חשבוניות" },
   ];
 
@@ -204,7 +208,13 @@ export function PaymentsPanel({ onOpenBoard, initialTab }: PaymentsPanelProps) {
           <button
             key={id}
             type="button"
-            onClick={() => setActiveTab(id)}
+            onClick={() => {
+              if (id === "invoices") {
+                router.push("/dashboard/finances/documents");
+                return;
+              }
+              setActiveTab(id);
+            }}
             className={`flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-medium whitespace-nowrap transition-all border-b-2 -mb-px ${
               activeTab === id
                 ? "border-[var(--clean-accent)] text-[var(--clean-accent)]"
@@ -213,7 +223,6 @@ export function PaymentsPanel({ onOpenBoard, initialTab }: PaymentsPanelProps) {
           >
             {id === "overview" && <BarChart3 className="w-3.5 h-3.5" strokeWidth={1.75} />}
             {id === "payments" && <Wallet className="w-3.5 h-3.5" strokeWidth={1.75} />}
-            {id === "finance" && <Receipt className="w-3.5 h-3.5" strokeWidth={1.75} />}
             {id === "invoices" && <FileText className="w-3.5 h-3.5" strokeWidth={1.75} />}
             {isHe ? labelHe : labelEn}
           </button>
@@ -232,7 +241,7 @@ export function PaymentsPanel({ onOpenBoard, initialTab }: PaymentsPanelProps) {
             <p className="text-xs text-[var(--clean-text-secondary)] mt-1">{isHe ? "חשבונות ממתינים" : "Pending bills"}</p>
           </div>
           <p className="text-[13px] text-[var(--clean-text-secondary)]">
-            {isHe ? "עבור ל'תשלומים' כדי לראות רשימת חשבונות, או ל'כספים' לסיכום פיננסי." : "Go to Payments for the bills list, or Finance for financial summary."}
+            {isHe ? "עבור ל'תשלומים' כדי לראות רשימת חשבונות, או ל'חשבוניות' לניהול מסמכים." : "Go to Payments for the bills list, or Invoices for document management."}
           </p>
         </div>
       )}
@@ -400,11 +409,9 @@ export function PaymentsPanel({ onOpenBoard, initialTab }: PaymentsPanelProps) {
         </>
       )}
 
-      {activeTab === "finance" && <FinanceTabContent />}
-
       {activeTab === "invoices" && (
         <div className="flex-1 min-h-0 overflow-y-auto p-4 bg-white flex items-center justify-center">
-          <p className="text-[13px] text-[var(--clean-text-secondary)]">{isHe ? "חשבוניות — בקרוב" : "Invoices — Coming soon"}</p>
+          <p className="text-[13px] text-[var(--clean-text-secondary)]">{isHe ? "מעבר למסמכים…" : "Redirecting to Documents…"}</p>
         </div>
       )}
     </PanelWrapper>

@@ -173,6 +173,8 @@ function pdfLabels(lang: PdfLang): {
 
 /**
  * Generate PDF blob for the document. Computes content hash and adds signature badge in footer.
+ * Uses the same data as the A4 UI Preview (WYSIWYG): doc must include id, number, type, client*,
+ * items (with discountPct), subtotal, vatRate, vatAmount, total, date, title, notes, documentLanguage.
  * Returns { blob, contentHash } for storing on document.
  */
 export async function generateDocumentPdf(

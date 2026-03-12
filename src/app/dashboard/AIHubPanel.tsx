@@ -415,7 +415,7 @@ export type AIHubPanelHandle = { openTool: (action: HubToolAction) => void };
 
 const ACTION_GRID_ITEMS: { key: string; labelEn: string; labelHe: string; icon: typeof MessageSquare; href?: string }[] = [
   { key: "notebook", labelEn: "Notebook", labelHe: "מחברת", icon: MessageSquare },
-  { key: "finance", labelEn: "Finance", labelHe: "כספים", icon: ShoppingBag },
+  { key: "payments", labelEn: "Payments", labelHe: "תשלומים", icon: ShoppingBag, href: "/dashboard?panel=0" },
   { key: "tasks", labelEn: "Tasks", labelHe: "משימות", icon: BarChart3 },
   { key: "profile", labelEn: "Profile", labelHe: "פרופיל", icon: Globe },
 ];
@@ -513,7 +513,7 @@ const AIHubPanelInner = forwardRef<AIHubPanelHandle, { locale: "en" | "he"; pane
             animate={{ opacity: 1, y: 0 }}
             className="grid grid-cols-2 gap-3 w-full max-w-[280px] mb-6"
           >
-            {ACTION_GRID_ITEMS.map(({ key, labelEn, labelHe, icon: Icon }, idx) => (
+            {ACTION_GRID_ITEMS.map(({ key, labelEn, labelHe, icon: Icon, href }, idx) => (
               <motion.div
                 key={key}
                 initial={{ opacity: 0, scale: 0.95 }}
@@ -521,7 +521,7 @@ const AIHubPanelInner = forwardRef<AIHubPanelHandle, { locale: "en" | "he"; pane
                 transition={{ delay: idx * 0.05 }}
               >
                 <Link
-                  href={key === "finance" ? "/dashboard?panel=0&paymentsTab=finance" : key === "profile" ? "/profile" : "/dashboard"}
+                  href={href ?? (key === "profile" ? "/profile" : "/dashboard")}
                   className="flex flex-col items-center justify-center gap-2 rounded-md border border-[#008080]/30 bg-white py-5 px-4 text-gray-700 hover:bg-[#008080]/5 hover:border-[#008080]/50 transition-colors"
                 >
                   <Icon className="w-6 h-6 text-[#008080]" />

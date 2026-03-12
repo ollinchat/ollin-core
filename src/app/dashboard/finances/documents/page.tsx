@@ -75,6 +75,9 @@ function companyDisplayName(profile: { name?: string; nameEn?: string; nameHe?: 
 }
 
 const TEAL = "#008080";
+/** A4 at 72dpi for PDF/preview consistency (WYSIWYG). */
+const A4_WIDTH_PX = 595;
+const A4_HEIGHT_PX = 842;
 
 type TabId = "quotes" | "invoices" | "receipts" | "delivery_notes" | "cancellations" | "expenses";
 type CreateModalType = "quote" | "invoice" | "receipt" | "receipt_from_invoice" | "invoice_from_source" | "delivery_note" | "credit_note" | "negative_receipt" | "expense";
@@ -259,9 +262,9 @@ function UnifiedDocumentPreview({
       className={`relative bg-white overflow-hidden ${compact ? "shadow-md max-w-[420px]" : "shadow-lg border border-gray-200"} ${scale}`}
       style={{
         fontFamily: "Inter, var(--font-sans), ui-sans-serif, system-ui, sans-serif",
-        width: compact ? undefined : 595,
-        height: compact ? undefined : 842,
-        minHeight: compact ? undefined : 842,
+        width: compact ? undefined : A4_WIDTH_PX,
+        height: compact ? undefined : A4_HEIGHT_PX,
+        minHeight: compact ? undefined : A4_HEIGHT_PX,
       }}
     >
       {isCanceled && (
@@ -710,7 +713,7 @@ function SuccessWithPreview({
     <div className="flex flex-col gap-6 p-4 bg-white">
       <div className="flex-1 overflow-y-auto flex justify-center min-h-0">
         {genDoc ? (
-          <div className="flex-shrink-0 w-full" style={{ maxWidth: 595 }}>
+          <div className="flex-shrink-0 w-full" style={{ maxWidth: A4_WIDTH_PX }}>
             <UnifiedDocumentPreview
               company={{
                 name: businessProfile?.legalName ?? "",
@@ -800,7 +803,7 @@ function DocumentCreateSlideOver({
   clientOptions: BillingClient[];
   locale: "en" | "he";
   onClose: () => void;
-  onSubmit: (client: BillingClient, items: BillingLineItem[], notes?: string, title?: string) => Promise<string | null>;
+  onSubmit: (client: BillingClient, items: BillingLineItem[], notes?: string, title?: string, documentLanguage?: "he" | "en" | "bilingual") => Promise<string | null>;
   isSubmitting: boolean;
   downloadPdf: (docId: string) => void;
   getShareLink: (docId: string) => string | null;
@@ -821,6 +824,11 @@ function DocumentCreateSlideOver({
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [documentDate, setDocumentDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [dueDate, setDueDate] = useState("");
+  const [docLanguage, setDocLanguage] = useState<"he" | "en" | "bilingual">(() => {
+    const v = documentLanguage as string | undefined;
+    if (v === "he" || v === "en" || v === "bilingual") return v;
+    return "en";
+  });
   const [step, setStep] = useState<DocCreateStep>("form");
   const [generatedDocId, setGeneratedDocId] = useState<string | null>(null);
   const currencyRef = useRef<HTMLDivElement>(null);
@@ -905,13 +913,14 @@ function DocumentCreateSlideOver({
       items: normalized.length > 0 ? normalized : [{ id: generateUUID(), description: "Item", quantity: 1, unitPrice: 0 }],
       notes: notes.trim() || undefined,
       title: documentTitle.trim() || undefined,
+      documentLanguage: docLanguage,
     };
-  }, [effectiveClient, lineItems, notes, documentTitle]);
+  }, [effectiveClient, lineItems, notes, documentTitle, docLanguage]);
 
   const handleGenerate = useCallback(async () => {
     const payload = buildPayload();
     if (!payload) return;
-    const docId = await onSubmit(payload.client, payload.items, payload.notes, payload.title);
+    const docId = await onSubmit(payload.client, payload.items, payload.notes, payload.title, payload.documentLanguage);
     if (docId) {
       setGeneratedDocId(docId);
       setStep("generated");
@@ -1022,6 +1031,19 @@ function DocumentCreateSlideOver({
             <div>
               <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-500 mb-1">{t.docNumber}</label>
               <p className="text-sm font-medium text-gray-900">#{docNumberPreview}</p>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-500 mb-1">{t.docLanguage}</label>
+              <select
+                value={docLanguage}
+                onChange={(e) => setDocLanguage(e.target.value as "he" | "en" | "bilingual")}
+                className="w-full rounded-none border border-gray-200 bg-white px-3 py-2 text-[13px] text-gray-900 focus:outline-none focus:border-[#008080]"
+              >
+                <option value="he">{locale === "he" ? "עברית" : "Hebrew"}</option>
+                <option value="en">{locale === "he" ? "אנגלית" : "English"}</option>
+                <option value="bilingual">{locale === "he" ? "שתי שפות" : "Both"}</option>
+              </select>
             </div>
 
             <div className="flex flex-wrap items-center gap-3 border-b border-gray-200 pb-4">
@@ -1279,7 +1301,7 @@ function DocumentCreateSlideOver({
             {step === "preview" && (
               <div className="fixed inset-0 z-[120] flex flex-col bg-gray-100" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
                 <div className="flex-1 overflow-y-auto overflow-x-auto p-6 flex justify-center min-h-0">
-                  <div className="flex-shrink-0 w-full" style={{ maxWidth: 595, minHeight: 842 }}>
+                  <div className="flex-shrink-0 w-full" style={{ maxWidth: A4_WIDTH_PX, minHeight: A4_HEIGHT_PX }}>
                     <UnifiedDocumentPreview
                       company={{
                         name: businessProfile?.legalName ?? "",
@@ -1635,21 +1657,11 @@ export default function DocumentsPage() {
     (invoice: BillingDocument) => {
       if (invoice.type !== "invoice") return;
       if ((invoice.status as string) === "canceled") return;
-      if ((invoice.status as string) !== "paid") {
-        setLoadingDocId(invoice.id);
-        setTimeout(() => {
-          markPaid(invoice.id);
-          if (createReceipt(invoice.id)) {
-            setActiveTab("receipts");
-            showSuccessToast("Receipt issued");
-          }
-          setLoadingDocId(null);
-        }, 450);
-        return;
-      }
-      handleIssueReceipt(invoice.id);
+      setReceiptFromInvoicePreselectedId(invoice.id);
+      setCreateModal("receipt_from_invoice");
+      setOpenMenuDocId(null);
     },
-    [createReceipt, handleIssueReceipt, markPaid, showSuccessToast]
+    []
   );
 
   const handleScanReceipt = useCallback(() => {
@@ -1717,11 +1729,11 @@ export default function DocumentsPage() {
   const [createDocSubmitting, setCreateDocSubmitting] = useState(false);
   const handleCreateDocument = useCallback(
     (type: "quote" | "invoice" | "delivery_note") =>
-      async (client: BillingClient, items: BillingLineItem[], notes?: string, title?: string): Promise<string | null> => {
+      async (client: BillingClient, items: BillingLineItem[], notes?: string, title?: string, documentLanguage?: "he" | "en" | "bilingual"): Promise<string | null> => {
         setCreateDocSubmitting(true);
         try {
           if (type === "delivery_note") {
-            const doc = createDeliveryNote(client, items, notes, title);
+            const doc = createDeliveryNote(client, items, notes, title, documentLanguage);
             if (doc) {
               setActiveTab("delivery_notes");
               showSuccessToast("Delivery note created");
@@ -1729,7 +1741,7 @@ export default function DocumentsPage() {
             }
             return null;
           }
-          const draft = createDraft(client, items, notes, title);
+          const draft = createDraft(client, items, notes, title, documentLanguage);
           if (!draft) return null;
           const quote = convertToQuote(draft.id);
           if (!quote) return null;
@@ -2031,7 +2043,8 @@ export default function DocumentsPage() {
               )}
             </div>
 
-            {/* Filter bar */}
+            {/* Filter bar – hidden on Cancellations for cleaner view */}
+            {activeTab !== "cancellations" && (
             <div className="px-4 py-3 border-b border-gray-200 bg-white">
               {/* Mobile: Filter button that opens drawer */}
               <div className="flex items-center gap-2 lg:hidden">
@@ -2148,6 +2161,7 @@ export default function DocumentsPage() {
                 )}
               </div>
             </div>
+            )}
 
             {/* Filter drawer (mobile) */}
             <AnimatePresence>
@@ -2303,12 +2317,12 @@ export default function DocumentsPage() {
                         key={d.id}
                         className={`border-b border-gray-100 transition-colors duration-150 ${isCanceled ? "bg-gray-50/70 hover:bg-gray-50" : "hover:bg-gray-50/50"}`}
                       >
-                        <td className="px-4 py-2.5 align-top">
+                        <td className="px-4 py-3 align-top">
                           <div className="min-w-0">
-                            <p className={`font-semibold truncate ${isCanceled ? "text-gray-500" : "text-gray-900"}`} style={{ fontSize: "13px" }}>
+                            <p className={`font-semibold truncate ${isCanceled ? "text-gray-500" : "text-gray-900"}`} style={{ fontSize: "14px" }}>
                               {subject}
                             </p>
-                            <p className={`text-[12px] mt-0.5 ${isCanceled ? "text-gray-400" : "text-gray-500"}`}>
+                            <p className={`text-[12px] mt-1 ${isCanceled ? "text-gray-400" : "text-gray-500"}`}>
                               {metaLine}
                             </p>
                           </div>
@@ -2680,7 +2694,7 @@ export default function DocumentsPage() {
         return (
           <div className="fixed inset-0 z-[200] flex flex-col bg-black/50" onClick={() => setPreviewDocId(null)}>
             <div className="flex-1 overflow-y-auto overflow-x-auto p-6 flex justify-center min-h-0" onClick={(e) => e.stopPropagation()}>
-              <div className="flex-shrink-0 bg-white border border-gray-200 shadow-lg" style={{ width: 595, height: 842, maxWidth: "100%" }}>
+              <div className="flex-shrink-0 bg-white border border-gray-200 shadow-lg" style={{ width: A4_WIDTH_PX, height: A4_HEIGHT_PX, maxWidth: "100%" }}>
                 <UnifiedDocumentPreview
                   company={{
                     name: businessProfile?.legalName ?? "",
@@ -2738,7 +2752,7 @@ export default function DocumentsPage() {
         return (
           <div className="fixed inset-0 z-[210] flex flex-col bg-black/50" onClick={() => setJustIssuedDocId(null)}>
             <div className="flex-1 overflow-y-auto p-6 flex justify-center min-h-0" onClick={(e) => e.stopPropagation()}>
-              <div className="bg-white rounded-none border border-gray-200 shadow-xl" style={{ width: 595, minHeight: 842, maxWidth: "100%" }}>
+              <div className="bg-white rounded-none border border-gray-200 shadow-xl" style={{ width: A4_WIDTH_PX, minHeight: A4_HEIGHT_PX, maxWidth: "100%" }}>
                 <div className="p-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
                   <h3 className="font-semibold text-gray-900">{locale === "he" ? "המסמך נוצר בהצלחה" : "Document created successfully"}</h3>
                   <button type="button" onClick={() => setJustIssuedDocId(null)} className="p-2 rounded-none text-gray-500 hover:bg-gray-100"><X className="w-5 h-5" /></button>
@@ -3129,26 +3143,24 @@ export default function DocumentsPage() {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-4">
-              {documents.filter((d) => d.type === "invoice" && (d.status as string) === "paid").length === 0 ? (
-                <p className="text-sm text-gray-500">No paid invoices. Mark an invoice as paid first.</p>
+              {documents.filter((d) => d.type === "invoice" && (d.status as string) !== "canceled").length === 0 ? (
+                <p className="text-sm text-gray-500">{locale === "he" ? "אין חשבוניות. הנפק חשבונית קודם." : "No invoices. Create an invoice first."}</p>
               ) : (
                 <ul className="space-y-1">
                   {documents
-                    .filter((d) => d.type === "invoice" && (d.status as string) === "paid")
+                    .filter((d) => d.type === "invoice" && (d.status as string) !== "canceled")
                     .map((inv) => (
                       <li key={inv.id}>
                         <button
                           type="button"
                           onClick={() => {
-                            if (createReceipt(inv.id)) {
-                              setCreateModal(null);
-                              setActiveTab("receipts");
-                              showSuccessToast("Receipt created");
-                            }
+                            setReceiptFromInvoicePreselectedId(inv.id);
+                            setCreateModal("receipt_from_invoice");
                           }}
                           className="w-full text-left px-3 py-2 rounded-sm border border-gray-100 hover:bg-gray-50 text-sm font-medium text-gray-900"
                         >
                           Invoice #{inv.number} · {inv.clientName} · {formatMoney(inv.total || 0)}
+                          {(inv.status as string) === "paid" && <span className="text-gray-500 text-xs ml-1">({locale === "he" ? "שולם" : "Paid"})</span>}
                         </button>
                       </li>
                     ))}
@@ -3182,8 +3194,8 @@ export default function DocumentsPage() {
                   <div className="mb-4 text-sm text-gray-600">
                     {locale === "he" ? `עבור חשבונית #${preselectedInvoice.number}` : `For Invoice #${preselectedInvoice.number}`}
                   </div>
-                  <div className="bg-gray-50 border border-gray-100 rounded-none overflow-hidden" style={{ width: 595, minHeight: 842, maxWidth: "100%", transform: "scale(0.65)", transformOrigin: "top left" }}>
-                    <div style={{ width: 595, minHeight: 842 }}>
+                  <div className="bg-gray-50 border border-gray-100 rounded-none overflow-hidden" style={{ width: A4_WIDTH_PX, minHeight: A4_HEIGHT_PX, maxWidth: "100%", transform: "scale(0.65)", transformOrigin: "top left" }}>
+                    <div style={{ width: A4_WIDTH_PX, minHeight: A4_HEIGHT_PX }}>
                       <UnifiedDocumentPreview
                         company={{ name: businessProfile?.legalName ?? "", address: businessProfile?.address, taxId: businessProfile?.taxId, logoUrl: businessProfile?.businessLogo, signatureUrl: (businessProfile as { signature?: string })?.signature }}
                         client={{ name: preselectedInvoice.clientName ?? "", email: preselectedInvoice.clientEmail, phone: preselectedInvoice.clientPhone, address: preselectedInvoice.clientAddress, taxId: preselectedInvoice.clientTaxId }}
@@ -3282,8 +3294,8 @@ export default function DocumentsPage() {
                 <div className="mb-4 text-sm text-gray-600">
                   {locale === "he" ? `עבור קבלה #${receipt.number}` : `For Receipt #${receipt.number}`}
                 </div>
-                <div className="bg-gray-50 border border-gray-100 rounded-none overflow-hidden" style={{ width: 595, minHeight: 842, maxWidth: "100%", transform: "scale(0.65)", transformOrigin: "top left" }}>
-                  <div style={{ width: 595, minHeight: 842 }}>
+                <div className="bg-gray-50 border border-gray-100 rounded-none overflow-hidden" style={{ width: A4_WIDTH_PX, minHeight: A4_HEIGHT_PX, maxWidth: "100%", transform: "scale(0.65)", transformOrigin: "top left" }}>
+                  <div style={{ width: A4_WIDTH_PX, minHeight: A4_HEIGHT_PX }}>
                     <UnifiedDocumentPreview
                       company={{ name: businessProfile?.legalName ?? "", address: businessProfile?.address, taxId: businessProfile?.taxId, logoUrl: businessProfile?.businessLogo, signatureUrl: (businessProfile as { signature?: string })?.signature }}
                       client={{ name: receipt.clientName ?? "", email: receipt.clientEmail, phone: receipt.clientPhone, address: receipt.clientAddress, taxId: receipt.clientTaxId }}
@@ -3672,6 +3684,7 @@ function LegacyFinanceDocumentsPage() {
                           status={q.status as string}
                           date={new Date(q.createdAt).toLocaleDateString()}
                           dueDate={q.dueDate}
+                          title={q.title ?? undefined}
                           borderAccent="teal"
                           primaryAction={{ label: "Convert to Tax Invoice", onClick: () => { convertQuoteToInvoice(q.id) && setActiveTab("invoices"); } }}
                           onView={() => openQuotePdf(q, companyDisplayName(companyProfile, locale), locale)}
@@ -3697,6 +3710,7 @@ function LegacyFinanceDocumentsPage() {
                           status={q.status as string}
                           date={new Date(q.createdAt).toLocaleDateString()}
                           dueDate={q.dueDate}
+                          title={q.title ?? undefined}
                           borderAccent="amber"
                           primaryAction={{ label: "Convert to Tax Invoice", onClick: () => { convertQuoteToInvoice(q.id) && setActiveTab("invoices"); } }}
                           onView={() => openQuotePdf(q, companyDisplayName(companyProfile, locale), locale)}
@@ -3732,6 +3746,7 @@ function LegacyFinanceDocumentsPage() {
                 total={rec.total}
                 status={rec.status as string}
                 date={new Date(rec.createdAt).toLocaleDateString()}
+                title={(rec as { title?: string }).title ?? undefined}
                 borderAccent="teal"
                 onView={() => {}}
                 onShare={() => { navigator.clipboard.writeText(`${window.location.origin}/dashboard/finances/documents?receipt=${rec.id}`); }}
@@ -3766,6 +3781,7 @@ function LegacyFinanceDocumentsPage() {
                             effectiveStatus={eff}
                             date={new Date(inv.createdAt).toLocaleDateString()}
                             dueDate={inv.dueDate}
+                            title={(inv as { title?: string }).title ?? undefined}
                             borderAccent="teal"
                             primaryAction={inv.status !== "canceled" ? { label: "Issue Receipt", onClick: () => { issueReceiptFromInvoice(inv.id) && setActiveTab("receipts"); } } : undefined}
                             onView={() => openInvoicePdf(inv, companyDisplayName(companyProfile, locale), companyProfile.signature, locale)}
@@ -3809,6 +3825,7 @@ function LegacyFinanceDocumentsPage() {
                             effectiveStatus={eff}
                             date={new Date(inv.createdAt).toLocaleDateString()}
                             dueDate={inv.dueDate}
+                            title={(inv as { title?: string }).title ?? undefined}
                             borderAccent="amber"
                             primaryAction={inv.status !== "canceled" ? { label: "Issue Receipt", onClick: () => { issueReceiptFromInvoice(inv.id) && setActiveTab("receipts"); } } : undefined}
                             onView={() => openInvoicePdf(inv, companyDisplayName(companyProfile, locale), companyProfile.signature, locale)}

@@ -15,6 +15,9 @@ export interface BusinessProfile {
     iban?: string;
     swift?: string;
     bitLink?: string; // payment link
+    bankName?: string;
+    branchNumber?: string;
+    accountNumber?: string;
   };
 }
 

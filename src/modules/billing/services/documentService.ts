@@ -56,7 +56,8 @@ export function createDraft(
   clientTaxId?: string,
   items: BillingLineItem[] = [{ id: generateUUID(), description: "Item", quantity: 1, unitPrice: 0 }],
   notes?: string,
-  title?: string
+  title?: string,
+  documentLanguage?: "he" | "en" | "bilingual"
 ): BillingDocument {
   const docs = vault.getAllDocuments(userId);
   const number = nextNumber("DRAFT", docs);
@@ -82,6 +83,7 @@ export function createDraft(
     date: nowIso(),
     title,
     notes,
+    documentLanguage,
     createdAt: now,
     updatedAt: now,
     auditTrail: [],
@@ -215,6 +217,7 @@ export function createInvoiceFromDeliveryNoteWithData(userId: string, deliveryNo
     title: data.title,
     notes: data.notes,
     dueDate: data.dueDate,
+    documentLanguage: data.documentLanguage,
     date: nowIso(),
     auditTrail: [...dn.auditTrail, { action: "issued", at: now, note: "From delivery note" }],
     updatedAt: now,
@@ -350,7 +353,8 @@ export function createDeliveryNote(
   clientTaxId?: string,
   items: BillingLineItem[] = [{ id: generateUUID(), description: "Item", quantity: 1, unitPrice: 0 }],
   notes?: string,
-  title?: string
+  title?: string,
+  documentLanguage?: "he" | "en" | "bilingual"
 ): BillingDeliveryNote {
   const number = getNextDeliveryNoteNumber();
   const { subtotal, vatAmount, total } = baseFromItems(items, BILLING_VAT_RATE);
@@ -375,6 +379,7 @@ export function createDeliveryNote(
     date: nowIso(),
     title,
     notes,
+    documentLanguage,
     createdAt: now,
     updatedAt: now,
     auditTrail: [],
