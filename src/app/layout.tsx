@@ -20,6 +20,7 @@ import { SetDir } from "@/components/SetDir";
 import { ArchitectProvider } from "@/contexts/ArchitectContext";
 import { MiniSiteProvider } from "@/contexts/MiniSiteContext";
 import { BillingProvider } from "@/contexts/BillingContext";
+import { AuthSessionProvider } from "@/components/auth/AuthSessionProvider";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -65,42 +66,44 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} ${roboto.variable} ${cormorant.variable} ${plusJakarta.variable}`} suppressHydrationWarning>
       <body className="min-h-screen antialiased bg-white text-[var(--clean-text)]" style={{ fontFamily: "var(--font-plus-jakarta), ui-sans-serif, system-ui, sans-serif" }}>
-        <LocaleProvider initialLocale="en">
-          <ProfileProvider>
-            <BoardProvider>
-              <ScansProvider>
-                <CallsProvider>
-                  <ContactsProvider>
-                    <LiveCallProvider>
-                      <FinanceProvider>
-                        <BillsProvider>
-                          <ChecklistsProvider>
-                            <ChatEngineProvider>
-                              <MiniSiteProvider>
-                              <BillingProvider>
-                              <ArchitectProvider>
-                                <FoldersProvider>
-                                  <NotesProvider>
-                                    <TimeClockProvider>
-                                      <SetDir />
-                                      {children}
-                                    </TimeClockProvider>
-                                  </NotesProvider>
-                                </FoldersProvider>
-                              </ArchitectProvider>
-                              </BillingProvider>
-                              </MiniSiteProvider>
-                            </ChatEngineProvider>
-                          </ChecklistsProvider>
-                        </BillsProvider>
-                      </FinanceProvider>
-                    </LiveCallProvider>
-                  </ContactsProvider>
-                </CallsProvider>
-              </ScansProvider>
-            </BoardProvider>
-          </ProfileProvider>
-        </LocaleProvider>
+        <AuthSessionProvider>
+          <LocaleProvider initialLocale="en">
+            <ProfileProvider>
+              <BoardProvider>
+                <ScansProvider>
+                  <CallsProvider>
+                    <ContactsProvider>
+                      <LiveCallProvider>
+                        <FinanceProvider>
+                          <BillsProvider>
+                            <ChecklistsProvider>
+                              <ChatEngineProvider>
+                                <MiniSiteProvider>
+                                  <BillingProvider>
+                                    <ArchitectProvider>
+                                      <FoldersProvider>
+                                        <NotesProvider>
+                                          <TimeClockProvider>
+                                            <SetDir />
+                                            {children}
+                                          </TimeClockProvider>
+                                        </NotesProvider>
+                                      </FoldersProvider>
+                                    </ArchitectProvider>
+                                  </BillingProvider>
+                                </MiniSiteProvider>
+                              </ChatEngineProvider>
+                            </ChecklistsProvider>
+                          </BillsProvider>
+                        </FinanceProvider>
+                      </LiveCallProvider>
+                    </ContactsProvider>
+                  </CallsProvider>
+                </ScansProvider>
+              </BoardProvider>
+            </ProfileProvider>
+          </LocaleProvider>
+        </AuthSessionProvider>
       </body>
     </html>
   );
