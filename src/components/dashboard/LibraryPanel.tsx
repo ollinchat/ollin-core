@@ -31,17 +31,9 @@ export function LibraryPanel({ locale, onSelectedContactChange, onOpenBoard }: L
   const isSystem = (id: string): id is SystemFolderId => SYSTEM_FOLDERS.some((f) => f.id === id);
   const contentId = isSystem(selectedId) ? selectedId : "folder";
 
-  if (contentId === "chats") {
-    return (
-      <PanelWrapper className="flex-1 min-h-0">
-        <InternalChatPanel locale={locale} onSelectedContactChange={onSelectedContactChange} />
-      </PanelWrapper>
-    );
-  }
-
   return (
     <div className="flex flex-1 min-h-0 bg-[#f8f9fa] overflow-hidden">
-      {/* Sidebar: system folders (pinned) + separator + user folders — hidden when Chat is selected */}
+      {/* Sidebar: Notes | Conversations | Archive | folders — always visible */}
       <aside className="flex-shrink-0 w-40 border-r border-gray-200/80 bg-white/60 flex flex-col py-1.5 px-1 overflow-hidden">
         {SYSTEM_FOLDERS.map(({ id, labelEn, labelHe, icon: Icon }) => {
           const isActive = selectedId === id;
@@ -80,6 +72,11 @@ export function LibraryPanel({ locale, onSelectedContactChange, onOpenBoard }: L
         })}
       </aside>
       <PanelWrapper className="flex-1 min-h-0 flex flex-col">
+        {contentId === "chats" && (
+          <div className="flex-1 min-h-0 overflow-hidden flex flex-col w-full">
+            <InternalChatPanel locale={locale} onSelectedContactChange={onSelectedContactChange} />
+          </div>
+        )}
         {contentId === "notes" && <NotebookPanel locale={locale} />}
         {contentId === "archive" && (
           <div className="flex-1 p-3 flex flex-col items-center justify-center text-center min-h-[200px] bg-[#f8f9fa]">

@@ -16,7 +16,7 @@ import { IncomingCallOverlay, ActiveCallFloating, OutgoingCallBar } from "@/comp
 import { PaymentsPanel } from "@/components/dashboard/PaymentsPanel";
 import { ExplorePanel } from "@/components/dashboard/ExplorePanel";
 import { ToolFanPanel } from "@/components/dashboard/ToolFanPanel";
-import { LibraryPanel } from "@/components/dashboard/LibraryPanel";
+import InternalChatPanel from "@/components/InternalChatPanel";
 
 const PANEL_COUNT = 5;
 const DEFAULT_PANEL_INDEX = 2;
@@ -80,12 +80,11 @@ export function DashboardPanels(props: DashboardPanelsProps = {}) {
         {safePanelIndex === 2 && <div className="flex-1 min-h-0 flex flex-col"><ToolFanPanel onOpenBoard={() => setPanelIndexSafe(3)} /></div>}
         {safePanelIndex === 3 && <div className="flex-1 min-h-0 flex flex-col"><StrategicBoard locale={locale} onBack={() => setPanelIndexSafe(2)} initialMainTab={boardTab} /></div>}
         {safePanelIndex === 4 && (
-          <div className="flex-1 min-h-0 flex flex-col">
-          <LibraryPanel
-            locale={locale}
-            onSelectedContactChange={onSelectedContactChange}
-            onOpenBoard={() => setPanelIndexSafe(3)}
-          />
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+            <InternalChatPanel
+              locale={locale}
+              onSelectedContactChange={onSelectedContactChange}
+            />
           </div>
         )}
       </div>

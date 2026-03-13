@@ -26,7 +26,7 @@ export function PanelWrapper({
           {header}
         </div>
       )}
-      <div className="flex-1 overflow-y-auto min-h-0 relative">
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden relative">
         {children}
       </div>
       {footer != null && (
