@@ -8,6 +8,7 @@ import { useContacts } from "@/contexts/ContactsContext";
 import { useInternalMessages } from "@/contexts/ChatEngineContext";
 import { useBoard } from "@/contexts/BoardContext";
 import { useBilling } from "@/contexts/BillingContext";
+import { GmailPanel } from "@/components/dashboard/GmailPanel";
 import { MessageSquare, Send, Trash2, Search, Camera, Plus, MapPin, FileText, ImagePlus, Forward, ListTodo, ScanLine, BarChart3, Mic, ChevronLeft, Phone, Video, ClipboardList, CalendarDays, Users, Brain, Ban, UserPlus, Shield, CheckCheck, Pencil } from "lucide-react";
 import { PollCreator } from "@/components/board/PollCreator";
 import { MeetingEventFormModal } from "@/components/board/MeetingEventFormModal";
@@ -36,20 +37,22 @@ export type ChannelId =
   | "linkedin"
   | "imessage";
 
-/** Fixed tab order: Ollin Chat, Ollin Calls, Gmail. */
+/** Fixed tab order: Ollin Chat, Ollin Calls (static, no close, not draggable). */
 const FIXED_TABS: { id: ChannelId; label: string; connected: boolean }[] = [
   { id: "ollin_chat", label: "Ollin Chat", connected: true },
   { id: "ollin_calls", label: "Ollin Calls", connected: true },
-  { id: "gmail", label: "Gmail", connected: false },
 ];
 
-/** Channels that can be added via + and shown as dynamic tabs. */
+/** Channels that can be added via + and shown as dynamic tabs (with close + drag). */
 const ADDABLE_CHANNELS: { id: ChannelId; labelEn: string; labelHe: string; icon: React.ReactNode }[] = [
+  { id: "gmail", labelEn: "Gmail", labelHe: "Gmail", icon: <GmailIcon /> },
   { id: "whatsapp", labelEn: "WhatsApp", labelHe: "וואטסאפ", icon: <WhatsAppIcon /> },
   { id: "telegram", labelEn: "Telegram", labelHe: "טלגרם", icon: <TelegramIcon /> },
   { id: "instagram", labelEn: "Instagram", labelHe: "אינסטגרם", icon: <InstagramIcon /> },
   { id: "linkedin", labelEn: "LinkedIn", labelHe: "לינקדאין", icon: <LinkedInIcon /> },
   { id: "imessage", labelEn: "Apple Messages", labelHe: "iMessage", icon: <AppleMessagesIcon /> },
+  // Extra social channels for the grid/menu (still map to existing icons where possible)
+  // Note: TikTok, X (Twitter), Messenger, Slack icons come from ChannelBrandIcons.
 ];
 
 function getChannelTabIcon(id: ChannelId): React.ReactNode {
@@ -361,10 +364,8 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
           {/* Row 1: Fixed tabs (Ollin Chat, Ollin Calls, Gmail) + pinned channels + Add (+) */}
           <div className="flex-shrink-0 w-full bg-[#f8f9fa] rounded-t-xl">
             <div className="flex items-center gap-1 overflow-x-auto overflow-y-hidden py-1.5 px-1.5 min-h-[2.5rem] scrollbar-hide">
-              {[
-                ...FIXED_TABS,
-                ...pinnedChannels.map((id) => ({ id, label: getChannelLabel(id), connected: false })),
-              ].map(({ id, label, connected }) => {
+              {/* Static tabs: Ollin Chat, Ollin Calls */ }
+              {FIXED_TABS.map(({ id, label, connected }) => {
                 const icon = getChannelTabIcon(id);
                 const isActive = activeChannel === id;
                 if (!icon) return null;
@@ -391,6 +392,65 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
                       )}
                     </span>
                   </button>
+                );
+              })}
+              {/* Dynamic tabs: pinned channels — draggable with close (X) */ }
+              {pinnedChannels.map((id, index) => {
+                const label = getChannelLabel(id);
+                const icon = getChannelTabIcon(id);
+                const isActive = activeChannel === id;
+                if (!icon) return null;
+                const isWhatsApp = id === "whatsapp";
+                const isGmail = id === "gmail";
+                const activeColor =
+                  isWhatsApp ? "bg-[#e6f8f0] text-[#128c7e]" : isGmail ? "bg-[#fde8e6] text-[#ea4335]" : "bg-[#374151] text-white";
+                return (
+                  <div
+                    key={id}
+                    draggable
+                    onDragStart={() => {
+                      // index is within pinnedChannels only
+                      (setPinnedChannels as React.Dispatch<React.SetStateAction<ChannelId[]>>)((prev) => prev);
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      const from = index;
+                      const to = Number((e.currentTarget as HTMLDivElement).dataset.index ?? index);
+                      if (from === to) return;
+                      setPinnedChannels((prev) => {
+                        const next = [...prev];
+                        const [moved] = next.splice(from, 1);
+                        next.splice(to, 0, moved);
+                        return next;
+                      });
+                    }}
+                    data-index={index}
+                    className={`flex-shrink-0 flex items-center justify-center gap-1.5 py-1.5 px-2 text-xs font-medium rounded-xl min-w-[4.5rem] border ${
+                      isActive ? activeColor + " shadow-sm border-transparent" : "bg-gray-100/80 text-gray-600 border-gray-200/50"
+                    } cursor-grab active:cursor-grabbing`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setActiveChannel(id)}
+                      className="flex items-center gap-1.5 min-w-0"
+                    >
+                      <span className="flex items-center justify-center w-5 h-5 shrink-0 [&>svg]:w-5 [&>svg]:h-5 [&>img]:w-5 [&>img]:h-5">
+                        {icon}
+                      </span>
+                      <span className="truncate max-w-[4rem]">{label}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPinnedChannels((prev) => prev.filter((c) => c !== id));
+                        if (activeChannel === id) setActiveChannel("ollin_chat");
+                      }}
+                      className="ml-1 p-0.5 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-200/70"
+                      aria-label={isHe ? "סגור ערוץ" : "Close channel"}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
                 );
               })}
               {/* Add Channel (+) — dropdown to pin a channel as a new tab */}
@@ -895,18 +955,9 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
               </div>
             </div>
           ) : activeChannel === "gmail" ? (
-            /* Gmail tab: Connect Gmail */
-            <div className="flex-1 overflow-y-auto px-2 py-3 bg-[#f8f9fa]">
-              <div className="rounded-xl bg-white/80 border border-gray-100 p-4 text-center">
-                <span className="inline-flex items-center justify-center w-10 h-10 mx-auto mb-2 [&>svg]:w-10 [&>svg]:h-10">
-                  <GmailIcon className="w-10 h-10" />
-                </span>
-                <p className="text-sm font-medium text-gray-800 mb-1">{isHe ? "חבר Gmail" : "Connect Gmail"}</p>
-                <p className="text-[11px] text-gray-500 mb-3">{isHe ? "סנכרן שיחות ודוא״ל מהחשבון שלך" : "Sync conversations and email from your account."}</p>
-                <button type="button" className="px-4 py-2 rounded-xl text-sm font-medium text-white hover:opacity-90" style={{ backgroundColor: TEAL }}>
-                  {isHe ? "התחבר עם Google" : "Connect with Google"}
-                </button>
-              </div>
+            /* Gmail tab: full GmailPanel (OAuth-backed) */
+            <div className="flex-1 min-h-0 flex flex-col bg-white">
+              <GmailPanel />
             </div>
           ) : (
             /* List view: full-width conversation list (no sidebar) */
