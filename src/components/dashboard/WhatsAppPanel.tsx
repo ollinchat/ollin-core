@@ -1,14 +1,17 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
+import { Smile, Paperclip, Mic, CheckCheck } from "lucide-react";
 
 const WA = {
-  green: "#00a884",
+  // WhatsApp branding
+  green: "#075e54",
+  greenLight: "#25D366",
   sidebarBg: "#f0f2f5",
-  chatBg: "#efeae2",
-  bubbleOut: "#d9fdd3",
+  chatBg: "#e5ddd5", // doodle background
+  bubbleOut: "#dcf8c6",
   bubbleIn: "#ffffff",
-  headerBg: "#f0f2f5",
+  headerBg: "#075e54",
   inputBg: "#ffffff",
   text: "#111b21",
   textMuted: "#667781",
@@ -25,11 +28,14 @@ const TEST_CONTACT = {
 };
 
 type Chat = typeof TEST_CONTACT & { phone?: string };
+type ChatMessage = { id: string; text: string; out: boolean; time: string; seen?: boolean };
 
 export function WhatsAppPanel() {
-  const [chats, setChats] = useState<Chat[]>([{ ...TEST_CONTACT }]);
-  const [selectedChat, setSelectedChat] = useState<Chat | null>({ ...TEST_CONTACT });
-  const [messages, setMessages] = useState<{ id: string; text: string; out: boolean; time: string }[]>([]);
+  const [chats] = useState<Chat[]>([{ ...TEST_CONTACT }]);
+  const [activeChatId, setActiveChatId] = useState<string>(TEST_CONTACT.id);
+  const [messagesByChat, setMessagesByChat] = useState<Record<string, ChatMessage[]>>({
+    [TEST_CONTACT.id]: [],
+  });
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
@@ -38,12 +44,15 @@ export function WhatsAppPanel() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  const selectedChat = chats.find((c) => c.id === activeChatId) ?? chats[0];
+  const messages = messagesByChat[activeChatId] ?? [];
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   const selectChat = (chat: Chat) => {
-    setSelectedChat(chat);
+    setActiveChatId(chat.id);
     setSendError(null);
   };
 
@@ -58,13 +67,17 @@ export function WhatsAppPanel() {
     setSending(true);
     setSendError(null);
     const tempId = `temp-${Date.now()}`;
-    const newMsg = {
+    const newMsg: ChatMessage = {
       id: tempId,
       text,
       out: true,
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      seen: true,
     };
-    setMessages((prev) => [...prev, newMsg]);
+    setMessagesByChat((prev) => {
+      const prevForChat = prev[activeChatId] ?? [];
+      return { ...prev, [activeChatId]: [...prevForChat, newMsg] };
+    });
     setInput("");
     try {
       const res = await fetch("/api/whatsapp/send", {
@@ -75,15 +88,19 @@ export function WhatsAppPanel() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setSendError(data.error || "Failed to send");
-        setMessages((prev) => prev.filter((m) => m.id !== tempId));
         return;
       }
-      setMessages((prev) =>
-        prev.map((m) => (m.id === tempId ? { ...m, id: data.messageId || m.id } : m))
-      );
+      setMessagesByChat((prev) => {
+        const current = prev[activeChatId] ?? [];
+        return {
+          ...prev,
+          [activeChatId]: current.map((m) =>
+            m.id === tempId ? { ...m, id: data.messageId || m.id } : m
+          ),
+        };
+      });
     } catch (e) {
       setSendError(e instanceof Error ? e.message : "Send failed");
-      setMessages((prev) => prev.filter((m) => m.id !== tempId));
     } finally {
       setSending(false);
     }
@@ -98,22 +115,41 @@ export function WhatsAppPanel() {
 
   return (
     <div
-      className="flex flex-1 min-h-0 w-full h-full overflow-hidden bg-[#e5ddd5]"
+      className="flex flex-1 min-h-0 w-full h-full overflow-hidden"
       style={{
-        backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d4cdc4' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")",
+        backgroundColor: WA.chatBg,
+        backgroundImage:
+          "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d4cdc4' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")",
       }}
     >
       {/* Left: WhatsApp contact list only — no other sidebars in this tab */}
       <aside
-        className="flex flex-col shrink-0 border-r w-[300px] min-w-[260px] min-h-0"
+        className="flex flex-col shrink-0 border-r w-[350px] min-w-[320px] min-h-0"
         style={{ backgroundColor: WA.sidebarBg, borderColor: WA.border }}
       >
-        <div className="flex items-center gap-3 px-3 py-3 shrink-0" style={{ backgroundColor: WA.headerBg, borderBottom: `1px solid ${WA.border}` }}>
-          <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-lg font-medium shrink-0" style={{ backgroundColor: WA.green }}>WA</div>
-          <div className="flex-1 min-w-0">
-            <h2 className="font-semibold text-[15px] truncate" style={{ color: WA.text }}>Chats</h2>
-            <p className="text-xs truncate" style={{ color: WA.textMuted }}>WhatsApp Web</p>
+        {/* Sidebar header with avatar + icons */}
+        <div
+          className="flex items-center gap-3 px-3 py-3 shrink-0"
+          style={{ backgroundColor: WA.headerBg, borderBottom: `1px solid ${WA.border}` }}
+        >
+          <div className="w-8 h-8 rounded-full bg-[#ece5dd] flex items-center justify-center text-sm font-semibold text-[#075e54]">
+            U
           </div>
+          <div className="flex-1 min-w-0" />
+          <button
+            type="button"
+            className="p-1.5 rounded-full text-[#ece5dd] hover:bg-black/10"
+            aria-label="Status"
+          >
+            <Smile className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            className="p-1.5 rounded-full text-[#ece5dd] hover:bg-black/10"
+            aria-label="New chat"
+          >
+            <Paperclip className="w-4 h-4 rotate-90" />
+          </button>
         </div>
         <div className="shrink-0 px-2 py-2" style={{ backgroundColor: WA.sidebarBg, borderBottom: `1px solid ${WA.border}` }}>
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ backgroundColor: WA.inputBg, border: `1px solid ${WA.border}` }}>
@@ -122,9 +158,21 @@ export function WhatsAppPanel() {
           </div>
         </div>
         <ul className="flex-1 overflow-y-auto list-none m-0 p-0" role="list">
-          {chats.map((chat) => (
+          {chats
+            .filter((chat) =>
+              chat.name.toLowerCase().includes(sidebarSearch.toLowerCase())
+            )
+            .map((chat) => (
             <li key={chat.id} className="border-b" style={{ borderColor: WA.border }}>
-              <button type="button" onClick={() => selectChat(chat)} className="w-full flex items-center gap-3 px-3 py-3 text-left hover:bg-black/5" style={{ backgroundColor: selectedChat?.id === chat.id ? "rgba(0,0,0,0.06)" : undefined }}>
+              <button
+                type="button"
+                onClick={() => selectChat(chat)}
+                className="w-full flex items-center gap-3 px-3 py-3 text-left hover:bg-black/5"
+                style={{
+                  backgroundColor:
+                    selectedChat?.id === chat.id ? "rgba(0,0,0,0.06)" : undefined,
+                }}
+              >
                 <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-medium shrink-0" style={{ backgroundColor: WA.green }}>{chat.name.slice(0, 2).toUpperCase()}</div>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-[15px] truncate" style={{ color: WA.text }}>{chat.name}</p>
@@ -138,36 +186,132 @@ export function WhatsAppPanel() {
       <main className="flex-1 flex flex-col min-w-0 min-h-0">
         {selectedChat && (
           <>
-            <header className="flex items-center gap-3 px-3 py-2 shrink-0" style={{ backgroundColor: WA.headerBg, borderBottom: `1px solid ${WA.border}` }}>
-              <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-medium shrink-0" style={{ backgroundColor: WA.green }}>{selectedChat.name.slice(0, 2).toUpperCase()}</div>
+            {/* Chat header with contact name + online status */}
+            <header
+              className="flex items-center gap-3 px-4 py-2 shrink-0"
+              style={{ backgroundColor: WA.headerBg, borderBottom: `1px solid ${WA.border}` }}
+            >
+              <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-medium shrink-0 border border-white/40">
+                {selectedChat.name.slice(0, 1).toUpperCase()}
+              </div>
               <div className="flex-1 min-w-0">
-                <h1 className="font-semibold text-[16px] truncate" style={{ color: WA.text }}>{selectedChat.name}</h1>
-                <p className="text-xs truncate" style={{ color: WA.textMuted }}>{selectedChat.phone || "Set phone below to send"}</p>
+                <h1 className="font-semibold text-[15px] truncate text-white">{selectedChat.name}</h1>
+                <p className="text-xs text-[#daded9] truncate">online</p>
               </div>
             </header>
-            <div className="flex-1 overflow-y-auto px-4 py-2 flex flex-col gap-1 min-h-0">
-              {messages.length === 0 && <p className="text-sm text-center py-8" style={{ color: WA.textMuted }}>No messages yet. Type below and send via WhatsApp API.</p>}
+
+            {/* Messages list with independent scroll */}
+            <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-1 min-h-0">
+              {messages.length === 0 && (
+                <p className="text-sm text-center py-8" style={{ color: WA.textMuted }}>
+                  No messages yet. Type below and send via WhatsApp API.
+                </p>
+              )}
               {messages.map((msg) => (
                 <div key={msg.id} className={`flex ${msg.out ? "justify-end" : "justify-start"}`}>
-                  <div className="max-w-[65%] rounded-lg px-3 py-2 shadow-sm" style={{ backgroundColor: msg.out ? WA.bubbleOut : WA.bubbleIn, color: WA.text }}>
+                  <div
+                    className="max-w-[70%] rounded-lg px-3 py-2 shadow-sm relative"
+                    style={{
+                      backgroundColor: msg.out ? WA.bubbleOut : WA.bubbleIn,
+                      color: WA.text,
+                    }}
+                  >
                     <p className="text-[14px] whitespace-pre-wrap break-words">{msg.text}</p>
-                    <p className="text-[11px] mt-1 opacity-70" style={{ color: WA.textMuted }}>{msg.time}</p>
+                    <div className="flex items-center justify-end gap-1 mt-1">
+                      <span
+                        className="text-[10px] opacity-70"
+                        style={{ color: WA.textMuted }}
+                      >
+                        {msg.time}
+                      </span>
+                      {msg.out && (
+                        <CheckCheck
+                          className="w-3 h-3"
+                          style={{ color: WA.textMuted }}
+                        />
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
               <div ref={messagesEndRef} />
             </div>
+
+            {/* Recipient phone for test contact */}
             {selectedChat.id === TEST_CONTACT.id && (
-              <div className="px-4 py-2 shrink-0 border-t" style={{ backgroundColor: WA.sidebarBg, borderColor: WA.border }}>
-                <label className="text-xs font-medium block mb-1" style={{ color: WA.textMuted }}>Recipient phone (E.164)</label>
-                <input type="tel" value={testPhone} onChange={(e) => setTestPhone(e.target.value)} placeholder="15551234567" className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2" style={{ borderColor: WA.border, backgroundColor: WA.inputBg, color: WA.text }} />
+              <div
+                className="px-4 py-2 shrink-0 border-t"
+                style={{ backgroundColor: WA.sidebarBg, borderColor: WA.border }}
+              >
+                <label
+                  className="text-xs font-medium block mb-1"
+                  style={{ color: WA.textMuted }}
+                >
+                  Recipient phone (E.164)
+                </label>
+                <input
+                  type="tel"
+                  value={testPhone}
+                  onChange={(e) => setTestPhone(e.target.value)}
+                  placeholder="15551234567"
+                  className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2"
+                  style={{
+                    borderColor: WA.border,
+                    backgroundColor: WA.inputBg,
+                    color: WA.text,
+                  }}
+                />
               </div>
             )}
-            {sendError && <div className="px-4 py-2 shrink-0 bg-red-50 text-red-700 text-sm">{sendError}</div>}
-            <div className="flex items-end gap-2 px-4 py-3 shrink-0" style={{ backgroundColor: WA.headerBg, borderTop: `1px solid ${WA.border}` }}>
-              <textarea ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown} placeholder="Type a message" rows={1} className="flex-1 min-h-[42px] max-h-32 px-4 py-2.5 rounded-lg border resize-none text-sm focus:outline-none focus:ring-2" style={{ borderColor: WA.border, backgroundColor: WA.inputBg, color: WA.text }} disabled={sending} />
-              <button type="button" onClick={sendMessage} disabled={sending || !input.trim()} className="shrink-0 w-12 h-[42px] rounded-full flex items-center justify-center text-white disabled:opacity-50" style={{ backgroundColor: WA.green }} title="Send">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 ml-0.5"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" /></svg>
+
+            {sendError && (
+              <div className="px-4 py-2 shrink-0 bg-red-50 text-red-700 text-sm">
+                {sendError}
+              </div>
+            )}
+
+            {/* Bottom input bar with smiley, attachment, input, mic/send */}
+            <div
+              className="flex items-center gap-2 px-4 py-3 shrink-0"
+              style={{ backgroundColor: WA.headerBg }}
+            >
+              <button
+                type="button"
+                className="p-2 rounded-full text-[#daded9] hover:bg-black/10"
+                aria-label="Emoji"
+              >
+                <Smile className="w-5 h-5" />
+              </button>
+              <button
+                type="button"
+                className="p-2 rounded-full text-[#daded9] hover:bg-black/10"
+                aria-label="Attach"
+              >
+                <Paperclip className="w-5 h-5 -rotate-45" />
+              </button>
+              <div
+                className="flex-1 flex items-center rounded-full px-3 py-1.5 bg-white"
+                style={{ backgroundColor: WA.inputBg }}
+              >
+                <input
+                  ref={inputRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Type a message"
+                  className="flex-1 bg-transparent text-sm outline-none"
+                  style={{ color: WA.text }}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={sendMessage}
+                disabled={sending || !input.trim()}
+                className="p-2 rounded-full text-white disabled:opacity-50"
+                style={{ backgroundColor: WA.greenLight }}
+                aria-label="Send voice/message"
+              >
+                <Mic className="w-5 h-5" />
               </button>
             </div>
           </>
