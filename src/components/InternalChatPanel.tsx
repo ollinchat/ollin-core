@@ -9,7 +9,8 @@ import { useInternalMessages } from "@/contexts/ChatEngineContext";
 import { useBoard } from "@/contexts/BoardContext";
 import { useBilling } from "@/contexts/BillingContext";
 import { GmailPanel } from "@/components/dashboard/GmailPanel";
-import { MessageSquare, Send, Trash2, Search, Camera, Plus, MapPin, FileText, ImagePlus, Forward, ListTodo, ScanLine, BarChart3, Mic, ChevronLeft, Phone, Video, ClipboardList, CalendarDays, Users, Brain, Ban, UserPlus, Shield, CheckCheck, Pencil } from "lucide-react";
+import { WhatsAppPanel } from "@/components/dashboard/WhatsAppPanel";
+import { MessageSquare, Send, Trash2, Search, Camera, Plus, MapPin, FileText, ImagePlus, Forward, ListTodo, ScanLine, BarChart3, Mic, ChevronLeft, Phone, Video, ClipboardList, CalendarDays, Users, Brain, Ban, UserPlus, Shield, CheckCheck, Pencil, X } from "lucide-react";
 import { PollCreator } from "@/components/board/PollCreator";
 import { MeetingEventFormModal } from "@/components/board/MeetingEventFormModal";
 import {
@@ -20,6 +21,10 @@ import {
   InstagramIcon,
   LinkedInIcon,
   AppleMessagesIcon,
+  TikTokIcon,
+  XTwitterIcon,
+  MessengerIcon,
+  SlackIcon,
 } from "@/components/dashboard/ChannelBrandIcons";
 import type { InternalMessageRecord } from "@/lib/chat-engine";
 import { formatOllinIdForDisplay } from "@/lib/user-id";
@@ -35,7 +40,11 @@ export type ChannelId =
   | "telegram"
   | "instagram"
   | "linkedin"
-  | "imessage";
+  | "imessage"
+  | "messenger"
+  | "slack"
+  | "tiktok"
+  | "twitter";
 
 /** Fixed tab order: Ollin Chat, Ollin Calls (static, no close, not draggable). */
 const FIXED_TABS: { id: ChannelId; label: string; connected: boolean }[] = [
@@ -51,8 +60,10 @@ const ADDABLE_CHANNELS: { id: ChannelId; labelEn: string; labelHe: string; icon:
   { id: "instagram", labelEn: "Instagram", labelHe: "אינסטגרם", icon: <InstagramIcon /> },
   { id: "linkedin", labelEn: "LinkedIn", labelHe: "לינקדאין", icon: <LinkedInIcon /> },
   { id: "imessage", labelEn: "Apple Messages", labelHe: "iMessage", icon: <AppleMessagesIcon /> },
-  // Extra social channels for the grid/menu (still map to existing icons where possible)
-  // Note: TikTok, X (Twitter), Messenger, Slack icons come from ChannelBrandIcons.
+  { id: "messenger", labelEn: "Messenger", labelHe: "Messenger", icon: <MessengerIcon /> },
+  { id: "slack", labelEn: "Slack", labelHe: "Slack", icon: <SlackIcon /> },
+  { id: "tiktok", labelEn: "TikTok", labelHe: "TikTok", icon: <TikTokIcon /> },
+  { id: "twitter", labelEn: "X / Twitter", labelHe: "X / Twitter", icon: <XTwitterIcon /> },
 ];
 
 function getChannelTabIcon(id: ChannelId): React.ReactNode {
@@ -73,6 +84,14 @@ function getChannelTabIcon(id: ChannelId): React.ReactNode {
       return <LinkedInIcon />;
     case "imessage":
       return <AppleMessagesIcon />;
+    case "messenger":
+      return <MessengerIcon />;
+    case "slack":
+      return <SlackIcon />;
+    case "tiktok":
+      return <TikTokIcon />;
+    case "twitter":
+      return <XTwitterIcon />;
     default:
       return null;
   }
@@ -87,6 +106,10 @@ function getChannelLabel(id: ChannelId): string {
   if (id === "instagram") return "Instagram";
   if (id === "linkedin") return "LinkedIn";
   if (id === "imessage") return "Apple Messages";
+  if (id === "messenger") return "Messenger";
+  if (id === "slack") return "Slack";
+  if (id === "tiktok") return "TikTok";
+  if (id === "twitter") return "X / Twitter";
   return id;
 }
 
@@ -136,6 +159,7 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const longPressRef = useRef<NodeJS.Timeout | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [draggedPinnedIndex, setDraggedPinnedIndex] = useState<number | null>(null);
 
   const conversationsWithMeta = getConversationsWithMeta(currentUserId);
   const contactIdsWithChats = conversationsWithMeta.map((c) => c.contactId);
@@ -408,23 +432,19 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
                   <div
                     key={id}
                     draggable
-                    onDragStart={() => {
-                      // index is within pinnedChannels only
-                      (setPinnedChannels as React.Dispatch<React.SetStateAction<ChannelId[]>>)((prev) => prev);
-                    }}
+                    onDragStart={() => setDraggedPinnedIndex(index)}
                     onDragOver={(e) => {
                       e.preventDefault();
-                      const from = index;
-                      const to = Number((e.currentTarget as HTMLDivElement).dataset.index ?? index);
-                      if (from === to) return;
+                      if (draggedPinnedIndex === null || draggedPinnedIndex === index) return;
                       setPinnedChannels((prev) => {
                         const next = [...prev];
-                        const [moved] = next.splice(from, 1);
-                        next.splice(to, 0, moved);
+                        const [moved] = next.splice(draggedPinnedIndex, 1);
+                        next.splice(index, 0, moved);
                         return next;
                       });
+                      setDraggedPinnedIndex(index);
                     }}
-                    data-index={index}
+                    onDragEnd={() => setDraggedPinnedIndex(null)}
                     className={`flex-shrink-0 flex items-center justify-center gap-1.5 py-1.5 px-2 text-xs font-medium rounded-xl min-w-[4.5rem] border ${
                       isActive ? activeColor + " shadow-sm border-transparent" : "bg-gray-100/80 text-gray-600 border-gray-200/50"
                     } cursor-grab active:cursor-grabbing`}
@@ -448,7 +468,7 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
                       className="ml-1 p-0.5 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-200/70"
                       aria-label={isHe ? "סגור ערוץ" : "Close channel"}
                     >
-                      <Trash2 className="w-3 h-3" />
+                      <X className="w-3 h-3" strokeWidth={2} />
                     </button>
                   </div>
                 );
@@ -928,6 +948,11 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
                       </div>
                     </>
                   )}
+            </div>
+          ) : activeChannel === "whatsapp" ? (
+            /* WhatsApp tab: fully encapsulated WhatsAppPanel */
+            <div className="flex-1 min-h-0 flex flex-col bg-white">
+              <WhatsAppPanel />
             </div>
           ) : activeChannel === "ollin_calls" ? (
             /* Ollin Calls tab: Recent Calls (Voice & Video) */
