@@ -816,7 +816,6 @@ export function WhatsAppPanel() {
               className="hidden"
               onChange={(e) => handleFileSelect(e, "image")}
             />
-            </div>
             <div
               className="flex-1 flex items-center min-w-0 rounded-2xl px-4 py-2.5"
               style={{ backgroundColor: WA.inputBg, border: `1px solid ${WA.border}` }}

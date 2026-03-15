@@ -501,8 +501,8 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
               </div>
             </div>
           </div>
-          {/* Row 2: Global search — ONLY in list view (not in active chat header) */}
-          {!selectedContactId && (
+          {/* Row 2: Global search — only for Ollin Chat / list view; hide for WhatsApp/Gmail so their UI starts immediately */}
+          {!selectedContactId && activeChannel !== "whatsapp" && activeChannel !== "gmail" && (
           <div className="flex-shrink-0 px-2 py-1.5 bg-[#f8f9fa] relative">
             <div className="flex items-center gap-1.5 w-full bg-white border border-gray-200/80 rounded-xl pl-2.5 pr-2 py-1.5 min-h-[32px]">
               <Search className="w-3.5 h-3.5 text-gray-400 shrink-0" strokeWidth={2} />
