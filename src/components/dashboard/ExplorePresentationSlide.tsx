@@ -31,8 +31,9 @@ const BG_WHITE = "#ffffff";
 const BG_SUBTLE = "#f8fafc";
 const BORDER = "#e2e8f0";
 const SHELL_RADIUS = "3.5rem";
-const SHELL_HEIGHT = 850;
+const SHELL_HEIGHT = 850; // Fixed height (px) for scroll layout — header + top block fixed, only feed scrolls
 
+// Demo flow: Open /dashboard/explore-slide → Scroll feed → Edit → X on Jobs → Add → Local Deals → Done → Refine → Paste JSON (tabs: no Jobs, with Local Deals)
 type TabId = "all" | "deals" | "gossip" | "local_deals" | "jobs" | "pros";
 type TabEntry = { id: TabId; labelEn: string; labelHe: string };
 
@@ -131,7 +132,6 @@ export function ExplorePresentationSlide() {
       radiusKm,
       locale,
       timestamp: new Date().toISOString(),
-      source: "Ollin Explore",
     };
     navigator.clipboard.writeText(JSON.stringify(state, null, 2));
     setRefineCopied(true);
