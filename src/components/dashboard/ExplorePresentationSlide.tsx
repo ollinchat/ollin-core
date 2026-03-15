@@ -39,7 +39,7 @@ type TabEntry = { id: TabId; labelEn: string; labelHe: string };
 // ALL is always first and cannot be removed. Other tabs come from the library.
 const TAB_ALL: TabEntry = { id: "all", labelEn: "ALL", labelHe: "הכל" };
 
-// Predefined tab library: categories that can be added in Edit Mode (spec: Deals, Gossip, Local Deals, Jobs, Pros).
+// Tab library: all categories that can be added in Edit Mode (investor demo: add/remove from this set).
 const TAB_LIBRARY: TabEntry[] = [
   { id: "deals", labelEn: "Deals", labelHe: "מבצעים" },
   { id: "gossip", labelEn: "Gossip", labelHe: "רכילות" },
@@ -48,12 +48,13 @@ const TAB_LIBRARY: TabEntry[] = [
   { id: "pros", labelEn: "Pros", labelHe: "מומחים" },
 ];
 
+// Initial tab bar: ALL + four categories (Local Deals omitted so it can be added in-demo).
 const DEFAULT_TABS: TabEntry[] = [
   TAB_ALL,
-  { id: "deals", labelEn: "Deals", labelHe: "מבצעים" },
-  { id: "gossip", labelEn: "Gossip", labelHe: "רכילות" },
-  { id: "jobs", labelEn: "Jobs", labelHe: "משרות" },
-  { id: "pros", labelEn: "Pros", labelHe: "מומחים" },
+  TAB_LIBRARY[0], // Deals
+  TAB_LIBRARY[1], // Gossip
+  TAB_LIBRARY[3], // Jobs
+  TAB_LIBRARY[4], // Pros
 ];
 
 function formatDistance(km: number): string {
@@ -122,14 +123,14 @@ export function ExplorePresentationSlide() {
   const [radiusKm, setRadiusKm] = useState(10);
   const radiusDisplay = useMemo(() => formatDistance(radiusKm), [radiusKm]);
 
-  // Refine (Magic Button): copy actual slide state for AI/Gemini iteration
+  // Refine (Magic Button): copy exact current state including full tab list (added/removed)
   const [refineCopied, setRefineCopied] = useState(false);
   const handleRefine = useCallback(() => {
     const state = {
       activeTab,
       radiusKm,
       tabs: tabs.map((t) => ({ id: t.id, labelEn: t.labelEn, labelHe: t.labelHe })),
-      locale: locale,
+      locale,
       scanComplete,
       timestamp: new Date().toISOString(),
       source: "Ollin Explore — sync with Gemini",
@@ -148,9 +149,15 @@ export function ExplorePresentationSlide() {
     });
   }, [activeTab]);
 
+  // Keep activeTab in sync if it was removed (e.g. by deleting the current tab)
+  useEffect(() => {
+    const exists = tabs.some((t) => t.id === activeTab);
+    if (!exists && activeTab !== "all") setActiveTab("all");
+  }, [tabs, activeTab]);
+
   return (
     <div
-      className="flex flex-col mx-auto w-full max-w-[420px] min-h-[88vh] overflow-hidden bg-white shadow-2xl"
+      className="flex flex-col mx-auto w-full max-w-[420px] h-[85vh] min-h-[560px] max-h-[900px] overflow-hidden bg-white shadow-2xl"
       style={{
         borderRadius: RADIUS_SHELL,
         border: `1px solid ${BORDER}`,
@@ -193,6 +200,8 @@ export function ExplorePresentationSlide() {
         </div>
       </header>
 
+      {/* Scrollable column: everything above the feed can shrink; feed gets flex-1 and scrolls */}
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       {/* Explore section: title + search + Set location */}
       <section className="shrink-0 px-4 pt-4 pb-3" style={{ backgroundColor: BG_WHITE }}>
         <div className="flex items-center gap-2 mb-3">
@@ -296,7 +305,7 @@ export function ExplorePresentationSlide() {
                         key={entry.id}
                         type="button"
                         onClick={() => addTab(entry)}
-                        className="w-full text-left px-3 py-2.5 text-sm font-medium transition-colors hover:bg-gray-50 flex items-center gap-2"
+                        className="w-full text-start px-3 py-2.5 text-sm font-medium transition-colors hover:bg-gray-50 flex items-center gap-2"
                         style={{ color: TEXT_PRIMARY }}
                       >
                         <Plus className="w-4 h-4 shrink-0" style={{ color: OLLIN_EMERALD }} strokeWidth={2} />
@@ -415,8 +424,8 @@ export function ExplorePresentationSlide() {
         />
       </div>
 
-      {/* Feature cards: Visual Deal + Chargeback Protection (blue) */}
-      <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-4">
+      {/* Main feed: only this area scrolls — flex-1 min-h-0 is critical for overflow */}
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 pb-4 space-y-4">
         {/* Chargeback Protection — high-priority blue card (The Edge) */}
         <article
           className="rounded-2xl overflow-hidden border-2 shadow-lg transition-transform hover:scale-[1.01] active:scale-[0.99]"
@@ -510,6 +519,8 @@ export function ExplorePresentationSlide() {
             </p>
           </div>
         </article>
+      </div>
+
       </div>
 
       {/* Bottom navigation */}
