@@ -4,14 +4,12 @@ import React, { useState, useRef, useEffect } from "react";
 import { Smile, Paperclip, Mic, CheckCheck } from "lucide-react";
 
 const WA = {
-  // WhatsApp branding
-  green: "#075e54",
-  greenLight: "#25D366",
-  sidebarBg: "#f0f2f5",
+  // WhatsApp branding colors (exact as requested)
+  tealSidebar: "#008069", // sidebar header
+  chatHeaderBg: "#f0f2f5", // chat header + input bar
   chatBg: "#e5ddd5", // doodle background
-  bubbleOut: "#dcf8c6",
-  bubbleIn: "#ffffff",
-  headerBg: "#075e54",
+  bubbleOut: "#dcf8c6", // sent
+  bubbleIn: "#ffffff", // received
   inputBg: "#ffffff",
   text: "#111b21",
   textMuted: "#667781",
@@ -119,7 +117,8 @@ export function WhatsAppPanel() {
       style={{
         backgroundColor: WA.chatBg,
         backgroundImage:
-          "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d4cdc4' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")",
+          "url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')",
+        backgroundRepeat: "repeat",
       }}
     >
       {/* Left: WhatsApp contact list only — no other sidebars in this tab */}
@@ -130,7 +129,11 @@ export function WhatsAppPanel() {
         {/* Sidebar header with avatar + icons */}
         <div
           className="flex items-center gap-3 px-3 py-3 shrink-0"
-          style={{ backgroundColor: WA.headerBg, borderBottom: `1px solid ${WA.border}` }}
+          style={{
+            backgroundColor: WA.tealSidebar,
+            borderBottom: `1px solid ${WA.border}`,
+            height: 60,
+          }}
         >
           <div className="w-8 h-8 rounded-full bg-[#ece5dd] flex items-center justify-center text-sm font-semibold text-[#075e54]">
             U
@@ -189,19 +192,37 @@ export function WhatsAppPanel() {
             {/* Chat header with contact name + online status */}
             <header
               className="flex items-center gap-3 px-4 py-2 shrink-0"
-              style={{ backgroundColor: WA.headerBg, borderBottom: `1px solid ${WA.border}` }}
+              style={{
+                backgroundColor: WA.chatHeaderBg,
+                borderBottom: `1px solid ${WA.border}`,
+                height: 60,
+                borderLeft: "1px solid #ddd",
+              }}
             >
               <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-medium shrink-0 border border-white/40">
                 {selectedChat.name.slice(0, 1).toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
-                <h1 className="font-semibold text-[15px] truncate text-white">{selectedChat.name}</h1>
-                <p className="text-xs text-[#daded9] truncate">online</p>
+                <h1 className="font-semibold text-[15px] truncate" style={{ color: WA.text }}>
+                  {selectedChat.name}
+                </h1>
+                <p className="text-xs truncate" style={{ color: WA.textMuted }}>
+                  online
+                </p>
               </div>
             </header>
 
             {/* Messages list with independent scroll */}
-            <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-1 min-h-0">
+            <div
+              className="flex-1 overflow-y-auto flex flex-col gap-1 min-h-0"
+              style={{
+                backgroundColor: WA.chatBg,
+                backgroundImage:
+                  "url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')",
+                backgroundRepeat: "repeat",
+                padding: "12px 16px",
+              }}
+            >
               {messages.length === 0 && (
                 <p className="text-sm text-center py-8" style={{ color: WA.textMuted }}>
                   No messages yet. Type below and send via WhatsApp API.
@@ -210,10 +231,14 @@ export function WhatsAppPanel() {
               {messages.map((msg) => (
                 <div key={msg.id} className={`flex ${msg.out ? "justify-end" : "justify-start"}`}>
                   <div
-                    className="max-w-[70%] rounded-lg px-3 py-2 shadow-sm relative"
+                    className="max-w-[70%] px-3 py-2 shadow-sm relative"
                     style={{
                       backgroundColor: msg.out ? WA.bubbleOut : WA.bubbleIn,
                       color: WA.text,
+                      borderRadius: msg.out
+                        ? "8px 0 8px 8px"
+                        : "0 8px 8px 8px",
+                      boxShadow: "0 1px 0.5px rgba(0,0,0,0.13)",
                     }}
                   >
                     <p className="text-[14px] whitespace-pre-wrap break-words">{msg.text}</p>
@@ -273,7 +298,10 @@ export function WhatsAppPanel() {
             {/* Bottom input bar with smiley, attachment, input, mic/send */}
             <div
               className="flex items-center gap-2 px-4 py-3 shrink-0"
-              style={{ backgroundColor: WA.headerBg }}
+              style={{
+                backgroundColor: WA.chatHeaderBg,
+                padding: "10px 16px",
+              }}
             >
               <button
                 type="button"
