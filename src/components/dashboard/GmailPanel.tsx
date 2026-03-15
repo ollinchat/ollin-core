@@ -22,6 +22,12 @@ import {
   Users,
   LayoutGrid,
   ArrowLeft,
+  ArchiveRestore,
+  MailOpen,
+  MoreVertical,
+  Reply,
+  Forward,
+  ChevronDown,
 } from "lucide-react";
 import { GmailIcon } from "@/components/dashboard/ChannelBrandIcons";
 
@@ -41,6 +47,15 @@ type GmailLabelItem = {
   type: string;
   messagesTotal?: number;
   messagesUnread?: number;
+};
+
+type MessageDetail = {
+  subject: string;
+  from: string;
+  to: string;
+  date: string;
+  body: string;
+  snippet: string;
 };
 
 const SIDEBAR_ITEMS: {
@@ -111,11 +126,11 @@ function Badge({
   if (count === 0 && (unread === undefined || unread === 0)) return null;
   const bg =
     color === "blue"
-      ? "bg-[#1a73e8]/90"
+      ? "bg-[#1a73e8]"
       : color === "green"
-        ? "bg-[#0b804b]/90"
+        ? "bg-[#0b804b]"
         : color === "orange"
-          ? "bg-[#e37400]/90"
+          ? "bg-[#e37400]"
           : "bg-[#5f6368]";
   return (
     <span className={`rounded-md px-1.5 py-0.5 text-xs font-medium text-white ${bg}`}>
@@ -131,7 +146,7 @@ export function GmailPanel() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [body, setBody] = useState<string | null>(null);
+  const [selectedDetail, setSelectedDetail] = useState<MessageDetail | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [sidebarSelected, setSidebarSelected] = useState("all_inboxes");
   const isConnected = status === "authenticated" && !!session;
@@ -176,16 +191,26 @@ export function GmailPanel() {
 
   useEffect(() => {
     if (!selectedId || !isConnected) {
-      setBody(null);
+      setSelectedDetail(null);
       return;
     }
     fetch(`/api/gmail/messages/${selectedId}`)
       .then((res) => res.json())
       .then((data) => {
-        if (data.error) setBody("Could not load message.");
-        else setBody(data.body ?? data.snippet ?? "");
+        if (data.error) {
+          setSelectedDetail(null);
+        } else {
+          setSelectedDetail({
+            subject: data.subject ?? "",
+            from: data.from ?? "",
+            to: data.to ?? "",
+            date: data.date ?? "",
+            body: data.body ?? data.snippet ?? "",
+            snippet: data.snippet ?? "",
+          });
+        }
       })
-      .catch(() => setBody("Could not load message."));
+      .catch(() => setSelectedDetail(null));
   }, [selectedId, isConnected]);
 
   const labelCounts = useMemo(() => {
@@ -206,18 +231,18 @@ export function GmailPanel() {
 
   if (status === "loading") {
     return (
-      <div className="flex-1 min-h-0 flex items-center justify-center bg-[#121212] p-0 m-0 w-full h-full">
-        <p className="text-sm text-[#9aa0a6]">Loading…</p>
+      <div className="flex-1 min-h-0 flex items-center justify-center bg-[#ffffff] p-0 m-0 w-full h-full" style={{ color: "#1f1f1f" }}>
+        <p className="text-sm" style={{ color: "#5f6368" }}>Loading…</p>
       </div>
     );
   }
 
   if (!isConnected) {
     return (
-      <div className="flex-1 min-h-0 flex flex-col items-center justify-center bg-[#121212] p-8 m-0 w-full h-full">
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center bg-[#ffffff] p-8 m-0 w-full h-full" style={{ color: "#1f1f1f" }}>
         <GmailIcon className="w-14 h-14 mb-4 opacity-90" />
-        <h3 className="text-lg font-semibold text-white mb-2">Gmail</h3>
-        <p className="text-sm text-[#9aa0a6] text-center max-w-sm mb-6">
+        <h3 className="text-lg font-semibold mb-2" style={{ color: "#1f1f1f" }}>Gmail</h3>
+        <p className="text-sm text-center max-w-sm mb-6" style={{ color: "#5f6368" }}>
           Connect your Google account to read and send mail from OllinChat.
         </p>
         <button
@@ -234,23 +259,141 @@ export function GmailPanel() {
   const userImage = (session?.user as any)?.image ?? null;
   const userName = (session?.user as any)?.name ?? (session?.user as any)?.email ?? "";
 
+  const textPrimary = "#1f1f1f";
+  const textSecondary = "#5f6368";
+  const bgMain = "#ffffff";
+  const bgSidebar = "#f6f8fc";
+  const borderColor = "rgba(0,0,0,0.08)";
+
   return (
-    <div className="flex-1 min-h-0 flex flex-col w-full h-full bg-[#121212] text-white p-0 m-0 overflow-hidden">
+    <div
+      className="flex-1 min-h-0 flex flex-col w-full h-full p-0 m-0 overflow-hidden font-sans"
+      style={{ backgroundColor: bgMain, color: textPrimary }}
+    >
+      {/* Internal Email View: full white page (mobile + desktop when message open) */}
+      {selectedId && selectedDetail && (
+        <div
+          className="absolute inset-0 z-50 flex flex-col bg-[#ffffff] overflow-hidden"
+          style={{ color: textPrimary }}
+        >
+          {/* Action bar */}
+          <header className="flex items-center justify-between shrink-0 h-14 px-2 border-b min-w-0" style={{ borderColor, backgroundColor: bgMain }}>
+            <button
+              type="button"
+              onClick={() => setSelectedId(null)}
+              className="p-2 -ml-1 rounded-full hover:bg-[#f6f8fc] transition-colors"
+              style={{ color: textPrimary }}
+              aria-label="Back"
+            >
+              <ArrowLeft className="w-6 h-6" />
+            </button>
+            <div className="flex items-center gap-1">
+              <button type="button" className="p-2 rounded-full hover:bg-[#f6f8fc]" style={{ color: textPrimary }} aria-label="Archive">
+                <ArchiveRestore className="w-5 h-5" />
+              </button>
+              <button type="button" className="p-2 rounded-full hover:bg-[#f6f8fc]" style={{ color: textPrimary }} aria-label="Delete">
+                <Trash2 className="w-5 h-5" />
+              </button>
+              <button type="button" className="p-2 rounded-full hover:bg-[#f6f8fc]" style={{ color: textPrimary }} aria-label="Mark as unread">
+                <MailOpen className="w-5 h-5" />
+              </button>
+              <button type="button" className="p-2 rounded-full hover:bg-[#f6f8fc]" style={{ color: textPrimary }} aria-label="More">
+                <MoreVertical className="w-5 h-5" />
+              </button>
+            </div>
+          </header>
+
+          {/* Subject + star + Inbox pill */}
+          <div className="shrink-0 px-4 pt-3 pb-2 border-b" style={{ borderColor }}>
+            <div className="flex items-start justify-between gap-2">
+              <h1 className="text-xl font-semibold flex-1 min-w-0 pr-2" style={{ color: textPrimary }}>
+                {selectedDetail.subject || "(No subject)"}
+              </h1>
+              <Star className="w-5 h-5 shrink-0 mt-0.5" style={{ color: textSecondary }} strokeWidth={2} />
+            </div>
+            <span className="inline-block mt-2 rounded-full px-2.5 py-0.5 text-xs" style={{ backgroundColor: "#f6f8fc", color: textSecondary }}>
+              Inbox
+            </span>
+          </div>
+
+          {/* Sender row */}
+          <div className="shrink-0 flex items-start gap-3 px-4 py-3 border-b" style={{ borderColor }}>
+            <div
+              className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-sm font-medium text-white"
+              style={{ backgroundColor: "#5f6368" }}
+            >
+              {parseFrom(selectedDetail.from).initial}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center flex-wrap gap-x-2 gap-y-1">
+                <span className="font-semibold text-sm" style={{ color: textPrimary }}>{parseFrom(selectedDetail.from).name || selectedDetail.from}</span>
+                <span className="text-sm" style={{ color: textSecondary }}>{formatDate(selectedDetail.date)}</span>
+              </div>
+              <button type="button" className="flex items-center gap-1 mt-0.5 text-sm hover:underline" style={{ color: textSecondary }}>
+                to me
+                <ChevronDown className="w-4 h-4" />
+              </button>
+              <div className="mt-1">
+                <button type="button" className="text-sm hover:underline" style={{ color: "#1a73e8" }}>Unsubscribe</button>
+                <button type="button" className="p-1 ml-1 rounded-full hover:bg-[#f6f8fc] inline-flex" style={{ color: textSecondary }} aria-label="More">
+                  <MoreVertical className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto px-4 py-4 text-sm whitespace-pre-wrap" style={{ color: textPrimary }}>
+            {selectedDetail.body || selectedDetail.snippet || "No content."}
+          </div>
+
+          {/* Reply / Forward bar */}
+          <div className="shrink-0 flex items-center gap-3 px-4 py-3 border-t" style={{ borderColor, backgroundColor: bgMain }}>
+            <button
+              type="button"
+              className="flex items-center gap-2 rounded-full px-4 py-2.5 border transition-colors hover:bg-[#f6f8fc]"
+              style={{ borderColor, color: textPrimary }}
+            >
+              <Reply className="w-5 h-5" />
+              <span className="font-medium text-sm">Reply</span>
+            </button>
+            <button
+              type="button"
+              className="flex items-center gap-2 rounded-full px-4 py-2.5 border transition-colors hover:bg-[#f6f8fc]"
+              style={{ borderColor, color: textPrimary }}
+            >
+              <Forward className="w-5 h-5" />
+              <span className="font-medium text-sm">Forward</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Top bar: search + hamburger + profile */}
-      <header className="flex items-center gap-2 shrink-0 h-14 px-2 md:px-3 bg-[#1f1f1f] border-b border-[#3c4043]">
+      <header
+        className="flex items-center gap-2 shrink-0 h-14 px-2 md:px-3 border-b min-w-0"
+        style={{ borderColor, backgroundColor: bgMain }}
+      >
         <button
           type="button"
           onClick={() => setDrawerOpen((o) => !o)}
-          className="p-2 rounded-full hover:bg-white/10 text-[#e8eaed]"
+          className="p-2 rounded-full hover:bg-[#f6f8fc] transition-colors"
+          style={{ color: textPrimary }}
           aria-label="Menu"
         >
           <Menu className="w-6 h-6" />
         </button>
-        <div className="flex-1 flex items-center gap-2 min-w-0 rounded-lg bg-[#3c4043] px-3 py-2">
-          <Search className="w-5 h-5 shrink-0 text-[#9aa0a6]" />
-          <span className="text-[#9aa0a6] text-sm">Search in mail</span>
+        <div
+          className="flex-1 flex items-center gap-2 min-w-0 rounded-full px-4 py-2.5 shadow-sm border"
+          style={{ backgroundColor: bgMain, borderColor }}
+        >
+          <Search className="w-5 h-5 shrink-0" style={{ color: textSecondary }} />
+          <span className="text-sm" style={{ color: textSecondary }}>Search in mail</span>
         </div>
-        <div className="w-9 h-9 rounded-full overflow-hidden bg-[#4a86e8] flex items-center justify-center shrink-0 border-2 border-white/20">
+        <div
+          className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center shrink-0 border"
+          style={{ backgroundColor: "#4a86e8", borderColor }}
+        >
           {userImage ? (
             <img src={userImage} alt="" className="w-full h-full object-cover" />
           ) : (
@@ -260,33 +403,32 @@ export function GmailPanel() {
       </header>
 
       <div className="flex-1 flex min-h-0 overflow-hidden">
-        {/* Sidebar overlay (mobile) */}
         {drawerOpen && (
           <div
-            className="fixed inset-0 z-40 bg-black/50 md:hidden"
+            className="fixed inset-0 z-40 bg-black/20 md:hidden"
             onClick={() => setDrawerOpen(false)}
             aria-hidden
           />
         )}
 
-        {/* Sidebar */}
         <aside
           className={`
-            fixed md:relative z-50 top-0 left-0 bottom-0 w-[280px] max-w-[85vw] flex flex-col bg-[#2d2d2d] 
-            border-r border-[#3c4043] transform transition-transform duration-200 ease-out
+            fixed md:relative z-50 top-0 left-0 bottom-0 w-[280px] max-w-[85vw] flex flex-col
+            border-r transform transition-transform duration-200 ease-out
             ${drawerOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
           `}
+          style={{ backgroundColor: bgSidebar, borderColor }}
         >
-          <div className="flex items-center gap-2 px-4 py-4 border-b border-[#3c4043]">
+          <div className="flex items-center gap-2 px-4 py-4 border-b" style={{ borderColor }}>
             <GmailIcon className="w-8 h-8 shrink-0" />
-            <span className="font-medium text-white text-lg">Gmail</span>
+            <span className="font-medium text-lg" style={{ color: textPrimary }}>Gmail</span>
           </div>
           <nav className="flex-1 overflow-y-auto py-2">
             {SIDEBAR_ITEMS.map((item) => {
               if (item.id === "manage") {
                 return (
                   <div key={item.id} className="px-4 py-2 flex items-center gap-3">
-                    <span className="text-sm text-[#9aa0a6]">Manage subscriptions</span>
+                    <span className="text-sm" style={{ color: textSecondary }}>Manage subscriptions</span>
                     <span className="rounded bg-[#1a73e8] px-1.5 py-0.5 text-[10px] font-medium text-white">New</span>
                   </div>
                 );
@@ -304,69 +446,80 @@ export function GmailPanel() {
                     setSidebarSelected(item.id);
                     setDrawerOpen(false);
                   }}
-                  className={`
-                    w-full flex items-center gap-3 px-4 py-2.5 text-left
-                    ${isSelected ? "bg-[#5f4b32]" : "hover:bg-white/5"}
-                  `}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-left rounded-r-full transition-colors"
+                  style={{
+                    backgroundColor: isSelected ? "rgba(26, 115, 232, 0.08)" : "transparent",
+                    color: isSelected ? "#1a73e8" : textPrimary,
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isSelected) e.currentTarget.style.backgroundColor = "#f6f8fc";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSelected) e.currentTarget.style.backgroundColor = "transparent";
+                  }}
                 >
-                  {item.icon && <span className="text-[#e8eaed] shrink-0">{item.icon}</span>}
-                  <span className="flex-1 text-sm text-white truncate">{item.label}</span>
-                  {showBadge && (
-                    <Badge
-                      count={total}
-                      unread={unread}
-                      color={item.badgeColor}
-                    />
-                  )}
+                  {item.icon && <span className="shrink-0" style={{ color: "inherit" }}>{item.icon}</span>}
+                  <span className="flex-1 text-sm truncate">{item.label}</span>
+                  {showBadge && <Badge count={total} unread={unread} color={item.badgeColor} />}
                 </button>
               );
             })}
           </nav>
         </aside>
 
-        {/* Main: list + detail */}
-        <div className="flex-1 flex flex-col min-w-0 bg-[#121212] relative">
-          {/* Inbox list header */}
-          <div className="shrink-0 px-3 py-2 bg-[#1f1f1f] border-b border-[#3c4043]">
-            <p className="text-sm text-[#9aa0a6]">
+        <div className="flex-1 flex flex-col min-w-0 relative" style={{ backgroundColor: bgMain }}>
+          <div className="shrink-0 px-3 py-2 border-b" style={{ borderColor, backgroundColor: bgMain }}>
+            <p className="text-sm" style={{ color: textSecondary }}>
               {SIDEBAR_ITEMS.find((i) => i.id === sidebarSelected)?.label ?? "All inboxes"}
             </p>
           </div>
 
           {error && (
-            <p className="px-3 py-2 text-sm text-red-400">{error}</p>
+            <p className="px-3 py-2 text-sm text-red-600">{error}</p>
           )}
 
           {loading ? (
-            <div className="flex-1 flex items-center justify-center text-[#9aa0a6] text-sm">Loading…</div>
+            <div className="flex-1 flex items-center justify-center text-sm" style={{ color: textSecondary }}>Loading…</div>
           ) : (
             <ul className="flex-1 overflow-y-auto list-none m-0 p-0">
               {messages.length === 0 && (
-                <li className="px-4 py-8 text-sm text-[#9aa0a6] text-center">No messages</li>
+                <li className="px-4 py-8 text-sm text-center" style={{ color: textSecondary }}>No messages</li>
               )}
               {messages.map((m) => {
                 const { name, initial } = parseFrom(m.from);
                 const isSelected = selectedId === m.id;
                 return (
-                  <li key={m.id} className="border-b border-[#3c4043]/50">
+                  <li key={m.id} className="border-b" style={{ borderColor }}>
                     <button
                       type="button"
                       onClick={() => setSelectedId(m.id)}
-                      className={`w-full flex items-start gap-3 px-3 py-3 text-left hover:bg-white/5 ${isSelected ? "bg-white/10" : ""}`}
+                      className="w-full flex items-start gap-3 px-3 py-3 text-left transition-colors rounded-none"
+                      style={{
+                        backgroundColor: isSelected ? "#f6f8fc" : "transparent",
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isSelected) e.currentTarget.style.backgroundColor = "#f6f8fc";
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isSelected) e.currentTarget.style.backgroundColor = "transparent";
+                      }}
                     >
-                      <div className="w-10 h-10 rounded-full bg-[#5f6368] flex items-center justify-center shrink-0 text-sm font-medium text-white">
+                      <div
+                        className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-sm font-medium text-white"
+                        style={{ backgroundColor: "#5f6368" }}
+                      >
                         {initial}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-2">
-                          <span className="font-semibold text-white text-sm truncate">{name || m.from}</span>
-                          <span className="text-xs text-[#9aa0a6] shrink-0">{formatDate(m.date)}</span>
+                          <span className="font-semibold text-sm truncate" style={{ color: textPrimary }}>{name || m.from}</span>
+                          <span className="text-xs shrink-0" style={{ color: textSecondary }}>{formatDate(m.date)}</span>
                         </div>
-                        <p className="text-sm text-[#e8eaed] truncate mt-0.5">{m.subject || "(No subject)"}</p>
-                        <p className="text-xs text-[#9aa0a6] truncate mt-0.5">{m.snippet}</p>
+                        <p className="text-sm truncate mt-0.5" style={{ color: textPrimary }}>{m.subject || "(No subject)"}</p>
+                        <p className="text-xs truncate mt-0.5" style={{ color: textSecondary }}>{m.snippet}</p>
                       </div>
                       <div className="flex flex-col items-center shrink-0 pt-1">
-                        <Star className="w-4 h-4 text-[#9aa0a6] stroke-[2]" />
+                        <Star className="w-4 h-4" style={{ color: textSecondary }} strokeWidth={2} />
                       </div>
                     </button>
                   </li>
@@ -375,7 +528,6 @@ export function GmailPanel() {
             </ul>
           )}
 
-          {/* FAB Compose */}
           <div className="absolute bottom-20 right-4 md:bottom-6 md:right-6 z-30">
             <button
               type="button"
@@ -386,42 +538,15 @@ export function GmailPanel() {
             </button>
           </div>
         </div>
-
-        {/* Detail panel (when message selected) - desktop */}
-        {selectedId && (
-          <div className="hidden md:flex w-[50%] min-w-[320px] max-w-[480px] flex-col bg-[#1f1f1f] border-l border-[#3c4043] overflow-hidden">
-            <div className="flex-1 overflow-y-auto p-4 text-sm text-[#e8eaed] whitespace-pre-wrap">
-              {body === null ? "Loading…" : body}
-            </div>
-          </div>
-        )}
-
-        {/* Mobile: full-screen message view when selected */}
-        {selectedId && (
-          <div className="md:hidden fixed inset-0 z-30 flex flex-col bg-[#1f1f1f]">
-            <header className="flex items-center gap-2 h-14 px-3 border-b border-[#3c4043] bg-[#2d2d2d]">
-              <button
-                type="button"
-                onClick={() => setSelectedId(null)}
-                className="p-2 -ml-1 text-[#e8eaed]"
-                aria-label="Back"
-              >
-                <ArrowLeft className="w-6 h-6" />
-              </button>
-              <span className="text-sm text-white truncate">Message</span>
-            </header>
-            <div className="flex-1 overflow-y-auto p-4 text-sm text-[#e8eaed] whitespace-pre-wrap">
-              {body === null ? "Loading…" : body}
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* Bottom nav */}
-      <nav className="flex shrink-0 h-14 items-center justify-around bg-[#1f1f1f] border-t border-[#3c4043] px-4">
+      <nav
+        className="flex shrink-0 h-14 items-center justify-around px-4 border-t"
+        style={{ borderColor, backgroundColor: bgMain }}
+      >
         <div className="relative flex flex-col items-center gap-0.5">
-          <Mail className="w-6 h-6 text-white" />
-          <span className="text-[10px] text-[#9aa0a6]">Mail</span>
+          <Mail className="w-6 h-6" style={{ color: textPrimary }} />
+          <span className="text-[10px]" style={{ color: textSecondary }}>Mail</span>
           {inboxTotalUnread > 0 && (
             <span className="absolute -top-0.5 right-1/2 translate-x-6 min-w-[18px] h-[18px] rounded-full bg-[#ea4335] text-[10px] font-medium text-white flex items-center justify-center px-1">
               {inboxTotalUnread >= 99 ? "99+" : inboxTotalUnread}
@@ -429,8 +554,8 @@ export function GmailPanel() {
           )}
         </div>
         <div className="flex flex-col items-center gap-0.5">
-          <Video className="w-6 h-6 text-[#9aa0a6]" />
-          <span className="text-[10px] text-[#9aa0a6]">Video</span>
+          <Video className="w-6 h-6" style={{ color: textSecondary }} />
+          <span className="text-[10px]" style={{ color: textSecondary }}>Video</span>
         </div>
       </nav>
     </div>
