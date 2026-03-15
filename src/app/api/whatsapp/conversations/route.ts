@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { loadWaMessages } from "@/lib/whatsapp-store";
 
 /**
  * Returns WhatsApp conversations for the panel.
@@ -90,16 +91,34 @@ export async function GET() {
     const token = process.env.WHATSAPP_ACCESS_TOKEN;
     const hasApi = !!token;
 
-    // Use live credentials for send (see /api/whatsapp/send). Conversation list is not provided by Meta's API;
-    // replace getDemoConversations() with your webhook-stored conversations when available.
     const conversations = getDemoConversations();
+    const stored = await loadWaMessages();
+    const byPhone = new Map<string, { text: string; time: number }>();
+    for (const m of stored) {
+      const key = m.phone.replace(/\D/g, "");
+      if (!key) continue;
+      const existing = byPhone.get(key);
+      if (!existing || m.timestamp_ms > existing.time) {
+        byPhone.set(key, { text: m.text, time: m.timestamp_ms });
+      }
+    }
+    const merged = conversations.map((c) => {
+      const key = c.phone?.replace(/\D/g, "");
+      const last = key ? byPhone.get(key) : undefined;
+      if (!last) return c;
+      return {
+        ...c,
+        lastMessage: last.text,
+        time: new Date(last.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      };
+    });
 
-    const totalUnread = conversations.reduce((s, c) => s + c.unread, 0);
+    const totalUnread = merged.reduce((s, c) => s + c.unread, 0);
     const missedCallsCount = 1;
     const settingsNotificationCount = 1;
 
     return NextResponse.json({
-      conversations,
+      conversations: merged,
       meta: {
         totalUnread,
         missedCallsCount,

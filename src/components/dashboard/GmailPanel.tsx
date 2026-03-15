@@ -57,6 +57,8 @@ type MessageDetail = {
   date: string;
   body: string;
   snippet: string;
+  threadId?: string;
+  messageId?: string;
 };
 
 const SIDEBAR_ITEMS: {
@@ -114,6 +116,11 @@ function parseFrom(from: string): { name: string; initial: string } {
   return { name: name || from, initial };
 }
 
+function extractEmail(from: string): string {
+  const match = from.match(/<([^>]+)>/);
+  return match ? match[1].trim() : from.trim();
+}
+
 function Badge({
   count,
   unread,
@@ -150,6 +157,10 @@ export function GmailPanel() {
   const [selectedDetail, setSelectedDetail] = useState<MessageDetail | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [sidebarSelected, setSidebarSelected] = useState("all_inboxes");
+  const [replyMode, setReplyMode] = useState<"reply" | "forward" | null>(null);
+  const [replyText, setReplyText] = useState("");
+  const [forwardTo, setForwardTo] = useState("");
+  const [sendingMail, setSendingMail] = useState(false);
   const isConnected = status === "authenticated" && !!session;
 
   const currentLabelId = useMemo(() => {
@@ -208,6 +219,8 @@ export function GmailPanel() {
             date: data.date ?? "",
             body: data.body ?? data.snippet ?? "",
             snippet: data.snippet ?? "",
+            threadId: data.threadId,
+            messageId: data.messageId,
           });
         }
       })
@@ -224,6 +237,52 @@ export function GmailPanel() {
     });
     return map;
   }, [labels]);
+
+  const sendReplyOrForward = useCallback(
+    async (mode: "reply" | "forward") => {
+      if (!selectedDetail) return;
+      const to =
+        mode === "reply" ? extractEmail(selectedDetail.from) : forwardTo.trim();
+      const subject =
+        mode === "reply"
+          ? (selectedDetail.subject.startsWith("Re:") ? selectedDetail.subject : `Re: ${selectedDetail.subject}`)
+          : (selectedDetail.subject.startsWith("Fwd:") ? selectedDetail.subject : `Fwd: ${selectedDetail.subject}`);
+      const body =
+        mode === "reply"
+          ? replyText.trim()
+          : `---------- Forwarded message ---------\nFrom: ${selectedDetail.from}\nDate: ${selectedDetail.date}\nSubject: ${selectedDetail.subject}\nTo: ${selectedDetail.to}\n\n${selectedDetail.body?.slice(0, 5000) || selectedDetail.snippet}\n\n${replyText.trim()}`;
+      if (!to || !body) return;
+      setSendingMail(true);
+      try {
+        const res = await fetch("/api/gmail/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            to,
+            subject,
+            body,
+            contentType: "text/plain",
+            threadId: mode === "reply" ? selectedDetail.threadId : undefined,
+            inReplyTo: mode === "reply" ? selectedDetail.messageId : undefined,
+            references: mode === "reply" ? selectedDetail.messageId : undefined,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+          setReplyMode(null);
+          setReplyText("");
+          setForwardTo("");
+        } else {
+          setError(data.error || "Send failed");
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Send failed");
+      } finally {
+        setSendingMail(false);
+      }
+    },
+    [selectedDetail, replyText, forwardTo]
+  );
 
   const inboxTotalUnread = useMemo(() => {
     const inb = labelCounts["INBOX"];
@@ -281,7 +340,7 @@ export function GmailPanel() {
           <header className="flex items-center justify-between shrink-0 h-14 px-2 border-b min-w-0" style={{ borderColor, backgroundColor: bgMain }}>
             <button
               type="button"
-              onClick={() => setSelectedId(null)}
+              onClick={() => { setSelectedId(null); setReplyMode(null); setReplyText(""); setForwardTo(""); }}
               className="p-2 -ml-1 rounded-full hover:bg-[#f6f8fc] transition-colors"
               style={{ color: textPrimary }}
               aria-label="Back"
@@ -400,10 +459,51 @@ export function GmailPanel() {
             </div>
           </div>
 
+          {replyMode && (
+            <div className="shrink-0 px-4 py-3 border-t" style={{ borderColor, backgroundColor: "#f6f8fc" }}>
+              {replyMode === "forward" && (
+                <input
+                  type="email"
+                  placeholder="To"
+                  value={forwardTo}
+                  onChange={(e) => setForwardTo(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border text-sm mb-2"
+                  style={{ borderColor, color: textPrimary }}
+                />
+              )}
+              <textarea
+                placeholder={replyMode === "reply" ? "Write your reply..." : "Add a note (optional)"}
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 rounded-lg border text-sm resize-none"
+                style={{ borderColor, color: textPrimary }}
+              />
+              <div className="flex gap-2 mt-2">
+                <button
+                  type="button"
+                  onClick={() => sendReplyOrForward(replyMode)}
+                  disabled={sendingMail || (replyMode === "reply" ? !replyText.trim() : !forwardTo.trim())}
+                  className="px-4 py-2 rounded-full text-sm font-medium text-white bg-[#1a73e8] hover:bg-[#1557b0] disabled:opacity-50"
+                >
+                  {sendingMail ? "Sending…" : replyMode === "reply" ? "Send Reply" : "Send Forward"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setReplyMode(null); setReplyText(""); setForwardTo(""); }}
+                  className="px-4 py-2 rounded-full text-sm font-medium"
+                  style={{ borderColor, color: textPrimary }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
           {/* Reply / Forward — fixed at bottom (Gmail mobile style) */}
           <div className="shrink-0 flex items-center gap-3 px-4 py-3 border-t" style={{ borderColor, backgroundColor: bgMain }}>
             <button
               type="button"
+              onClick={() => setReplyMode(replyMode === "reply" ? null : "reply")}
               className="flex-1 flex items-center justify-center gap-2 rounded-full py-3 border-2 transition-colors hover:bg-[#f6f8fc]"
               style={{ borderColor, color: textPrimary }}
             >
@@ -412,6 +512,7 @@ export function GmailPanel() {
             </button>
             <button
               type="button"
+              onClick={() => setReplyMode(replyMode === "forward" ? null : "forward")}
               className="flex-1 flex items-center justify-center gap-2 rounded-full py-3 border-2 transition-colors hover:bg-[#f6f8fc]"
               style={{ borderColor, color: textPrimary }}
             >

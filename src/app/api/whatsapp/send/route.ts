@@ -61,7 +61,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ success: true, messageId: data.messages?.[0]?.id });
+    const messageId = data.messages?.[0]?.id;
+    if (messageId) {
+      const { appendWaMessage } = await import("@/lib/whatsapp-store");
+      await appendWaMessage({
+        id: messageId,
+        phone: toE164,
+        from_me: true,
+        text: text.trim(),
+        timestamp_ms: Date.now(),
+        type: "text",
+      });
+    }
+
+    return NextResponse.json({ success: true, messageId });
   } catch (e) {
     console.error("[whatsapp/send]", e);
     return NextResponse.json(

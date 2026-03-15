@@ -46,7 +46,7 @@ const WA = {
 const DOODLE_PATTERN =
   "url(\"data:image/svg+xml,%3Csvg width='60' height='60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M10 10 L50 10 M30 20 L55 35 M15 40 L45 55 M20 25 L25 30 M40 15 L45 20' stroke='rgba(0,0,0,0.04)' fill='none' stroke-width='1'/%3E%3Ccircle cx='25' cy='35' r='2' fill='rgba(0,0,0,0.03)'/%3E%3Ccircle cx='45' cy='25' r='1.5' fill='rgba(0,0,0,0.03)'/%3E%3C/svg%3E\")";
 
-type ChatMessage = { id: string; text: string; out: boolean; time: string; seen?: boolean };
+type ChatMessage = { id: string; text: string; out: boolean; time: string; seen?: boolean; type?: string; media_url?: string };
 
 const PLUS_MENU_ITEMS: { id: string; label: string; icon: React.ReactNode }[] = [
   { id: "document", label: "Document", icon: <FileText className="w-6 h-6" /> },
@@ -117,9 +117,15 @@ export function WhatsAppPanel() {
   const [testPhone, setTestPhone] = useState("");
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; message: ChatMessage } | null>(null);
   const [recordingVoice, setRecordingVoice] = useState(false);
+  const [taskCreatedToast, setTaskCreatedToast] = useState(false);
   const plusMenuRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const fileInputImageRef = useRef<HTMLInputElement>(null);
+  const fileInputDocRef = useRef<HTMLInputElement>(null);
+  const fileInputCameraRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetch("/api/whatsapp/conversations")
@@ -132,17 +138,17 @@ export function WhatsAppPanel() {
   }, []);
 
   useEffect(() => {
-    if (activeChatId) {
-      fetch(`/api/whatsapp/messages?contactId=${encodeURIComponent(activeChatId)}`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.messages?.length) {
-            setMessagesByChat((prev) => ({ ...prev, [activeChatId]: data.messages }));
-          }
-        })
-        .catch(() => {});
-    }
-  }, [activeChatId]);
+    if (!activeChatId) return;
+    const chat = conversations.find((c) => c.id === activeChatId);
+    const phone = chat?.phone?.trim() || activeChatId;
+    fetch(`/api/whatsapp/messages?phone=${encodeURIComponent(phone)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        const list = Array.isArray(data.messages) ? data.messages : [];
+        setMessagesByChat((prev) => ({ ...prev, [activeChatId]: list }));
+      })
+      .catch(() => {});
+  }, [activeChatId, conversations]);
 
   useEffect(() => {
     if (plusMenuOpen) {
@@ -252,8 +258,90 @@ export function WhatsAppPanel() {
         otherParty: selectedChat.name,
       });
       setContextMenu(null);
+      setTaskCreatedToast(true);
+      setTimeout(() => setTaskCreatedToast(false), 3000);
     },
     [selectedChat, addGivenTask]
+  );
+
+  const phoneForApi = (selectedChat?.phone || testPhone).replace(/\D/g, "");
+
+  const sendMedia = useCallback(
+    async (type: "image" | "audio" | "document", file: File | Blob, filename?: string) => {
+      if (!selectedChat || !phoneForApi) {
+        setSendError("Enter recipient phone (E.164) to send media.");
+        return;
+      }
+      const formData = new FormData();
+      formData.append("to", phoneForApi);
+      formData.append("type", type);
+      formData.append("file", file instanceof Blob ? new File([file], filename || "audio.ogg", { type: file.type }) : file);
+      setSending(true);
+      setSendError(null);
+      try {
+        const res = await fetch("/api/whatsapp/send-media", { method: "POST", body: formData });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setSendError(data.error || "Failed to send media");
+          return;
+        }
+        const newMsg: ChatMessage = {
+          id: data.messageId || `m-${Date.now()}`,
+          text: `[${type}]`,
+          out: true,
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          seen: true,
+          type,
+        };
+        setMessagesByChat((prev) => ({
+          ...prev,
+          [selectedChat.id]: [...(prev[selectedChat.id] || []), newMsg],
+        }));
+      } catch (e) {
+        setSendError(e instanceof Error ? e.message : "Send failed");
+      } finally {
+        setSending(false);
+      }
+    },
+    [selectedChat, phoneForApi, testPhone]
+  );
+
+  const startVoiceRecording = useCallback(() => {
+    if (!navigator.mediaDevices?.getUserMedia) return;
+    navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+      chunksRef.current = [];
+      const mr = new MediaRecorder(stream);
+      mediaRecorderRef.current = mr;
+      mr.ondataavailable = (e) => {
+        if (e.data.size) chunksRef.current.push(e.data);
+      };
+      mr.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(chunksRef.current, { type: "audio/ogg" });
+        if (blob.size > 0 && selectedChat && phoneForApi) sendMedia("audio", blob, "voice.ogg");
+      };
+      mr.start();
+      setRecordingVoice(true);
+    });
+  }, [selectedChat, phoneForApi, sendMedia]);
+
+  const stopVoiceRecording = useCallback(() => {
+    if (mediaRecorderRef.current?.state === "recording") {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current = null;
+    }
+    setRecordingVoice(false);
+  }, []);
+
+  const handleFileSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>, type: "image" | "document") => {
+      const file = e.target.files?.[0];
+      e.target.value = "";
+      if (!file || !selectedChat) return;
+      const apiType = type === "image" ? "image" : "document";
+      sendMedia(apiType, file);
+    },
+    [selectedChat, sendMedia]
   );
 
   const filteredBySearch = conversations.filter((c) =>
@@ -283,30 +371,30 @@ export function WhatsAppPanel() {
           className="flex flex-col w-full flex-1 min-h-0"
           style={{ backgroundColor: WA.sidebarBg, borderColor: WA.border }}
         >
+          {/* Teal header #008069 — large bold Chats, white icons */}
           <div
-            className="flex items-center shrink-0 h-14 px-3 border-b gap-2"
-            style={{ backgroundColor: WA.sidebarBg, borderColor: WA.border }}
+            className="flex items-center shrink-0 h-14 px-3 gap-2"
+            style={{ backgroundColor: "#008069", borderBottom: "1px solid rgba(255,255,255,0.2)" }}
           >
             <button
               type="button"
-              className="p-2 rounded-full hover:bg-black/5"
-              style={{ color: WA.textMuted }}
+              className="p-2 rounded-full hover:bg-white/10 text-white"
               aria-label="Settings"
             >
               <Settings className="w-5 h-5" />
             </button>
-            <h1 className="text-xl font-bold truncate flex-1 min-w-0" style={{ color: WA.text }}>
+            <h1 className="text-xl font-bold truncate flex-1 min-w-0 text-white">
               Chats
             </h1>
-            <button type="button" className="p-2 rounded-full hover:bg-black/5" style={{ color: WA.textMuted }} aria-label="Camera">
+            <button type="button" className="p-2 rounded-full hover:bg-white/10 text-white" aria-label="Camera">
               <Camera className="w-5 h-5" />
             </button>
-            <button type="button" className="p-2 rounded-full hover:bg-black/5" style={{ color: WA.textMuted }} aria-label="New chat">
+            <button type="button" className="p-2 rounded-full hover:bg-white/10 text-white" aria-label="New chat">
               <Plus className="w-5 h-5" strokeWidth={2} />
             </button>
           </div>
 
-          <div className="shrink-0 px-2 py-2" style={{ borderBottom: `1px solid ${WA.border}` }}>
+          <div className="shrink-0 px-2 py-2" style={{ backgroundColor: WA.sidebarBg, borderBottom: `1px solid ${WA.border}` }}>
             <div
               className="flex items-center gap-2 px-3 py-2.5 rounded-full backdrop-blur-md"
               style={{ backgroundColor: "rgba(0,0,0,0.06)" }}
@@ -410,12 +498,13 @@ export function WhatsAppPanel() {
 
       {/* ——— Full-screen internal chat ——— */}
       {viewMode === "chat" && selectedChat && (
-        <div className="absolute inset-0 z-10 flex flex-col bg-[#e5ddd5]" style={{ backgroundImage: DOODLE_PATTERN, backgroundRepeat: "repeat" }}>
+        <div className="absolute inset-0 z-10 flex flex-col" style={{ backgroundColor: WA.chatBg, backgroundImage: DOODLE_PATTERN, backgroundRepeat: "repeat" }}>
+          {/* Chat header — light gray, profile + name + online, Video/Voice right */}
           <header
             className="flex items-center gap-3 shrink-0 h-14 px-2 border-b"
-            style={{ backgroundColor: "#1f2c34", borderColor: "rgba(255,255,255,0.1)" }}
+            style={{ backgroundColor: WA.chatHeaderBg, borderColor: WA.border }}
           >
-            <button type="button" onClick={goBack} className="p-2 rounded-full text-white/90 hover:bg-white/10" aria-label="Back">
+            <button type="button" onClick={goBack} className="p-2 rounded-full hover:bg-black/5" style={{ color: WA.text }} aria-label="Back">
               <ChevronLeft className="w-6 h-6" />
             </button>
             <button
@@ -425,15 +514,15 @@ export function WhatsAppPanel() {
             >
               <WhatsAppAvatar avatar={selectedChat.avatar} name={selectedChat.name} size={10} className="shrink-0" />
               <div className="flex-1 min-w-0 text-left">
-                <h1 className="font-semibold text-[16px] truncate text-white">{selectedChat.name}</h1>
-                <p className="text-xs truncate text-white/70">online</p>
+                <h1 className="font-semibold text-[16px] truncate" style={{ color: WA.text }}>{selectedChat.name}</h1>
+                <p className="text-xs truncate" style={{ color: WA.textMuted }}>online</p>
               </div>
             </button>
             <div className="flex items-center gap-0.5 shrink-0">
-              <button type="button" className="p-2 rounded-full text-white/90 hover:bg-white/10" aria-label="Video call">
+              <button type="button" className="p-2 rounded-full hover:bg-black/5" style={{ color: WA.textMuted }} aria-label="Video call">
                 <Video className="w-5 h-5" />
               </button>
-              <button type="button" className="p-2 rounded-full text-white/90 hover:bg-white/10" aria-label="Voice call">
+              <button type="button" className="p-2 rounded-full hover:bg-black/5" style={{ color: WA.textMuted }} aria-label="Voice call">
                 <Phone className="w-5 h-5" />
               </button>
             </div>
@@ -492,6 +581,14 @@ export function WhatsAppPanel() {
               <div ref={messagesEndRef} />
             </div>
 
+            {taskCreatedToast && (
+              <div
+                className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[60] px-4 py-2 rounded-full shadow-lg text-sm font-medium text-white"
+                style={{ backgroundColor: WA.green }}
+              >
+                Task created from message
+              </div>
+            )}
             {contextMenu && (
               <div
                 className="fixed z-[100] py-1 rounded-lg shadow-xl border min-w-[200px]"
@@ -555,24 +652,51 @@ export function WhatsAppPanel() {
                       </p>
                     </div>
                     <div className="py-3 border-b" style={{ borderColor: WA.border }}>
-                      {[
-                        { icon: FileText, label: "Media, links and docs", sub: "None" },
-                        { icon: FileImage, label: "Starred", sub: "None" },
-                      ].map(({ icon: Icon, label, sub }) => (
-                        <button
-                          key={label}
-                          type="button"
-                          className="w-full flex items-center gap-3 py-3 text-left hover:bg-black/5 rounded-lg px-2"
-                          style={{ color: WA.text }}
-                        >
-                          <Icon className="w-5 h-5 shrink-0" style={{ color: WA.textMuted }} />
-                          <span className="flex-1 text-sm">{label}</span>
-                          <span className="text-sm" style={{ color: WA.textMuted }}>
-                            {sub}
-                          </span>
-                          <ChevronRight className="w-4 h-4" style={{ color: WA.textMuted }} />
-                        </button>
-                      ))}
+                      {(() => {
+                        const mediaInChat = messages.filter((m) => m.type && m.type !== "text");
+                        return (
+                          <>
+                            <button
+                              type="button"
+                              className="w-full flex items-center gap-3 py-3 text-left hover:bg-black/5 rounded-lg px-2"
+                              style={{ color: WA.text }}
+                            >
+                              <FileText className="w-5 h-5 shrink-0" style={{ color: WA.textMuted }} />
+                              <span className="flex-1 text-sm">Media, links and docs</span>
+                              <span className="text-sm" style={{ color: WA.textMuted }}>
+                                {mediaInChat.length > 0 ? `${mediaInChat.length} items` : "None"}
+                              </span>
+                              <ChevronRight className="w-4 h-4" style={{ color: WA.textMuted }} />
+                            </button>
+                            {mediaInChat.length > 0 && (
+                              <div className="flex flex-wrap gap-2 mt-2">
+                                {mediaInChat.slice(0, 6).map((m) => (
+                                  <div
+                                    key={m.id}
+                                    className="w-14 h-14 rounded-lg bg-black/5 flex items-center justify-center overflow-hidden"
+                                  >
+                                    {m.type === "image" && m.media_url ? (
+                                      <img src={m.media_url} alt="" className="w-full h-full object-cover" />
+                                    ) : (
+                                      <FileImage className="w-6 h-6" style={{ color: WA.textMuted }} />
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              className="w-full flex items-center gap-3 py-3 text-left hover:bg-black/5 rounded-lg px-2"
+                              style={{ color: WA.text }}
+                            >
+                              <FileImage className="w-5 h-5 shrink-0" style={{ color: WA.textMuted }} />
+                              <span className="flex-1 text-sm">Starred</span>
+                              <span className="text-sm" style={{ color: WA.textMuted }}>None</span>
+                              <ChevronRight className="w-4 h-4" style={{ color: WA.textMuted }} />
+                            </button>
+                          </>
+                        );
+                      })()}
                     </div>
                     <div className="py-3">
                       {[
@@ -625,15 +749,17 @@ export function WhatsAppPanel() {
             <div className="shrink-0 px-3 py-2 bg-red-50 text-red-700 text-sm">{sendError}</div>
           )}
 
+          {/* Mobile input bar: + left, text field, Camera and Mic right — light bar */}
           <div
             className="shrink-0 flex items-center gap-2 px-2 py-3 border-t"
-            style={{ backgroundColor: "#1f2c34", borderColor: "rgba(255,255,255,0.08)" }}
+            style={{ backgroundColor: WA.chatHeaderBg, borderColor: WA.border }}
           >
             <div className="relative shrink-0" ref={plusMenuRef}>
               <button
                 type="button"
                 onClick={() => setPlusMenuOpen((o) => !o)}
-                className="p-2 rounded-full text-white/90 hover:bg-white/10"
+                className="p-2 rounded-full hover:bg-black/5"
+                style={{ color: WA.textMuted }}
                 aria-label="Attach"
                 aria-expanded={plusMenuOpen}
               >
@@ -642,16 +768,24 @@ export function WhatsAppPanel() {
               {plusMenuOpen && (
                 <div
                   className="absolute bottom-full left-0 mb-1 w-[260px] rounded-2xl border shadow-2xl py-3 px-2 grid grid-cols-3 gap-2 z-50"
-                  style={{ backgroundColor: "#233138", borderColor: "rgba(255,255,255,0.1)" }}
+                  style={{ backgroundColor: WA.sidebarBg, borderColor: WA.border }}
                 >
                   {PLUS_MENU_ITEMS.map((item) => (
                     <button
                       key={item.id}
                       type="button"
-                      onClick={() => setPlusMenuOpen(false)}
-                      className="flex flex-col items-center gap-1.5 py-2 rounded-xl hover:bg-white/10 text-white/90 transition-colors"
+                      onClick={() => {
+                        setPlusMenuOpen(false);
+                        if (item.id === "document") fileInputDocRef.current?.click();
+                        else if (item.id === "camera") fileInputCameraRef.current?.click();
+                        else if (item.id === "gallery") fileInputImageRef.current?.click();
+                        else if (item.id === "location" || item.id === "contact") setSendError("Location/Contact: configure in WhatsApp.");
+                        else if (item.id === "scan") fileInputDocRef.current?.click();
+                      }}
+                      className="flex flex-col items-center gap-1.5 py-2 rounded-xl hover:bg-black/5 transition-colors"
+                      style={{ color: WA.text }}
                     >
-                      <span className="w-12 h-12 rounded-full flex items-center justify-center bg-white/10">
+                      <span className="w-12 h-12 rounded-full flex items-center justify-center bg-black/5" style={{ color: WA.green }}>
                         {item.icon}
                       </span>
                       <span className="text-[11px] font-medium truncate w-full text-center">{item.label}</span>
@@ -660,9 +794,32 @@ export function WhatsAppPanel() {
                 </div>
               )}
             </div>
+            <input
+              ref={fileInputImageRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => handleFileSelect(e, "image")}
+            />
+            <input
+              ref={fileInputDocRef}
+              type="file"
+              accept="*"
+              className="hidden"
+              onChange={(e) => handleFileSelect(e, "document")}
+            />
+            <input
+              ref={fileInputCameraRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => handleFileSelect(e, "image")}
+            />
+            </div>
             <div
               className="flex-1 flex items-center min-w-0 rounded-2xl px-4 py-2.5"
-              style={{ backgroundColor: "rgba(255,255,255,0.1)" }}
+              style={{ backgroundColor: WA.inputBg, border: `1px solid ${WA.border}` }}
             >
               <input
                 ref={inputRef}
@@ -670,27 +827,29 @@ export function WhatsAppPanel() {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Type a message"
-                className="flex-1 min-w-0 bg-transparent text-sm outline-none placeholder:text-white/50"
-                style={{ color: "#e9edef" }}
+                className="flex-1 min-w-0 bg-transparent text-sm outline-none"
+                style={{ color: WA.text }}
               />
             </div>
-            <button type="button" className="p-2 rounded-full text-white/70 hover:bg-white/10" aria-label="Emoji">
-              <span className="w-5 h-5 rounded bg-white/20 flex items-center justify-center text-xs">😊</span>
-            </button>
-            <button type="button" className="p-2 rounded-full text-white/70 hover:bg-white/10" aria-label="Camera">
+            <button type="button" className="p-2 rounded-full hover:bg-black/5" style={{ color: WA.textMuted }} aria-label="Camera">
               <Camera className="w-5 h-5" />
             </button>
             <button
               type="button"
+              onMouseDown={() => { if (!input.trim()) startVoiceRecording(); }}
+              onMouseUp={stopVoiceRecording}
+              onMouseLeave={stopVoiceRecording}
+              onTouchStart={() => { if (!input.trim()) startVoiceRecording(); }}
+              onTouchEnd={stopVoiceRecording}
               onClick={() => {
                 if (input.trim()) sendMessage();
-                else setRecordingVoice((r) => !r);
               }}
-              className={`p-2 rounded-full ${recordingVoice ? "bg-red-500/30 text-red-300" : "text-white/70 hover:bg-white/10"}`}
+              className={`p-2 rounded-full ${recordingVoice ? "bg-red-100 text-red-600" : "hover:bg-black/5"}`}
+              style={!recordingVoice ? { color: WA.textMuted } : undefined}
               aria-label={input.trim() ? "Send" : "Voice note"}
             >
               {input.trim() ? (
-                <Send className="w-5 h-5" style={{ color: WA.blueTicks }} />
+                <Send className="w-5 h-5" style={{ color: WA.green }} />
               ) : (
                 <Mic className="w-5 h-5" />
               )}

@@ -963,8 +963,8 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
                   )}
             </div>
           ) : activeChannel === "whatsapp" ? (
-            /* WhatsApp tab: fully encapsulated WhatsAppPanel */
-            <div className="flex-1 min-h-0 flex flex-col bg-white">
+            /* WhatsApp tab: full-screen, no padding — panel owns its own mobile frame */
+            <div className="flex-1 min-h-0 flex flex-col min-w-0 overflow-hidden p-0">
               <WhatsAppPanel />
             </div>
           ) : activeChannel === "ollin_calls" ? (
