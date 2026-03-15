@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Compass,
   MapPin,
@@ -18,6 +18,7 @@ import {
   ScanLine,
   GitBranch,
   Building2,
+  Plus,
 } from "lucide-react";
 import { useLocale } from "@/contexts/LocaleContext";
 
@@ -31,14 +32,28 @@ const BG_SUBTLE = "#f8fafc";
 const BORDER = "#e2e8f0";
 const RADIUS_SHELL = "3.5rem"; // extreme rounded corners — premium mobile shell
 
-type TabId = "all" | "deals" | "gossip" | "jobs" | "pros";
+type TabId = "all" | "deals" | "gossip" | "local_deals" | "jobs" | "pros";
 
-const DEFAULT_TABS: { id: TabId; labelEn: string; labelHe: string }[] = [
-  { id: "all", labelEn: "ALL", labelHe: "הכל" },
+type TabEntry = { id: TabId; labelEn: string; labelHe: string };
+
+// ALL is always first and cannot be removed. Other tabs come from the library.
+const TAB_ALL: TabEntry = { id: "all", labelEn: "ALL", labelHe: "הכל" };
+
+// Predefined tab library: categories that can be added in Edit Mode (spec: Deals, Gossip, Local Deals, Jobs, Pros).
+const TAB_LIBRARY: TabEntry[] = [
+  { id: "deals", labelEn: "Deals", labelHe: "מבצעים" },
+  { id: "gossip", labelEn: "Gossip", labelHe: "רכילות" },
+  { id: "local_deals", labelEn: "Local Deals", labelHe: "מבצעים לוקאליים" },
+  { id: "jobs", labelEn: "Jobs", labelHe: "משרות" },
+  { id: "pros", labelEn: "Pros", labelHe: "מומחים" },
+];
+
+const DEFAULT_TABS: TabEntry[] = [
+  TAB_ALL,
   { id: "deals", labelEn: "Deals", labelHe: "מבצעים" },
   { id: "gossip", labelEn: "Gossip", labelHe: "רכילות" },
   { id: "jobs", labelEn: "Jobs", labelHe: "משרות" },
-  { id: "pros", labelEn: "Pros", labelHe: "מקצוענים" },
+  { id: "pros", labelEn: "Pros", labelHe: "מומחים" },
 ];
 
 function formatDistance(km: number): string {
@@ -50,10 +65,39 @@ export function ExplorePresentationSlide() {
   const { locale, setLocale } = useLocale();
   const isHe = locale === "he";
 
-  // Tabs: customizable with edit mode (delete = remove from list with transition)
-  const [tabs, setTabs] = useState(DEFAULT_TABS);
+  // Tabs: customizable with edit mode — delete (X) and add from library
+  const [tabs, setTabs] = useState<TabEntry[]>(DEFAULT_TABS);
   const [editMode, setEditMode] = useState(false);
+  const [addTabMenuOpen, setAddTabMenuOpen] = useState(false);
+  const addTabMenuRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState<TabId>("all");
+
+  // Categories not yet in the tab bar — show these in the Add Tab menu
+  const availableToAdd = useMemo(
+    () => TAB_LIBRARY.filter((c) => !tabs.some((t) => t.id === c.id)),
+    [tabs]
+  );
+
+  const addTab = useCallback((entry: TabEntry) => {
+    setTabs((prev) => (prev.some((t) => t.id === entry.id) ? prev : [...prev, entry]));
+    setActiveTab(entry.id);
+    setAddTabMenuOpen(false);
+  }, []);
+
+  // Close Add Tab menu when clicking outside
+  useEffect(() => {
+    if (!addTabMenuOpen) return;
+    const handleOutside = (e: MouseEvent | TouchEvent) => {
+      const el = addTabMenuRef.current;
+      if (el && !el.contains(e.target as Node)) setAddTabMenuOpen(false);
+    };
+    document.addEventListener("mousedown", handleOutside);
+    document.addEventListener("touchstart", handleOutside, { passive: true });
+    return () => {
+      document.removeEventListener("mousedown", handleOutside);
+      document.removeEventListener("touchstart", handleOutside);
+    };
+  }, [addTabMenuOpen]);
 
   // Scanning "wow" effect: progress bar on load
   const [scanProgress, setScanProgress] = useState(0);
@@ -96,7 +140,7 @@ export function ExplorePresentationSlide() {
   }, [activeTab, radiusKm, tabs, locale, scanComplete]);
 
   const removeTab = useCallback((id: TabId) => {
-    if (id === "all") return; // keep ALL
+    if (id === "all") return; // ALL is never removable
     setTabs((prev) => {
       const next = prev.filter((t) => t.id !== id);
       if (activeTab === id) setActiveTab("all");
@@ -183,17 +227,14 @@ export function ExplorePresentationSlide() {
         </div>
       </section>
 
-      {/* Customizable tabs: edit mode = show X to delete with smooth transition */}
-      <div className="shrink-0 px-4 pb-3 overflow-x-auto scrollbar-hide">
+      {/* Customizable tabs: Edit Mode = delete (X) + Add Tab (library dropdown) */}
+      <div className="shrink-0 px-4 pb-3 overflow-x-auto scrollbar-hide relative">
         <div className="flex items-center gap-2 min-w-max">
           {tabs.map((tab) => (
             <div
               key={tab.id}
               className="flex items-center gap-1 flex-shrink-0 transition-all duration-300 ease-out"
-              style={{
-                opacity: 1,
-                transform: "scale(1)",
-              }}
+              style={{ opacity: 1, transform: "scale(1)" }}
             >
               <button
                 type="button"
@@ -223,9 +264,56 @@ export function ExplorePresentationSlide() {
               )}
             </div>
           ))}
+          {editMode && (
+            <div className="relative flex-shrink-0" ref={addTabMenuRef}>
+              <button
+                type="button"
+                onClick={() => setAddTabMenuOpen((o) => !o)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold border-2 border-dashed transition-colors hover:bg-gray-50 min-w-[44px] justify-center"
+                style={{ borderColor: OLLIN_EMERALD, color: OLLIN_EMERALD }}
+                aria-expanded={addTabMenuOpen}
+                aria-label={isHe ? "הוסף כרטיסייה" : "Add tab"}
+              >
+                <Plus className="w-4 h-4" strokeWidth={2.5} />
+                {isHe ? "הוסף" : "Add"}
+              </button>
+              {addTabMenuOpen && (
+                <div
+                  className="absolute top-full mt-1.5 z-50 min-w-[180px] rounded-xl border shadow-xl py-1.5 overflow-hidden"
+                  style={{
+                    backgroundColor: BG_WHITE,
+                    borderColor: BORDER,
+                    [isHe ? "right" : "left"]: 0,
+                  }}
+                >
+                  {availableToAdd.length === 0 ? (
+                    <p className="px-3 py-2 text-xs" style={{ color: TEXT_MUTED }}>
+                      {isHe ? "כל הקטגוריות נוספו" : "All categories added"}
+                    </p>
+                  ) : (
+                    availableToAdd.map((entry) => (
+                      <button
+                        key={entry.id}
+                        type="button"
+                        onClick={() => addTab(entry)}
+                        className="w-full text-left px-3 py-2.5 text-sm font-medium transition-colors hover:bg-gray-50 flex items-center gap-2"
+                        style={{ color: TEXT_PRIMARY }}
+                      >
+                        <Plus className="w-4 h-4 shrink-0" style={{ color: OLLIN_EMERALD }} strokeWidth={2} />
+                        {isHe ? entry.labelHe : entry.labelEn}
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           <button
             type="button"
-            onClick={() => setEditMode((e) => !e)}
+            onClick={() => {
+              setEditMode((e) => !e);
+              setAddTabMenuOpen(false);
+            }}
             className={`flex-shrink-0 px-3 py-2 rounded-full text-xs font-medium transition-colors ${editMode ? "bg-gray-800 text-white" : "border border-dashed"}`}
             style={editMode ? undefined : { borderColor: BORDER, color: TEXT_MUTED }}
           >
