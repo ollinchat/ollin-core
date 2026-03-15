@@ -7,7 +7,6 @@ import {
   Search,
   ChevronDown,
   MoreHorizontal,
-  Sparkles,
   Tag,
   Shield,
   Wallet,
@@ -18,6 +17,7 @@ import {
   Check,
   ScanLine,
   GitBranch,
+  Building2,
 } from "lucide-react";
 import { useLocale } from "@/contexts/LocaleContext";
 
@@ -78,19 +78,22 @@ export function ExplorePresentationSlide() {
   const [radiusKm, setRadiusKm] = useState(10);
   const radiusDisplay = useMemo(() => formatDistance(radiusKm), [radiusKm]);
 
-  // Refine (Magic Button): copy state for AI
+  // Refine (Magic Button): copy actual slide state for AI/Gemini iteration
   const [refineCopied, setRefineCopied] = useState(false);
   const handleRefine = useCallback(() => {
     const state = {
-      tab: activeTab,
+      activeTab,
       radiusKm,
+      tabs: tabs.map((t) => ({ id: t.id, labelEn: t.labelEn, labelHe: t.labelHe })),
+      locale: locale,
+      scanComplete,
       timestamp: new Date().toISOString(),
       source: "Ollin Explore — sync with Gemini",
     };
     navigator.clipboard.writeText(JSON.stringify(state, null, 2));
     setRefineCopied(true);
     setTimeout(() => setRefineCopied(false), 2800);
-  }, [activeTab, radiusKm]);
+  }, [activeTab, radiusKm, tabs, locale, scanComplete]);
 
   const removeTab = useCallback((id: TabId) => {
     if (id === "all") return; // keep ALL
@@ -231,25 +234,25 @@ export function ExplorePresentationSlide() {
         </div>
       </div>
 
-      {/* Scanning hero: radar animation + progress bar */}
+      {/* Scanning hero: radar pulse (high visibility) + smooth progress bar */}
       <div
         className="mx-4 mb-4 rounded-2xl border overflow-hidden transition-shadow hover:shadow-md"
         style={{ backgroundColor: BG_SUBTLE, borderColor: BORDER }}
       >
-        <div className="flex items-center gap-3 px-4 py-3">
-          <span className="relative flex h-10 w-10 shrink-0 items-center justify-center">
+        <div className="flex items-center gap-3 px-4 py-3.5">
+          <span className="relative flex h-12 w-12 shrink-0 items-center justify-center">
             <span
-              className="absolute inline-flex h-full w-full rounded-full explore-slide-radar-ring opacity-30"
-              style={{ backgroundColor: OLLIN_EMERALD }}
+              className="absolute inline-flex h-full w-full rounded-full explore-slide-radar-ring"
+              style={{ backgroundColor: OLLIN_EMERALD, opacity: 0.45 }}
             />
             <span
-              className="absolute inline-flex h-6 w-6 rounded-full explore-slide-radar-ring-delay opacity-50"
-              style={{ backgroundColor: OLLIN_EMERALD }}
+              className="absolute inline-flex h-7 w-7 rounded-full explore-slide-radar-ring-delay"
+              style={{ backgroundColor: OLLIN_EMERALD, opacity: 0.55 }}
             />
-            <ScanLine className="relative w-5 h-5" style={{ color: OLLIN_EMERALD }} strokeWidth={2} />
+            <ScanLine className="relative w-6 h-6" style={{ color: OLLIN_EMERALD }} strokeWidth={2.5} />
           </span>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold" style={{ color: TEXT_PRIMARY }}>
+            <p className="text-sm font-black" style={{ color: TEXT_PRIMARY }}>
               {isHe ? "אולין סורקת אותות מקומיים..." : "Ollin is scanning local signals..."}
             </p>
             <p className="text-xs mt-0.5" style={{ color: TEXT_MUTED }}>
@@ -260,10 +263,10 @@ export function ExplorePresentationSlide() {
             <MoreHorizontal className="w-5 h-5" />
           </button>
         </div>
-        <div className="px-4 pb-3">
-          <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: "rgba(0,0,0,0.08)" }}>
+        <div className="px-4 pb-3.5">
+          <div className="h-3 rounded-full overflow-hidden" style={{ backgroundColor: "rgba(0,0,0,0.1)" }}>
             <div
-              className="h-full rounded-full transition-all duration-300 ease-out"
+              className="h-full rounded-full transition-all duration-150 ease-out"
               style={{
                 width: `${scanProgress}%`,
                 backgroundColor: OLLIN_EMERALD,
@@ -271,7 +274,7 @@ export function ExplorePresentationSlide() {
             />
           </div>
           {scanComplete && (
-            <p className="text-xs font-medium mt-1.5" style={{ color: OLLIN_EMERALD }}>
+            <p className="text-xs font-bold mt-2" style={{ color: OLLIN_EMERALD }}>
               {isHe ? "סריקה הושלמה" : "Deep data scan complete"}
             </p>
           )}
@@ -353,31 +356,69 @@ export function ExplorePresentationSlide() {
           </div>
         </article>
 
-        {/* Visual Deal card: image placeholder, HOT DEAL, distance tag */}
+        {/* Visual Deal card: business image placeholder, HOT DEAL, distance — font-black title */}
         <article
           className="rounded-2xl overflow-hidden border shadow-md bg-white transition-all hover:shadow-lg"
           style={{ borderColor: BORDER }}
         >
-          <div className="relative aspect-[16/10] bg-gray-100">
-            <div className="absolute inset-0 flex items-center justify-center">
-              <Tag className="w-12 h-12" style={{ color: OLLIN_EMERALD }} strokeWidth={1.5} />
+          <div className="relative aspect-[16/10] overflow-hidden">
+            <div
+              className="absolute inset-0 flex items-center justify-center"
+              style={{
+                background: `linear-gradient(135deg, ${OLLIN_EMERALD}12 0%, #f0fdf4 50%, #ecfdf5 100%)`,
+              }}
+            >
+              <Building2 className="w-14 h-14" style={{ color: OLLIN_EMERALD }} strokeWidth={1.5} />
             </div>
-            <div className="absolute top-3 left-3 px-2.5 py-1 rounded-lg bg-black text-white text-xs font-bold uppercase tracking-wide">
+            <div
+              className={`absolute top-3 px-2.5 py-1.5 rounded-lg bg-black text-white text-xs font-black uppercase tracking-wide ${isHe ? "right-3" : "left-3"}`}
+            >
               {isHe ? "דיל חם" : "HOT DEAL"}
             </div>
             <div
-              className="absolute top-3 right-3 px-2.5 py-1 rounded-lg text-white text-xs font-bold"
+              className={`absolute top-3 px-2.5 py-1.5 rounded-lg text-white text-xs font-black ${isHe ? "left-3" : "right-3"}`}
               style={{ backgroundColor: OLLIN_EMERALD }}
             >
               {radiusDisplay} {isHe ? "ממך" : "from you"}
             </div>
           </div>
           <div className="p-4">
-            <h3 className="font-bold text-base" style={{ color: TEXT_PRIMARY }}>
+            <h3 className="font-black text-base leading-snug" style={{ color: TEXT_PRIMARY }}>
               50% off at the new café on Main Street
             </h3>
-            <p className="text-sm mt-1" style={{ color: TEXT_MUTED }}>
+            <p className="text-sm mt-1.5" style={{ color: TEXT_MUTED }}>
               Grand opening week — half off all pastries and coffee.
+            </p>
+          </div>
+        </article>
+
+        {/* Second deal card: high-quality business placeholder, authority typography */}
+        <article
+          className="rounded-2xl overflow-hidden border shadow-md bg-white transition-all hover:shadow-lg"
+          style={{ borderColor: BORDER }}
+        >
+          <div className="relative aspect-[16/10] overflow-hidden">
+            <div
+              className="absolute inset-0 flex items-center justify-center"
+              style={{
+                background: "linear-gradient(160deg, #f8fafc 0%, #e2e8f0 50%, #cbd5e1 100%)",
+              }}
+            >
+              <Tag className="w-14 h-14" style={{ color: OLLIN_EMERALD }} strokeWidth={1.5} />
+            </div>
+            <div
+              className={`absolute top-3 px-2.5 py-1.5 rounded-lg text-white text-xs font-black ${isHe ? "left-3" : "right-3"}`}
+              style={{ backgroundColor: OLLIN_EMERALD }}
+            >
+              {radiusDisplay} {isHe ? "ממך" : "from you"}
+            </div>
+          </div>
+          <div className="p-4">
+            <h3 className="font-black text-base leading-snug" style={{ color: TEXT_PRIMARY }}>
+              {isHe ? "חברת הכושר — 3 חודשים במחיר 1" : "Gym flash sale — 3 months for the price of 1"}
+            </h3>
+            <p className="text-sm mt-1.5" style={{ color: TEXT_MUTED }}>
+              {isHe ? "מכון כושר באזור — הצעה מוגבלת." : "Local fitness center — limited offer."}
             </p>
           </div>
         </article>

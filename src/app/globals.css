@@ -181,14 +181,15 @@ nav a,
   box-shadow: 0 0 12px rgba(0, 128, 128, 0.2);
 }
 
-/* Explore Presentation Slide: radar scanning rings (Ollin Emerald) */
+/* Explore Presentation Slide: radar scanning rings — smooth, highly visible (Ollin Emerald) */
 @keyframes explore-radar-ring {
-  0% { transform: scale(0.6); opacity: 0.4; }
-  100% { transform: scale(1.4); opacity: 0; }
+  0% { transform: scale(0.5); opacity: 0.5; }
+  70% { opacity: 0.25; }
+  100% { transform: scale(1.5); opacity: 0; }
 }
 .explore-slide-radar-ring {
   animation: explore-radar-ring 1.8s ease-out infinite;
 }
 .explore-slide-radar-ring-delay {
-  animation: explore-radar-ring 1.2s ease-out infinite 0.3s;
+  animation: explore-radar-ring 1.2s ease-out infinite 0.35s;
 }
