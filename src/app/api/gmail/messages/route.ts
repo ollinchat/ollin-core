@@ -33,9 +33,12 @@ export async function GET(request: Request) {
     const maxResults = Math.min(Number(searchParams.get("maxResults")) || 20, 50);
     const labelId = searchParams.get("labelIds") || searchParams.get("label") || "INBOX";
     const labelIds = labelId.split(",").map((s) => s.trim()).filter(Boolean);
+    const isAllMail = labelIds.length === 0 || (labelIds.length === 1 && labelIds[0].toUpperCase() === "ALL");
     const listUrl = new URL(`${GMAIL_API}/messages`);
     listUrl.searchParams.set("maxResults", String(maxResults));
-    labelIds.forEach((id) => listUrl.searchParams.append("labelIds", id));
+    if (!isAllMail) {
+      labelIds.forEach((id) => listUrl.searchParams.append("labelIds", id));
+    }
 
     const listRes = await fetch(listUrl.toString(), {
       headers: { Authorization: `Bearer ${accessToken}` },
