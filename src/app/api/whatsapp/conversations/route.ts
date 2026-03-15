@@ -90,7 +90,8 @@ export async function GET() {
     const token = process.env.WHATSAPP_ACCESS_TOKEN;
     const hasApi = !!token;
 
-    // TODO: When you have webhook-stored conversations, fetch from DB here.
+    // Use live credentials for send (see /api/whatsapp/send). Conversation list is not provided by Meta's API;
+    // replace getDemoConversations() with your webhook-stored conversations when available.
     const conversations = getDemoConversations();
 
     const totalUnread = conversations.reduce((s, c) => s + c.unread, 0);
