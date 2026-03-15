@@ -354,37 +354,53 @@ export function GmailPanel() {
             </div>
           </div>
 
-          {/* Content — formatted HTML (images, colors, layout) via sanitized dangerouslySetInnerHTML */}
-          <div className="flex-1 overflow-y-auto px-4 py-4 text-sm min-h-0" style={{ color: textPrimary }}>
-            {(() => {
-              const raw = selectedDetail.body || selectedDetail.snippet || "";
-              const looksLikeHtml = /<[a-z][\s\S]*>/i.test(raw);
-              if (looksLikeHtml && raw.trim()) {
-                const sanitized = DOMPurify.sanitize(raw, {
-                  ALLOWED_TAGS: [
-                    "p", "div", "span", "br", "a", "strong", "b", "em", "i", "u", "ul", "ol", "li",
-                    "h1", "h2", "h3", "h4", "h5", "h6", "img", "table", "thead", "tbody", "tfoot", "tr", "th", "td",
-                    "blockquote", "hr", "sub", "sup", "pre", "code", "font", "center", "section", "header", "footer",
-                  ],
-                  ALLOWED_ATTR: [
-                    "href", "src", "alt", "title", "target", "rel", "style", "class", "id",
-                    "width", "height", "border", "cellpadding", "cellspacing", "colspan", "rowspan",
-                    "align", "valign", "color", "size", "face", "background",
-                  ],
-                  ADD_ATTR: ["target"],
-                });
+          {/* Content — professional formatted email (HTML or plain); no raw code */}
+          <div className="flex-1 overflow-y-auto min-h-0 bg-[#ffffff]">
+            <div className="max-w-[720px] mx-auto px-4 py-5 text-[15px] leading-relaxed" style={{ color: textPrimary }}>
+              {(() => {
+                const raw = selectedDetail.body || selectedDetail.snippet || "";
+                const hasEscapedEntities = typeof raw === "string" && (/&lt;|&gt;|&amp;/.test(raw));
+                const decoded = hasEscapedEntities && typeof document !== "undefined" ? (() => {
+                  try {
+                    const div = document.createElement("div");
+                    div.innerHTML = raw;
+                    return div.textContent || raw;
+                  } catch {
+                    return raw;
+                  }
+                })() : raw;
+                const looksLikeHtml = /<[a-z][\s\S]*>/i.test(decoded);
+                if (looksLikeHtml && decoded.trim()) {
+                  const sanitized = DOMPurify.sanitize(decoded, {
+                    ALLOWED_TAGS: [
+                      "p", "div", "span", "br", "a", "strong", "b", "em", "i", "u", "ul", "ol", "li",
+                      "h1", "h2", "h3", "h4", "h5", "h6", "img", "table", "thead", "tbody", "tfoot", "tr", "th", "td",
+                      "blockquote", "hr", "sub", "sup", "pre", "code", "font", "center", "section", "header", "footer",
+                    ],
+                    ALLOWED_ATTR: [
+                      "href", "src", "alt", "title", "target", "rel", "style", "class", "id",
+                      "width", "height", "border", "cellpadding", "cellspacing", "colspan", "rowspan",
+                      "align", "valign", "color", "size", "face", "background",
+                    ],
+                    ADD_ATTR: ["target"],
+                  });
+                  return (
+                    <div
+                      className="gmail-email-body break-words [&_a]:text-[#1a73e8] [&_a]:underline [&_img]:max-w-full [&_img]:h-auto [&_table]:max-w-full [&_table]:border-collapse [&_p]:mb-3 [&_ul]:my-2 [&_ol]:my-2"
+                      dangerouslySetInnerHTML={{ __html: sanitized }}
+                    />
+                  );
+                }
                 return (
-                  <div
-                    className="gmail-email-body break-words [&_a]:text-[#1a73e8] [&_a]:underline [&_img]:max-w-full [&_img]:h-auto [&_table]:max-w-full [&_table]:border-collapse"
-                    dangerouslySetInnerHTML={{ __html: sanitized }}
-                  />
+                  <div className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">
+                    {decoded || "No content."}
+                  </div>
                 );
-              }
-              return <div className="whitespace-pre-wrap break-words">{raw || "No content."}</div>;
-            })()}
+              })()}
+            </div>
           </div>
 
-          {/* Reply / Forward bar — wide, rounded outline buttons (Gmail mobile) */}
+          {/* Reply / Forward — fixed at bottom (Gmail mobile style) */}
           <div className="shrink-0 flex items-center gap-3 px-4 py-3 border-t" style={{ borderColor, backgroundColor: bgMain }}>
             <button
               type="button"
