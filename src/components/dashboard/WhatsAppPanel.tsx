@@ -1,14 +1,13 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { Plus, Camera, Mic, CheckCheck, Bell, Phone, MessageCircle } from "lucide-react";
+import { Plus, Camera, Mic, CheckCheck, Bell, Phone, MessageCircle, Wrench, Settings } from "lucide-react";
 
 const WA = {
-  // WhatsApp Business Light — white/beige only, no dark mode
-  tealSidebar: "#008069", // sidebar header (WhatsApp Business Green)
+  tealSidebar: "#008069",
   sidebarBg: "#ffffff",
   chatHeaderBg: "#f0f2f5",
-  chatBg: "#e5ddd5", // beige doodle background
+  chatBg: "#e5ddd5",
   bubbleOut: "#dcf8c6",
   bubbleIn: "#ffffff",
   inputBg: "#ffffff",
@@ -16,7 +15,7 @@ const WA = {
   textMuted: "#667781",
   border: "#e9edef",
   green: "#008069",
-  greenLight: "#008069",
+  blueTicks: "#53bdeb",
 } as const;
 
 // Light beige doodle pattern (subtle, #e5ddd5 tint)
@@ -120,42 +119,55 @@ export function WhatsAppPanel() {
 
   return (
     <div
-      className="flex flex-1 min-h-0 w-full h-full overflow-hidden flex-col"
+      className="flex flex-1 min-h-0 w-full h-full overflow-hidden flex-col p-0 m-0"
       style={{
         backgroundColor: WA.chatBg,
         backgroundImage: DOODLE_PATTERN,
         backgroundRepeat: "repeat",
       }}
     >
-      {/* Left: WhatsApp contact list only — no other sidebars in this tab */}
+      {/* Left: contact list — mobile frame, zero outer padding */}
       <aside
         className="flex flex-col shrink-0 border-r w-[350px] min-w-[320px] min-h-0"
         style={{ backgroundColor: WA.sidebarBg, borderColor: WA.border }}
       >
-        {/* Sidebar header with avatar + icons */}
+        {/* Mobile header: large bold Chats left, Camera + Plus right */}
         <div
-          className="flex items-center gap-3 px-3 py-3 shrink-0"
-          style={{
-            backgroundColor: WA.tealSidebar,
-            borderBottom: `1px solid rgba(255,255,255,0.2)`,
-            height: 60,
-          }}
+          className="flex items-center justify-between shrink-0 h-14 px-3 border-b"
+          style={{ backgroundColor: WA.sidebarBg, borderColor: WA.border }}
         >
-          <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-sm font-semibold text-white">
-            U
+          <h1 className="text-xl font-bold truncate" style={{ color: WA.text }}>
+            Chats
+          </h1>
+          <div className="flex items-center gap-0.5 shrink-0">
+            <button type="button" className="p-2 rounded-full hover:bg-black/5" style={{ color: WA.textMuted }} aria-label="Camera">
+              <Camera className="w-5 h-5" />
+            </button>
+            <button type="button" className="p-2 rounded-full hover:bg-black/5" style={{ color: WA.textMuted }} aria-label="New chat">
+              <Plus className="w-5 h-5" strokeWidth={2} />
+            </button>
           </div>
-          <div className="flex-1 min-w-0" />
-          <button type="button" className="p-1.5 rounded-full text-white/90 hover:bg-white/10" aria-label="Status">
-            <Bell className="w-4 h-4" />
-          </button>
-          <button type="button" className="p-1.5 rounded-full text-white/90 hover:bg-white/10" aria-label="New chat">
-            <Plus className="w-4 h-4" />
-          </button>
         </div>
+        {/* Search: rounded, translucent gray (glass effect) */}
         <div className="shrink-0 px-2 py-2" style={{ backgroundColor: WA.sidebarBg, borderBottom: `1px solid ${WA.border}` }}>
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ backgroundColor: WA.inputBg, border: `1px solid ${WA.border}` }}>
-            <span className="text-[#667781]"><svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg></span>
-            <input type="search" value={sidebarSearch} onChange={(e) => setSidebarSearch(e.target.value)} placeholder="Search" className="flex-1 min-w-0 bg-transparent border-0 text-sm focus:outline-none" style={{ color: WA.text }} />
+          <div
+            className="flex items-center gap-2 px-3 py-2.5 rounded-full border border-transparent backdrop-blur-md"
+            style={{
+              backgroundColor: "rgba(0,0,0,0.06)",
+              color: WA.text,
+            }}
+          >
+            <span style={{ color: WA.textMuted }}>
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+            </span>
+            <input
+              type="search"
+              value={sidebarSearch}
+              onChange={(e) => setSidebarSearch(e.target.value)}
+              placeholder="Search chats"
+              className="flex-1 min-w-0 bg-transparent border-0 text-sm focus:outline-none placeholder:opacity-70"
+              style={{ color: WA.text }}
+            />
           </div>
         </div>
         <ul className="flex-1 overflow-y-auto list-none m-0 p-0" role="list">
@@ -189,12 +201,11 @@ export function WhatsAppPanel() {
           <>
             {/* Chat header with contact name + online status */}
             <header
-              className="flex items-center gap-3 px-4 py-2 shrink-0"
+              className="flex items-center gap-3 px-3 py-2 shrink-0"
               style={{
                 backgroundColor: WA.chatHeaderBg,
                 borderBottom: `1px solid ${WA.border}`,
                 height: 60,
-                borderLeft: "1px solid #ddd",
               }}
             >
               <div
@@ -213,14 +224,13 @@ export function WhatsAppPanel() {
               </div>
             </header>
 
-            {/* Messages list with independent scroll */}
+            {/* Messages list — beige doodle #e5ddd5; sent #dcf8c6 + blue ticks, received #ffffff */}
             <div
-              className="flex-1 overflow-y-auto flex flex-col gap-1 min-h-0"
+              className="flex-1 overflow-y-auto flex flex-col gap-1 min-h-0 px-3 py-3"
               style={{
                 backgroundColor: WA.chatBg,
                 backgroundImage: DOODLE_PATTERN,
                 backgroundRepeat: "repeat",
-                padding: "12px 16px",
               }}
             >
               {messages.length === 0 && (
@@ -251,8 +261,9 @@ export function WhatsAppPanel() {
                       </span>
                       {msg.out && (
                         <CheckCheck
-                          className="w-3 h-3"
-                          style={{ color: WA.textMuted }}
+                          className="w-3.5 h-3.5 shrink-0"
+                          style={{ color: WA.blueTicks }}
+                          strokeWidth={2.5}
                         />
                       )}
                     </div>
@@ -265,7 +276,7 @@ export function WhatsAppPanel() {
             {/* Recipient phone for test contact */}
             {selectedChat.id === TEST_CONTACT.id && (
               <div
-                className="px-4 py-2 shrink-0 border-t"
+                className="px-3 py-2 shrink-0 border-t"
                 style={{ backgroundColor: WA.sidebarBg, borderColor: WA.border }}
               >
                 <label
@@ -290,17 +301,16 @@ export function WhatsAppPanel() {
             )}
 
             {sendError && (
-              <div className="px-4 py-2 shrink-0 bg-red-50 text-red-700 text-sm">
+              <div className="px-3 py-2 shrink-0 bg-red-50 text-red-700 text-sm">
                 {sendError}
               </div>
             )}
 
-            {/* Bottom input bar: + (left), text field, Camera, Microphone (right) — mobile layout */}
+            {/* Input bar: + far left, text field, Camera and Mic on right */}
             <div
-              className="flex items-center gap-2 px-4 py-3 shrink-0"
+              className="flex items-center gap-2 px-2 py-3 shrink-0"
               style={{
                 backgroundColor: WA.chatHeaderBg,
-                padding: "10px 16px",
               }}
             >
               <button
@@ -348,37 +358,42 @@ export function WhatsAppPanel() {
         )}
       </main>
 
-      {/* Bottom navigation: Updates, Calls, Chats — WhatsApp style */}
+      {/* Bottom navigation: 5-icon bar (Updates, Calls, Tools, Chats, Settings) with green badges */}
       <nav
-        className="flex shrink-0 items-center justify-around border-t px-2 py-2"
+        className="flex shrink-0 items-center justify-around border-t py-2"
         style={{ backgroundColor: WA.sidebarBg, borderColor: WA.border }}
       >
-        <button
-          type="button"
-          className="flex flex-col items-center gap-0.5 py-1"
-          style={{ color: WA.textMuted }}
-          aria-label="Updates"
-        >
-          <Bell className="w-6 h-6" />
-          <span className="text-[10px]">Updates</span>
+        <button type="button" className="relative flex flex-col items-center gap-0.5 py-1 min-w-0 flex-1" style={{ color: WA.textMuted }} aria-label="Updates">
+          <span className="relative inline-block">
+            <Bell className="w-6 h-6" />
+            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[#25D366]" aria-hidden />
+          </span>
+          <span className="text-[10px] truncate w-full text-center">Updates</span>
         </button>
-        <button
-          type="button"
-          className="flex flex-col items-center gap-0.5 py-1 relative"
-          style={{ color: WA.textMuted }}
-          aria-label="Calls"
-        >
-          <Phone className="w-6 h-6" />
-          <span className="text-[10px]">Calls</span>
+        <button type="button" className="relative flex flex-col items-center gap-0.5 py-1 min-w-0 flex-1" style={{ color: WA.textMuted }} aria-label="Calls">
+          <span className="relative inline-block">
+            <Phone className="w-6 h-6" />
+            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[#25D366]" aria-hidden />
+          </span>
+          <span className="text-[10px] truncate w-full text-center">Calls</span>
         </button>
-        <button
-          type="button"
-          className="flex flex-col items-center gap-0.5 py-1 relative"
-          style={{ color: WA.green }}
-          aria-label="Chats"
-        >
-          <MessageCircle className="w-6 h-6" />
-          <span className="text-[10px] font-medium">Chats</span>
+        <button type="button" className="relative flex flex-col items-center gap-0.5 py-1 min-w-0 flex-1" style={{ color: WA.textMuted }} aria-label="Tools">
+          <span className="relative inline-block">
+            <Wrench className="w-6 h-6" />
+            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[#25D366]" aria-hidden />
+          </span>
+          <span className="text-[10px] truncate w-full text-center">Tools</span>
+        </button>
+        <button type="button" className="relative flex flex-col items-center gap-0.5 py-1 min-w-0 flex-1" style={{ color: WA.green }} aria-label="Chats">
+          <MessageCircle className="w-6 h-6" strokeWidth={2.5} />
+          <span className="text-[10px] font-medium truncate w-full text-center">Chats</span>
+        </button>
+        <button type="button" className="relative flex flex-col items-center gap-0.5 py-1 min-w-0 flex-1" style={{ color: WA.textMuted }} aria-label="Settings">
+          <span className="relative inline-block">
+            <Settings className="w-6 h-6" />
+            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[#25D366]" aria-hidden />
+          </span>
+          <span className="text-[10px] truncate w-full text-center">Settings</span>
         </button>
       </nav>
     </div>
