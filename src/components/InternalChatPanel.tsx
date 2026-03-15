@@ -387,7 +387,10 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
         <>
           {/* Row 1: Fixed tabs (Ollin Chat, Ollin Calls, Gmail) + pinned channels + Add (+) */}
           <div className="flex-shrink-0 w-full bg-[#f8f9fa] rounded-t-xl">
-            <div className="flex items-center gap-1 overflow-x-auto overflow-y-hidden py-1.5 px-1.5 min-h-[2.5rem] scrollbar-hide">
+            <div
+              className="flex items-center gap-1 overflow-x-auto overflow-y-hidden py-1.5 px-1.5 min-h-[2.5rem] scrollbar-hide"
+              onDragOver={(e) => e.preventDefault()}
+            >
               {/* Static tabs: Ollin Chat, Ollin Calls */ }
               {FIXED_TABS.map(({ id, label, connected }) => {
                 const icon = getChannelTabIcon(id);
@@ -473,12 +476,22 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
                   </div>
                 );
               })}
-              {/* Add Channel (+) — dropdown to pin a channel as a new tab */}
+              {/* Add Channel (+) — opens social/channel grid */}
               <div className="relative flex-shrink-0 ml-0.5">
                 <button
                   type="button"
                   ref={addButtonRef}
-                  onClick={() => setAddChannelMenuOpen((o) => !o)}
+                  onClick={() => {
+                    const btn = addButtonRef.current;
+                    if (btn) {
+                      const rect = btn.getBoundingClientRect();
+                      const width = 280;
+                      const left = Math.max(8, rect.right + window.scrollX - width);
+                      const top = rect.bottom + window.scrollY + 8;
+                      setAddMenuPos({ top, left });
+                    }
+                    setAddChannelMenuOpen((o) => !o);
+                  }}
                   className="flex items-center justify-center w-9 h-8 rounded-xl text-gray-500 bg-gray-100/80 hover:bg-gray-200/90 hover:text-[#008080] border border-gray-200/50 transition-colors"
                   aria-label={isHe ? "הוסף ערוץ" : "Add channel"}
                   aria-expanded={addChannelMenuOpen}

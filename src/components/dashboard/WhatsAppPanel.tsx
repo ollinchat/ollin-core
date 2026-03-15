@@ -1,20 +1,27 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { Smile, Paperclip, Mic, CheckCheck } from "lucide-react";
+import { Plus, Camera, Mic, CheckCheck, Bell, Phone, MessageCircle } from "lucide-react";
 
 const WA = {
-  // WhatsApp branding colors (exact as requested)
-  tealSidebar: "#008069", // sidebar header
-  chatHeaderBg: "#f0f2f5", // chat header + input bar
-  chatBg: "#e5ddd5", // doodle background
-  bubbleOut: "#dcf8c6", // sent
-  bubbleIn: "#ffffff", // received
+  // WhatsApp Business Light — white/beige only, no dark mode
+  tealSidebar: "#008069", // sidebar header (WhatsApp Business Green)
+  sidebarBg: "#ffffff",
+  chatHeaderBg: "#f0f2f5",
+  chatBg: "#e5ddd5", // beige doodle background
+  bubbleOut: "#dcf8c6",
+  bubbleIn: "#ffffff",
   inputBg: "#ffffff",
   text: "#111b21",
   textMuted: "#667781",
   border: "#e9edef",
+  green: "#008069",
+  greenLight: "#008069",
 } as const;
+
+// Light beige doodle pattern (subtle, #e5ddd5 tint)
+const DOODLE_PATTERN =
+  "url(\"data:image/svg+xml,%3Csvg width='60' height='60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M10 10 L50 10 M30 20 L55 35 M15 40 L45 55 M20 25 L25 30 M40 15 L45 20' stroke='rgba(0,0,0,0.04)' fill='none' stroke-width='1'/%3E%3Ccircle cx='25' cy='35' r='2' fill='rgba(0,0,0,0.03)'/%3E%3Ccircle cx='45' cy='25' r='1.5' fill='rgba(0,0,0,0.03)'/%3E%3C/svg%3E\")";
 
 const TEST_CONTACT = {
   id: "test-contact",
@@ -113,11 +120,10 @@ export function WhatsAppPanel() {
 
   return (
     <div
-      className="flex flex-1 min-h-0 w-full h-full overflow-hidden"
+      className="flex flex-1 min-h-0 w-full h-full overflow-hidden flex-col"
       style={{
         backgroundColor: WA.chatBg,
-        backgroundImage:
-          "url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')",
+        backgroundImage: DOODLE_PATTERN,
         backgroundRepeat: "repeat",
       }}
     >
@@ -131,27 +137,19 @@ export function WhatsAppPanel() {
           className="flex items-center gap-3 px-3 py-3 shrink-0"
           style={{
             backgroundColor: WA.tealSidebar,
-            borderBottom: `1px solid ${WA.border}`,
+            borderBottom: `1px solid rgba(255,255,255,0.2)`,
             height: 60,
           }}
         >
-          <div className="w-8 h-8 rounded-full bg-[#ece5dd] flex items-center justify-center text-sm font-semibold text-[#075e54]">
+          <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-sm font-semibold text-white">
             U
           </div>
           <div className="flex-1 min-w-0" />
-          <button
-            type="button"
-            className="p-1.5 rounded-full text-[#ece5dd] hover:bg-black/10"
-            aria-label="Status"
-          >
-            <Smile className="w-4 h-4" />
+          <button type="button" className="p-1.5 rounded-full text-white/90 hover:bg-white/10" aria-label="Status">
+            <Bell className="w-4 h-4" />
           </button>
-          <button
-            type="button"
-            className="p-1.5 rounded-full text-[#ece5dd] hover:bg-black/10"
-            aria-label="New chat"
-          >
-            <Paperclip className="w-4 h-4 rotate-90" />
+          <button type="button" className="p-1.5 rounded-full text-white/90 hover:bg-white/10" aria-label="New chat">
+            <Plus className="w-4 h-4" />
           </button>
         </div>
         <div className="shrink-0 px-2 py-2" style={{ backgroundColor: WA.sidebarBg, borderBottom: `1px solid ${WA.border}` }}>
@@ -199,7 +197,10 @@ export function WhatsAppPanel() {
                 borderLeft: "1px solid #ddd",
               }}
             >
-              <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-medium shrink-0 border border-white/40">
+              <div
+                className="w-9 h-9 rounded-full flex items-center justify-center text-white font-medium shrink-0 border border-white/30"
+                style={{ backgroundColor: WA.green }}
+              >
                 {selectedChat.name.slice(0, 1).toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
@@ -217,8 +218,7 @@ export function WhatsAppPanel() {
               className="flex-1 overflow-y-auto flex flex-col gap-1 min-h-0"
               style={{
                 backgroundColor: WA.chatBg,
-                backgroundImage:
-                  "url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')",
+                backgroundImage: DOODLE_PATTERN,
                 backgroundRepeat: "repeat",
                 padding: "12px 16px",
               }}
@@ -295,7 +295,7 @@ export function WhatsAppPanel() {
               </div>
             )}
 
-            {/* Bottom input bar with smiley, attachment, input, mic/send */}
+            {/* Bottom input bar: + (left), text field, Camera, Microphone (right) — mobile layout */}
             <div
               className="flex items-center gap-2 px-4 py-3 shrink-0"
               style={{
@@ -305,21 +305,15 @@ export function WhatsAppPanel() {
             >
               <button
                 type="button"
-                className="p-2 rounded-full text-[#daded9] hover:bg-black/10"
-                aria-label="Emoji"
+                className="p-2 rounded-full shrink-0"
+                style={{ color: WA.textMuted }}
+                aria-label="Attach or add"
               >
-                <Smile className="w-5 h-5" />
-              </button>
-              <button
-                type="button"
-                className="p-2 rounded-full text-[#daded9] hover:bg-black/10"
-                aria-label="Attach"
-              >
-                <Paperclip className="w-5 h-5 -rotate-45" />
+                <Plus className="w-6 h-6" strokeWidth={2} />
               </button>
               <div
-                className="flex-1 flex items-center rounded-full px-3 py-1.5 bg-white"
-                style={{ backgroundColor: WA.inputBg }}
+                className="flex-1 flex items-center min-w-0 rounded-2xl px-4 py-2.5"
+                style={{ backgroundColor: WA.inputBg, border: `1px solid ${WA.border}` }}
               >
                 <input
                   ref={inputRef}
@@ -327,17 +321,25 @@ export function WhatsAppPanel() {
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder="Type a message"
-                  className="flex-1 bg-transparent text-sm outline-none"
+                  className="flex-1 min-w-0 bg-transparent text-sm outline-none"
                   style={{ color: WA.text }}
                 />
               </div>
               <button
                 type="button"
+                className="p-2 rounded-full shrink-0"
+                style={{ color: WA.textMuted }}
+                aria-label="Camera"
+              >
+                <Camera className="w-5 h-5" />
+              </button>
+              <button
+                type="button"
                 onClick={sendMessage}
                 disabled={sending || !input.trim()}
-                className="p-2 rounded-full text-white disabled:opacity-50"
-                style={{ backgroundColor: WA.greenLight }}
-                aria-label="Send voice/message"
+                className="p-2 rounded-full shrink-0 disabled:opacity-50"
+                style={{ color: input.trim() ? WA.green : WA.textMuted }}
+                aria-label="Send or voice"
               >
                 <Mic className="w-5 h-5" />
               </button>
@@ -345,6 +347,40 @@ export function WhatsAppPanel() {
           </>
         )}
       </main>
+
+      {/* Bottom navigation: Updates, Calls, Chats — WhatsApp style */}
+      <nav
+        className="flex shrink-0 items-center justify-around border-t px-2 py-2"
+        style={{ backgroundColor: WA.sidebarBg, borderColor: WA.border }}
+      >
+        <button
+          type="button"
+          className="flex flex-col items-center gap-0.5 py-1"
+          style={{ color: WA.textMuted }}
+          aria-label="Updates"
+        >
+          <Bell className="w-6 h-6" />
+          <span className="text-[10px]">Updates</span>
+        </button>
+        <button
+          type="button"
+          className="flex flex-col items-center gap-0.5 py-1 relative"
+          style={{ color: WA.textMuted }}
+          aria-label="Calls"
+        >
+          <Phone className="w-6 h-6" />
+          <span className="text-[10px]">Calls</span>
+        </button>
+        <button
+          type="button"
+          className="flex flex-col items-center gap-0.5 py-1 relative"
+          style={{ color: WA.green }}
+          aria-label="Chats"
+        >
+          <MessageCircle className="w-6 h-6" />
+          <span className="text-[10px] font-medium">Chats</span>
+        </button>
+      </nav>
     </div>
   );
 }

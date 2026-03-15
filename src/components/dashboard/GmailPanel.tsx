@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import DOMPurify from "dompurify";
 import { signIn, useSession } from "next-auth/react";
 import {
   Menu,
@@ -316,7 +317,7 @@ export function GmailPanel() {
             </span>
           </div>
 
-          {/* Sender row */}
+          {/* Sender row — Gmail mobile style: avatar, name, time, "to me" dropdown, Unsubscribe */}
           <div className="shrink-0 flex items-start gap-3 px-4 py-3 border-b" style={{ borderColor }}>
             <div
               className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-sm font-medium text-white"
@@ -329,40 +330,68 @@ export function GmailPanel() {
                 <span className="font-semibold text-sm" style={{ color: textPrimary }}>{parseFrom(selectedDetail.from).name || selectedDetail.from}</span>
                 <span className="text-sm" style={{ color: textSecondary }}>{formatDate(selectedDetail.date)}</span>
               </div>
-              <button type="button" className="flex items-center gap-1 mt-0.5 text-sm hover:underline" style={{ color: textSecondary }}>
+              <button
+                type="button"
+                className="flex items-center gap-0.5 mt-0.5 text-sm text-left w-full rounded hover:bg-[#f6f8fc] px-1 py-0.5 -mx-1 transition-colors"
+                style={{ color: textSecondary }}
+              >
                 to me
-                <ChevronDown className="w-4 h-4" />
+                <ChevronDown className="w-4 h-4 shrink-0 opacity-70" />
               </button>
-              <div className="mt-1">
-                <button type="button" className="text-sm hover:underline" style={{ color: "#1a73e8" }}>Unsubscribe</button>
-                <button type="button" className="p-1 ml-1 rounded-full hover:bg-[#f6f8fc] inline-flex" style={{ color: textSecondary }} aria-label="More">
+              <div className="mt-1.5 flex items-center flex-wrap gap-1">
+                <a
+                  href="#unsubscribe"
+                  className="text-sm font-medium hover:underline"
+                  style={{ color: "#1a73e8" }}
+                  onClick={(e) => e.preventDefault()}
+                >
+                  Unsubscribe
+                </a>
+                <button type="button" className="p-1 rounded-full hover:bg-[#f6f8fc] inline-flex" style={{ color: textSecondary }} aria-label="More">
                   <MoreVertical className="w-4 h-4" />
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Content */}
-          <div className="flex-1 overflow-y-auto px-4 py-4 text-sm whitespace-pre-wrap" style={{ color: textPrimary }}>
-            {selectedDetail.body || selectedDetail.snippet || "No content."}
+          {/* Content — render HTML when present, otherwise plain text */}
+          <div className="flex-1 overflow-y-auto px-4 py-4 text-sm min-h-0" style={{ color: textPrimary }}>
+            {(() => {
+              const raw = selectedDetail.body || selectedDetail.snippet || "";
+              const looksLikeHtml = /<[a-z][\s\S]*>/i.test(raw);
+              if (looksLikeHtml && raw.trim()) {
+                const sanitized = DOMPurify.sanitize(raw, {
+                  ALLOWED_TAGS: ["p", "div", "span", "br", "a", "strong", "b", "em", "i", "u", "ul", "ol", "li", "h1", "h2", "h3", "h4", "h5", "h6", "img", "table", "thead", "tbody", "tr", "th", "td", "blockquote", "hr", "sub", "sup"],
+                  ALLOWED_ATTR: ["href", "src", "alt", "title", "target", "rel", "style", "class"],
+                  ADD_ATTR: ["target"],
+                });
+                return (
+                  <div
+                    className="gmail-email-body break-words [&_a]:text-[#1a73e8] [&_a]:underline [&_img]:max-w-full [&_table]:max-w-full"
+                    dangerouslySetInnerHTML={{ __html: sanitized }}
+                  />
+                );
+              }
+              return <div className="whitespace-pre-wrap break-words">{raw || "No content."}</div>;
+            })()}
           </div>
 
-          {/* Reply / Forward bar */}
+          {/* Reply / Forward bar — wide, rounded outline buttons (Gmail mobile) */}
           <div className="shrink-0 flex items-center gap-3 px-4 py-3 border-t" style={{ borderColor, backgroundColor: bgMain }}>
             <button
               type="button"
-              className="flex items-center gap-2 rounded-full px-4 py-2.5 border transition-colors hover:bg-[#f6f8fc]"
+              className="flex-1 flex items-center justify-center gap-2 rounded-full py-3 border-2 transition-colors hover:bg-[#f6f8fc]"
               style={{ borderColor, color: textPrimary }}
             >
-              <Reply className="w-5 h-5" />
+              <Reply className="w-5 h-5 shrink-0" />
               <span className="font-medium text-sm">Reply</span>
             </button>
             <button
               type="button"
-              className="flex items-center gap-2 rounded-full px-4 py-2.5 border transition-colors hover:bg-[#f6f8fc]"
+              className="flex-1 flex items-center justify-center gap-2 rounded-full py-3 border-2 transition-colors hover:bg-[#f6f8fc]"
               style={{ borderColor, color: textPrimary }}
             >
-              <Forward className="w-5 h-5" />
+              <Forward className="w-5 h-5 shrink-0" />
               <span className="font-medium text-sm">Forward</span>
             </button>
           </div>
