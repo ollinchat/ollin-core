@@ -2068,15 +2068,13 @@ export default function DocumentsPage() {
                 <div className="flex-1 min-w-[200px] flex items-end gap-0">
                   <div className="flex-1 min-w-0">
                     <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
-                      {activeTab === "expenses"
-                        ? (locale === "he" ? "חיפוש (ספק / קטגוריה)" : "Search (vendor / category)")
-                        : (locale === "he" ? "חיפוש (מס׳ מסמך / לקוח)" : "Search (document # / customer)")}
+                      {locale === "he" ? "חיפוש (מס׳ מסמך / לקוח)" : "Search (document # / customer)"}
                     </label>
                     <input
                       type="search"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder={activeTab === "expenses" ? (locale === "he" ? "ספק או קטגוריה…" : "Vendor or category…") : (locale === "he" ? "מס׳ מסמך או שם לקוח…" : "Document number or customer name…")}
+                      placeholder={locale === "he" ? "מס׳ מסמך או שם לקוח…" : "Document number or customer name…"}
                       className="w-full rounded-none border border-gray-100 bg-white py-2 px-3 text-[13px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-[#008080] focus:ring-1 focus:ring-[#008080]"
                       style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
                     />
@@ -2193,13 +2191,13 @@ export default function DocumentsPage() {
                     <div className="flex-1 overflow-y-auto p-4 space-y-4">
                       <div>
                         <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
-                          {activeTab === "expenses" ? (locale === "he" ? "חיפוש" : "Search") : (locale === "he" ? "חיפוש" : "Search")}
+                          {locale === "he" ? "חיפוש" : "Search"}
                         </label>
                         <input
                           type="search"
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
-                          placeholder={activeTab === "expenses" ? (locale === "he" ? "ספק או קטגוריה…" : "Vendor or category…") : (locale === "he" ? "מס׳ מסמך או שם לקוח…" : "Document number or customer…")}
+                          placeholder={locale === "he" ? "מס׳ מסמך או שם לקוח…" : "Document number or customer…"}
                           className="w-full rounded-none border border-gray-100 bg-white py-2.5 px-3 text-[13px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-[#008080]"
                           style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
                         />
@@ -3684,7 +3682,7 @@ function LegacyFinanceDocumentsPage() {
                           status={q.status as string}
                           date={new Date(q.createdAt).toLocaleDateString()}
                           dueDate={q.dueDate}
-                          title={q.title ?? undefined}
+                          title={(q as { title?: string }).title ?? undefined}
                           borderAccent="teal"
                           primaryAction={{ label: "Convert to Tax Invoice", onClick: () => { convertQuoteToInvoice(q.id) && setActiveTab("invoices"); } }}
                           onView={() => openQuotePdf(q, companyDisplayName(companyProfile, locale), locale)}
@@ -3710,7 +3708,7 @@ function LegacyFinanceDocumentsPage() {
                           status={q.status as string}
                           date={new Date(q.createdAt).toLocaleDateString()}
                           dueDate={q.dueDate}
-                          title={q.title ?? undefined}
+                          title={(q as { title?: string }).title ?? undefined}
                           borderAccent="amber"
                           primaryAction={{ label: "Convert to Tax Invoice", onClick: () => { convertQuoteToInvoice(q.id) && setActiveTab("invoices"); } }}
                           onView={() => openQuotePdf(q, companyDisplayName(companyProfile, locale), locale)}

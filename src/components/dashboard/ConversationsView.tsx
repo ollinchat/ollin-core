@@ -204,7 +204,7 @@ export function ConversationsView({ locale, onSelectedContactChange }: Conversat
         </div>
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 bg-gray-50/50">
           {messages.length === 0 && <p className="text-center text-gray-500 text-sm py-8">{isHe ? "שלח הודעה — משימות יישמרו ללוח." : "Send a message — tasks are saved to your board."}</p>}
-          {messages.map((m) =>
+          {messages.map((m: { id: string; role?: string; content?: string; type?: string; taskTitle?: string }) =>
             "role" in m ? (
               <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                 <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${m.role === "user" ? "bg-[#008080] text-white" : "bg-white border border-gray-200 text-gray-900 shadow-sm"}`}>

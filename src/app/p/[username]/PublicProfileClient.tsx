@@ -350,6 +350,7 @@ export function PublicProfileClient({ username }: { username: string }) {
   const phoneUrl = profile.phone?.trim() ? `tel:${profile.phone.replace(/\s/g, "")}` : null;
 
   function handleSaveToContacts() {
+    if (!profile) return;
     const parts = ["BEGIN:VCARD", "VERSION:3.0", `FN:${fullName || "Contact"}`];
     const nameParts = (fullName || "Contact").split(/\s+/);
     parts.push(`N:${nameParts.length > 1 ? nameParts.slice(1).join(" ") : ""};${nameParts[0] || ""};;;`);

@@ -183,7 +183,7 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
   );
 
   const handleNewChat = useCallback(() => {
-    const firstUser = messages.find((m) => "role" in m && m.role === "user");
+    const firstUser = messages.find((m: { role?: string; content?: string }) => "role" in m && m.role === "user");
     const title = typeof firstUser?.content === "string" ? firstUser.content.slice(0, 40).trim() || (isHe ? "שיחה חדשה" : "New Chat") : isHe ? "שיחה חדשה" : "New Chat";
     if (messages.length > 0) setTopics((prev) => [{ id: generateUUID(), title }, ...prev]);
     clearMessages();
@@ -431,7 +431,7 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
               </AnimatePresence>
               <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 bg-white/30 min-h-0">
               {messages.length === 0 && <p className="text-center text-gray-500 text-sm py-8">{isHe ? "שלח הודעה — משימות יישמרו ללוח." : "Send a message — tasks are saved to your board."}</p>}
-              {messages.map((m) =>
+              {messages.map((m: { id: string; role?: string; content?: string; type?: string; taskTitle?: string }) =>
                 "role" in m ? (
                   <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                     <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${m.role === "user" ? "bg-[#008080] text-white shadow-[0_2px_12px_rgba(0,128,128,0.25)]" : "bg-white/90 backdrop-blur-sm border border-[#008080]/15 text-gray-900 shadow-sm"}`}>

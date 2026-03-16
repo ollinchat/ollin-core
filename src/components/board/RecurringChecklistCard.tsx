@@ -75,7 +75,8 @@ export function RecurringChecklistCard({
   const [feedbackTrayAttachments, setFeedbackTrayAttachments] = useState<RecurringChecklistItemAttachment[]>([]);
   const [feedbackTrayVisible, setFeedbackTrayVisible] = useState(false);
   const feedbackPhotoRef = useRef<HTMLInputElement>(null);
-  const { toggleItem, addItem, removeItem, updateChecklist } = useChecklists();
+  const { toggleItem, addItem, removeItem, updateChecklist, removeChecklist } = useChecklists();
+  const { addGivenTask } = useBoard();
 
   useEffect(() => {
     if (feedbackTrayItemId) setFeedbackTrayVisible(true);
@@ -237,7 +238,7 @@ export function RecurringChecklistCard({
                         const isChange = checklist.frequency !== freq;
                         updateChecklist(checklist.id, { frequency: freq });
                         setRepeatOpen(false);
-                        if (isChange && currentUserIdForTask && isCreator) {
+                        if (isChange && currentUserId && isCreator) {
                           const now = new Date();
                           const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
                           addGivenTask({
@@ -245,7 +246,7 @@ export function RecurringChecklistCard({
                             otherParty: "—",
                             checklist: [],
                             done: false,
-                            creatorId: currentUserIdForTask,
+                            creatorId: currentUserId,
                             priority: "low",
                             dueDate: todayStart,
                             recurringChecklistId: checklist.id,

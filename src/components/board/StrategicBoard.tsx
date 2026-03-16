@@ -176,7 +176,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(task);
     }
-    return orderDateKeys([...map.keys()]).map((key) => ({ key, label: getTaskDateLabel(key, locale), tasks: map.get(key)! }));
+    return orderDateKeys(Array.from(map.keys())).map((key) => ({ key, label: getTaskDateLabel(key, locale), tasks: map.get(key)! }));
   }, [sortedGiven, locale]);
   const groupedReceived = React.useMemo(() => {
     const map = new Map<string, BoardTask[]>();
@@ -185,7 +185,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(task);
     }
-    return orderDateKeys([...map.keys()]).map((key) => ({ key, label: getTaskDateLabel(key, locale), tasks: map.get(key)! }));
+    return orderDateKeys(Array.from(map.keys())).map((key) => ({ key, label: getTaskDateLabel(key, locale), tasks: map.get(key)! }));
   }, [sortedReceived, locale]);
 
   const activeMeetings = meetings.filter((m) => !m.archived);
