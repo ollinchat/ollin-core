@@ -22,6 +22,7 @@ const STATUS_LABELS: Record<BillingDocStatus, string> = {
   pending: "Pending",
   paid: "Paid",
   canceled: "Canceled",
+  invoiced: "Invoiced",
 };
 
 const TYPE_LABELS: Record<string, string> = {

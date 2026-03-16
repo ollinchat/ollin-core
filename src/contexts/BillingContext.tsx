@@ -530,7 +530,13 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
   const updateDocClient = useCallback(
     (docId: string, client: Partial<BillingClient>) => {
       if (!userId) return null;
-      const doc = documentService.updateDraftOrQuoteClient(userId, docId, client);
+      const docClient: Partial<Pick<BillingDocument, "clientName" | "clientEmail" | "clientPhone" | "clientAddress" | "clientTaxId">> = {};
+      if (client.name !== undefined) docClient.clientName = client.name;
+      if (client.email !== undefined) docClient.clientEmail = client.email;
+      if (client.phone !== undefined) docClient.clientPhone = client.phone;
+      if (client.address !== undefined) docClient.clientAddress = client.address;
+      if (client.taxId !== undefined) docClient.clientTaxId = client.taxId;
+      const doc = documentService.updateDraftOrQuoteClient(userId, docId, docClient);
       refreshDocuments();
       return doc;
     },

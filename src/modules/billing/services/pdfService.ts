@@ -68,7 +68,7 @@ function drawCanceledStamp(jsPDF: import("jspdf").jsPDF): void {
   const cx = PAGE_W / 2;
   const cy = PAGE_H / 2;
   const label = "CANCELLED";
-  jsPDF.setFontSize(32).setFont(undefined, "bold").setTextColor(185, 28, 28);
+  jsPDF.setFontSize(32).setFont("helvetica", "bold").setTextColor(185, 28, 28);
   jsPDF.text(label, cx, cy, { align: "center", angle: -25 });
 }
 
@@ -333,7 +333,7 @@ export async function generateDocumentPdf(
   pdf.text(`${L.vat} (${doc.vatRate}%)`, totalsLabelX, y + 3);
   pdf.text(formatPdfAmount(doc.vatAmount), totalsValueX, y + 3);
   y += 4;
-  pdf.setFontSize(9).setFont(undefined, "bold").setTextColor(0, 0, 0);
+  pdf.setFontSize(9).setFont("helvetica", "bold").setTextColor(0, 0, 0);
   pdf.text(L.total, totalsLabelX, y + 3);
   pdf.text(formatPdfAmount(doc.total), totalsValueX, y + 3);
   y += 6;

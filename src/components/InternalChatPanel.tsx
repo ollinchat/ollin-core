@@ -26,7 +26,7 @@ import {
   MessengerIcon,
   SlackIcon,
 } from "@/components/dashboard/ChannelBrandIcons";
-import type { InternalMessageRecord } from "@/lib/chat-engine";
+import type { InternalMessageRecord, InternalMessagePart } from "@/lib/chat-engine";
 import { formatOllinIdForDisplay } from "@/lib/user-id";
 
 const TEAL = "#008080";
@@ -162,8 +162,8 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
   const [draggedPinnedIndex, setDraggedPinnedIndex] = useState<number | null>(null);
 
   const conversationsWithMeta = getConversationsWithMeta(currentUserId);
-  const contactIdsWithChats = conversationsWithMeta.map((c) => c.contactId);
-  const metaByContact = new Map(conversationsWithMeta.map((c) => [c.contactId, c]));
+  const contactIdsWithChats = conversationsWithMeta.map((c: { contactId: string }) => c.contactId);
+  const metaByContact = new Map(conversationsWithMeta.map((c: { contactId: string }) => [c.contactId, c]));
 
   const conversation = selectedContactId ? getConversation(selectedContactId) : [];
   const sortedMessages = [...conversation].sort((a, b) => a.createdAt - b.createdAt);
@@ -302,7 +302,7 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
 
   useEffect(() => {
     if (!addChannelMenuOpen) return;
-    const onPointerDown = (e: MouseEvent) => {
+    const onPointerDown = (e: MouseEvent | TouchEvent) => {
       const t = e.target as Node | null;
       if (!t) return;
       if (addButtonRef.current?.contains(t)) return;
@@ -707,9 +707,9 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
                         </div>
                       </div>
                     )}
-                    {(chatSearchQuery.trim() ? sortedMessages.filter((m) => { const text = m.parts.find((p) => p.type === "text")?.content ?? ""; return text.toLowerCase().includes(chatSearchQuery.trim().toLowerCase()); }) : sortedMessages).map((m) => {
+                    {(chatSearchQuery.trim() ? sortedMessages.filter((m) => { const text = m.parts.find((p: InternalMessagePart) => p.type === "text")?.content ?? ""; return text.toLowerCase().includes(chatSearchQuery.trim().toLowerCase()); }) : sortedMessages).map((m) => {
                       const isMe = m.senderId === currentUserId;
-                      const text = m.parts.find((p) => p.type === "text")?.content ?? "";
+                      const text = m.parts.find((p: InternalMessagePart) => p.type === "text")?.content ?? "";
                       return (
                         <MessageBubble
                           key={m.id}
@@ -1004,14 +1004,14 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
                 <li className="px-2 py-1.5 text-[11px] text-gray-500 rounded-xl">{isHe ? "אין שיחות. הוסף אנשי קשר וכתוב הודעה." : "No chats. Add contacts and send a message."}</li>
               )}
               {conversationsWithMeta
-                .filter(({ contactId }) => {
+                .filter(({ contactId }: { contactId: string }) => {
                   const contact = contacts.find((c) => c.id === contactId);
                   if (contact?.blocked) return false;
                   if (!searchQuery.trim()) return true;
                   const name = (contact?.name || contact?.email || contactId).toLowerCase();
                   return name.includes(searchQuery.trim().toLowerCase());
                 })
-                .map(({ contactId, lastMessage, lastTime }) => {
+                .map(({ contactId, lastMessage, lastTime }: { contactId: string; lastMessage?: string; lastTime: number }) => {
                   const contact = contacts.find((c) => c.id === contactId);
                   const name = contact?.name || contact?.email || contactId;
                   return (
@@ -1102,9 +1102,9 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
             </div>
           )}
           <div className="flex-1 overflow-y-auto p-1.5 space-y-1">
-            {(chatSearchQuery.trim() ? sortedMessages.filter((m) => { const text = m.parts.find((p) => p.type === "text")?.content ?? ""; return text.toLowerCase().includes(chatSearchQuery.trim().toLowerCase()); }) : sortedMessages).map((m) => {
+            {(chatSearchQuery.trim() ? sortedMessages.filter((m) => { const text = m.parts.find((p: InternalMessagePart) => p.type === "text")?.content ?? ""; return text.toLowerCase().includes(chatSearchQuery.trim().toLowerCase()); }) : sortedMessages).map((m) => {
               const isMe = m.senderId === currentUserId;
-              const text = m.parts.find((p) => p.type === "text")?.content ?? "";
+              const text = m.parts.find((p: InternalMessagePart) => p.type === "text")?.content ?? "";
               return (
                 <MessageBubble
                   key={m.id}
