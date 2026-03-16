@@ -112,6 +112,7 @@ async function searchSerper(queryOrCity: string): Promise<LocalSignalsResponse |
 /** DuckDuckGo Instant Answer fallback (no key); limited but real. */
 async function searchDuckDuckGo(queryOrCity: string): Promise<LocalSignalsResponse> {
   const query = queryOrCity.includes(" in ") ? queryOrCity : `Local news and events ${queryOrCity}`;
+  const city = queryOrCity.split(" in ").pop()?.trim() || queryOrCity;
   try {
     const res = await fetch(
       `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1`,
