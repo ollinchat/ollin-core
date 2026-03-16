@@ -139,7 +139,7 @@ export function ConversationsView({ locale, onSelectedContactChange }: Conversat
                 {isHe ? "אין שיחות. התחל שיחה מהרשת או חבר ערוצים." : "No chats. Start a conversation or connect channels."}
               </li>
             )}
-            {conversationsWithMeta.map(({ contactId, lastMessage, lastTime }) => {
+            {conversationsWithMeta.map(({ contactId, lastMessage, lastTime }: { contactId: string; lastMessage?: string; lastTime: number }) => {
               const contact = contacts.find((c) => c.id === contactId);
               const name = contact?.name || contact?.email || contactId;
               const source: ChatSourceId = "ollin";
