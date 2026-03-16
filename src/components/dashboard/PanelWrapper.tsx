@@ -4,13 +4,15 @@ import type { ReactNode } from "react";
 
 /**
  * Simple panel layout: optional header/footer, scrollable middle.
- * Standard web: flex flex-col h-screen, no safe-area hacks.
+ * Use fillParent when inside a flex container (e.g. dashboard) so scroll works; otherwise h-screen.
  */
 export type PanelWrapperProps = {
   header?: ReactNode;
   footer?: ReactNode;
   children: ReactNode;
   className?: string;
+  /** When true, use flex-1 min-h-0 instead of h-screen so the panel fills and scrolls inside parent. */
+  fillParent?: boolean;
 };
 
 export function PanelWrapper({
@@ -18,9 +20,11 @@ export function PanelWrapper({
   footer,
   children,
   className,
+  fillParent,
 }: PanelWrapperProps) {
+  const base = fillParent ? "flex flex-col flex-1 min-h-0" : "flex flex-col h-screen";
   return (
-    <div className={className ? `flex flex-col h-screen ${className}` : "flex flex-col h-screen"}>
+    <div className={className ? `${base} ${className}` : base}>
       {header != null && (
         <div className="flex-shrink-0" data-panel-header>
           {header}

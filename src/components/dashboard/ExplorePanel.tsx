@@ -579,6 +579,83 @@ function saveInteractions(interactions: Record<string, number>) {
   } catch {}
 }
 
+/** Generate 3–4 realistic AI-style cards when API returns empty for a custom topic. */
+function generateMockPostsForTopic(topic: string): ExplorePost[] {
+  const t = topic.trim() || "Topic";
+  const now = Date.now();
+  const templates: Omit<ExplorePost, "id" | "commentsList">[] = [
+    {
+      category: "news",
+      authorName: "Ollin AI",
+      timestamp: "Just now",
+      title: `${t} — trends and updates this week`,
+      description: `Curated summary for ${t}: key developments and what matters for you.`,
+      likes: 0,
+      comments: 0,
+      shares: 0,
+      views: 0,
+      generatedByAI: true,
+      aiSummary: `Latest ${t} insights and local relevance.`,
+      sourceLabel: "Sourced from: Ollin AI",
+      summaryBullets: [`Top 3 ${t} trends right now`, "Personalized to your location", "Updated in real time"],
+      matchScore: 88,
+    },
+    {
+      category: "gossip",
+      authorName: "Ollin AI",
+      timestamp: "1 min ago",
+      title: `What’s happening in ${t} near you`,
+      description: `Community and market signals for ${t} in your area.`,
+      likes: 0,
+      comments: 0,
+      shares: 0,
+      views: 0,
+      generatedByAI: true,
+      aiSummary: `Local ${t} activity and buzz.`,
+      sourceLabel: "Sourced from: Local signals",
+      summaryBullets: ["Nearby activity", "Community reports", "Relevant to your interests"],
+      matchScore: 82,
+    },
+    {
+      category: "deals",
+      authorName: "Ollin AI",
+      timestamp: "2 min ago",
+      title: `${t}-related offers and opportunities`,
+      description: `Hand-picked ${t} deals and options in your radius.`,
+      likes: 0,
+      comments: 0,
+      shares: 0,
+      views: 0,
+      generatedByAI: true,
+      aiSummary: `Selected ${t} offers nearby.`,
+      sourceLabel: "Sourced from: Partner feeds",
+      summaryBullets: ["Verified offers", "Within your radius", "Limited time"],
+      matchScore: 79,
+    },
+    {
+      category: "news",
+      authorName: "Ollin AI",
+      timestamp: "3 min ago",
+      title: `Quick guide: ${t} and what to know`,
+      description: `Short overview so you can stay on top of ${t} without the noise.`,
+      likes: 0,
+      comments: 0,
+      shares: 0,
+      views: 0,
+      generatedByAI: true,
+      aiSummary: `Essential ${t} overview.`,
+      sourceLabel: "Sourced from: Ollin AI",
+      summaryBullets: ["Key points only", "No fluff", "Actionable next steps"],
+      matchScore: 85,
+    },
+  ];
+  return templates.map((p, i) => ({
+    ...p,
+    id: `mock-${t.replace(/\s+/g, "-").toLowerCase()}-${now}-${i}`,
+    commentsList: [],
+  }));
+}
+
 /** Copyright-safe image placeholder by category: brand (deals/jobs), news (gossip/news), pro */
 function PostImagePlaceholder({
   category,
@@ -1328,6 +1405,7 @@ export function ExplorePanel() {
   const [customTopicPosts, setCustomTopicPosts] = useState<Record<string, ExplorePost[]>>({});
   const [draggedTabIndex, setDraggedTabIndex] = useState<number | null>(null);
   const newTopicInputRef = React.useRef<HTMLInputElement>(null);
+  const tabDragHappenedRef = React.useRef(false);
   const interactionLogRef = React.useRef({ jobCardsViewed: 0, applyClicks: 0, directionsClicks: 0, dealCardsViewed: 0, sourceClicks: 0 });
 
   useEffect(() => {
@@ -1490,11 +1568,13 @@ export function ExplorePanel() {
       setNewTopicInput("");
       setAddingTopic(true);
       const city = location.trim() || "Haifa";
-      analyzeLocalSignals(city, topicLabel.trim())
-        .then(({ posts }) => {
-          setCustomTopicPosts((prev) => ({ ...prev, [id]: posts }));
-        })
-        .finally(() => setAddingTopic(false));
+      const topic = topicLabel.trim();
+      const minDelay = new Promise<void>((r) => setTimeout(r, 2000));
+      const fetchPromise = analyzeLocalSignals(city, topic).then(({ posts }) => posts);
+      Promise.all([minDelay, fetchPromise]).then(([, posts]) => {
+        const toShow = posts && posts.length >= 3 ? posts : generateMockPostsForTopic(topic || labelEn);
+        setCustomTopicPosts((prev) => ({ ...prev, [id]: toShow }));
+      }).finally(() => setAddingTopic(false));
     },
     [feedTabs, location]
   );
@@ -1647,26 +1727,34 @@ export function ExplorePanel() {
             <div
               key={tab.id}
               draggable
-              onDragStart={() => setDraggedTabIndex(index)}
-              onDragEnd={() => setDraggedTabIndex(null)}
+              onDragStart={() => { setDraggedTabIndex(index); tabDragHappenedRef.current = true; }}
+              onDragEnd={() => { setDraggedTabIndex(null); setTimeout(() => { tabDragHappenedRef.current = false; }, 0); }}
               onDragOver={(e) => {
                 e.preventDefault();
                 if (draggedTabIndex === null || draggedTabIndex === index) return;
                 reorderTabs(draggedTabIndex, index);
                 setDraggedTabIndex(index);
               }}
-              className="flex items-center gap-0.5 group flex-shrink-0"
+              className="flex items-center gap-1 group/tab flex-shrink-0"
             >
               <button
                 type="button"
-                onClick={() => setActiveFeedTab(tab.id)}
+                onClick={() => {
+                  if (tabDragHappenedRef.current) { tabDragHappenedRef.current = false; return; }
+                  setActiveFeedTab(tab.id);
+                }}
                 className={`flex-1 text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-colors truncate ${activeFeedTab === tab.id ? "bg-[#008080] text-white" : "text-gray-600 hover:bg-gray-200"}`}
               >
                 {isHe ? tab.labelHe : tab.labelEn}
               </button>
               {tab.id !== "all" && (
-                <button type="button" onClick={() => removeFeedTab(tab.id)} className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-100 text-gray-400 hover:text-red-600 transition-opacity" aria-label={isHe ? "הסר" : "Remove"}>
-                  <X className="w-3.5 h-3.5" strokeWidth={2.5} />
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); removeFeedTab(tab.id); }}
+                  className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 border border-gray-200 bg-white/80 text-gray-400 hover:bg-red-50 hover:border-red-200 hover:text-red-500 transition-all ${activeFeedTab === tab.id ? "opacity-100" : "opacity-0 group-hover/tab:opacity-100"}`}
+                  aria-label={isHe ? "הסר" : "Remove"}
+                >
+                  <X className="w-3 h-3" strokeWidth={2.5} />
                 </button>
               )}
             </div>
@@ -1698,8 +1786,8 @@ export function ExplorePanel() {
         </nav>
       </aside>
 
-      {/* Main: header + tabs + feed via shared PanelWrapper */}
-      <div className="flex-1 flex flex-col min-w-0">
+      {/* Main: header + tabs + feed via shared PanelWrapper — min-h-0 so scroll chain works */}
+      <div className="flex-1 flex flex-col min-w-0 min-h-0">
       {/* Location popover: only when clicking "Set location" */}
       {locationPillOpen && (
         <>
@@ -1738,6 +1826,7 @@ export function ExplorePanel() {
       )}
 
         <PanelWrapper
+          fillParent
           header={
             <>
               <header className="px-3 py-2.5 lg:px-6 border-b border-gray-200 flex flex-wrap items-center gap-2">
@@ -1773,19 +1862,22 @@ export function ExplorePanel() {
                     <div
                       key={tab.id}
                       draggable
-                      onDragStart={() => setDraggedTabIndex(index)}
-                      onDragEnd={() => setDraggedTabIndex(null)}
+                      onDragStart={() => { setDraggedTabIndex(index); tabDragHappenedRef.current = true; }}
+                      onDragEnd={() => { setDraggedTabIndex(null); setTimeout(() => { tabDragHappenedRef.current = false; }, 0); }}
                       onDragOver={(e) => {
                         e.preventDefault();
                         if (draggedTabIndex === null || draggedTabIndex === index) return;
                         reorderTabs(draggedTabIndex, index);
                         setDraggedTabIndex(index);
                       }}
-                      className="flex items-center gap-0 flex-shrink-0 group/tab rounded-full border border-transparent hover:border-gray-200"
+                      className="flex items-center gap-1 flex-shrink-0 group/tab rounded-full border border-transparent hover:border-gray-200"
                     >
                       <button
                         type="button"
-                        onClick={() => setActiveFeedTab(tab.id)}
+                        onClick={() => {
+                          if (tabDragHappenedRef.current) { tabDragHappenedRef.current = false; return; }
+                          setActiveFeedTab(tab.id);
+                        }}
                         className={`flex-shrink-0 px-4 py-2.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${activeFeedTab === tab.id ? "bg-[#008080] text-white" : "text-gray-600 bg-gray-100/80 hover:bg-gray-200"}`}
                       >
                         {isHe ? tab.labelHe : tab.labelEn}
@@ -1794,10 +1886,10 @@ export function ExplorePanel() {
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); removeFeedTab(tab.id); }}
-                          className="p-1.5 rounded-full opacity-0 group-hover/tab:opacity-100 hover:bg-red-100 text-gray-400 hover:text-red-600 transition-opacity shrink-0"
+                          className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 border border-gray-200 bg-white/90 text-gray-400 hover:bg-red-50 hover:border-red-200 hover:text-red-500 transition-all ${activeFeedTab === tab.id ? "opacity-100" : "opacity-0 group-hover/tab:opacity-100"}`}
                           aria-label={isHe ? "הסר" : "Remove"}
                         >
-                          <X className="w-3.5 h-3.5" strokeWidth={2.5} />
+                          <X className="w-3 h-3" strokeWidth={2.5} />
                         </button>
                       )}
                     </div>
@@ -1829,7 +1921,7 @@ export function ExplorePanel() {
               </div>
             </>
           }
-          className="min-w-0"
+          className="min-w-0 flex-1 min-h-0"
         >
             <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden h-full" style={{ WebkitOverflowScrolling: "touch" }}>
             <div className="flex justify-center p-4 lg:px-6">
@@ -1963,18 +2055,21 @@ export function ExplorePanel() {
                     </div>
                   )}
                   {displayPostsSorted.length === 0 ? (
-                    <div className="rounded-xl border border-gray-200 p-8 text-center text-sm text-gray-500">
-                      {addingTopic && String(activeFeedTab).startsWith("custom_") ? (
-                        <span className="inline-flex items-center gap-2 text-[#008080]">
+                    addingTopic && String(activeFeedTab).startsWith("custom_") ? (
+                      <div className="space-y-4">
+                        <p className="text-xs font-medium text-[#008080] flex items-center gap-2">
                           <ScanLine className="w-4 h-4 animate-pulse" strokeWidth={2} />
                           {isHe ? "מייצר תוכן..." : "Generating content..."}
-                        </span>
-                      ) : location.trim() ? (
-                        isHe ? "אין פוסטים התואמים את המיקום שנבחר." : "No posts match the selected location."
-                      ) : (
-                        isHe ? "אין פוסטים להצגה." : "No posts to show."
-                      )}
-                    </div>
+                        </p>
+                        <SkeletonFeed count={4} />
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-gray-200 p-8 text-center text-sm text-gray-500">
+                        {location.trim()
+                          ? (isHe ? "אין פוסטים התואמים את המיקום שנבחר." : "No posts match the selected location.")
+                          : (isHe ? "אין פוסטים להצגה." : "No posts to show.")}
+                      </div>
+                    )
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 isolate">
                       {displayPostsSorted.map((post) => (

@@ -126,6 +126,9 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
   const [toolsEditMode, setToolsEditMode] = useState(false);
   const [addToolMenuOpen, setAddToolMenuOpen] = useState(false);
   const [draggedToolIndex, setDraggedToolIndex] = useState<number | null>(null);
+  const [calculatorOpen, setCalculatorOpen] = useState(false);
+  const [calculatorPosition, setCalculatorPosition] = useState({ x: 80, y: 120 });
+  const calculatorDragRef = useRef({ isDragging: false, startX: 0, startY: 0, startLeft: 0, startTop: 0 });
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const topInputRef = useRef<HTMLTextAreaElement>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
@@ -503,6 +506,23 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
                     </button>
                   );
                 }
+                if (key === "calculator") {
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => { if (!toolsEditMode) setCalculatorOpen(true); }}
+                      onContextMenu={handleContextMenu}
+                      onTouchStart={handleTouchStart}
+                      onTouchEnd={handleTouchEnd}
+                      onTouchCancel={cancelLongPress}
+                      className={tileClass}
+                      {...(toolsEditMode ? dragProps : {})}
+                    >
+                      {tileContent}
+                    </button>
+                  );
+                }
                 return (
                   <div
                     key={key}
@@ -533,14 +553,14 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
                 {isHe ? "סיום עריכה" : "Done"}
               </button>
             )}
-            <div className="relative mt-2">
+            <div className="flex flex-col items-center mt-2">
               <button
                 type="button"
                 onClick={() => setAddToolMenuOpen((o) => !o)}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-[#008080]/30 text-[#008080] hover:bg-[#008080]/5 text-sm font-medium"
+                className="w-10 h-10 rounded-full border-2 border-dashed border-[#008080]/30 text-[#008080] flex items-center justify-center hover:bg-[#008080]/5 transition-colors"
+                aria-label={isHe ? "הוסף כלי" : "Add Tool"}
               >
-                <Plus className="w-4 h-4" strokeWidth={2.5} />
-                {isHe ? "הוסף כלי" : "Add Tool"}
+                <Plus className="w-5 h-5" strokeWidth={2.5} />
               </button>
               {addToolMenuOpen && (
                 <>
