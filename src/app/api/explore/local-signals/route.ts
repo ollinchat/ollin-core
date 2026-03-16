@@ -37,10 +37,10 @@ function toYellowPressTitle(snippet: string): string {
 }
 
 /** Tavily: POST https://api.tavily.com/search */
-async function searchTavily(city: string): Promise<LocalSignalsResponse | null> {
+async function searchTavily(queryOrCity: string): Promise<LocalSignalsResponse | null> {
   const apiKey = process.env.TAVILY_API_KEY;
   if (!apiKey) return null;
-  const query = `Local news, rumors, and deals in ${city}`;
+  const query = queryOrCity.includes(" in ") ? queryOrCity : `Local news, rumors, and deals in ${queryOrCity}`;
   try {
     const res = await fetch("https://api.tavily.com/search", {
       method: "POST",
@@ -70,17 +70,17 @@ async function searchTavily(city: string): Promise<LocalSignalsResponse | null> 
       category: inferCategory(r.title || "", r.content || ""),
       sourceName: r.url ? new URL(r.url).hostname.replace(/^www\./, "") : undefined,
     }));
-    return { signals, source: "tavily", city, query };
+    return { signals, source: "tavily", city: queryOrCity.split(" in ").pop() || queryOrCity, query };
   } catch {
     return null;
   }
 }
 
 /** Serper: POST https://google.serper.dev/search */
-async function searchSerper(city: string): Promise<LocalSignalsResponse | null> {
+async function searchSerper(queryOrCity: string): Promise<LocalSignalsResponse | null> {
   const apiKey = process.env.SERPER_API_KEY;
   if (!apiKey) return null;
-  const query = `Local news, rumors, and deals in ${city}`;
+  const query = queryOrCity.includes(" in ") ? queryOrCity : `Local news, rumors, and deals in ${queryOrCity}`;
   try {
     const res = await fetch("https://google.serper.dev/search", {
       method: "POST",
@@ -103,15 +103,15 @@ async function searchSerper(city: string): Promise<LocalSignalsResponse | null> 
       category: inferCategory(o.title || "", o.snippet || ""),
       sourceName: o.link ? new URL(o.link).hostname.replace(/^www\./, "") : undefined,
     }));
-    return { signals, source: "serper", city, query };
+    return { signals, source: "serper", city: queryOrCity.split(" in ").pop() || queryOrCity, query };
   } catch {
     return null;
   }
 }
 
 /** DuckDuckGo Instant Answer fallback (no key); limited but real. */
-async function searchDuckDuckGo(city: string): Promise<LocalSignalsResponse> {
-  const query = `Local news and events ${city}`;
+async function searchDuckDuckGo(queryOrCity: string): Promise<LocalSignalsResponse> {
+  const query = queryOrCity.includes(" in ") ? queryOrCity : `Local news and events ${queryOrCity}`;
   try {
     const res = await fetch(
       `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1`,
@@ -153,20 +153,22 @@ async function searchDuckDuckGo(city: string): Promise<LocalSignalsResponse> {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const city = searchParams.get("city")?.trim() || "Tel Aviv";
+  const topic = searchParams.get("topic")?.trim() || "";
+  const effectiveQuery = topic ? `${topic} in ${city}` : city;
   try {
-    const tavily = await searchTavily(city);
+    const tavily = await searchTavily(effectiveQuery);
     if (tavily && tavily.signals.length > 0) {
       return NextResponse.json(tavily);
     }
-    const serper = await searchSerper(city);
+    const serper = await searchSerper(effectiveQuery);
     if (serper && serper.signals.length > 0) {
       return NextResponse.json(serper);
     }
-    const fallback = await searchDuckDuckGo(city);
+    const fallback = await searchDuckDuckGo(effectiveQuery);
     return NextResponse.json(fallback);
   } catch (e) {
     return NextResponse.json(
-      { signals: [], source: "none", city, query: "", error: String(e) },
+      { signals: [], source: "none", city, query: topic || "", error: String(e) },
       { status: 200 }
     );
   }

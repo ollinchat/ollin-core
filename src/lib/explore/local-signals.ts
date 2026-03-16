@@ -24,15 +24,16 @@ export type LocalSignalsApiResponse = {
 /**
  * Fetch local signals from the backend (Tavily/Serper/DuckDuckGo).
  * Summarizes into Yellow Press format and returns normalized ExplorePost[].
+ * Optional topic (e.g. "Real Estate") narrows the search for custom tabs.
  */
-export async function analyzeLocalSignals(city: string): Promise<{
+export async function analyzeLocalSignals(city: string, topic?: string): Promise<{
   posts: ExplorePost[];
   source: string;
   query: string;
 }> {
-  const res = await fetch(
-    `/api/explore/local-signals?city=${encodeURIComponent(city)}`
-  );
+  const params = new URLSearchParams({ city });
+  if (topic?.trim()) params.set("topic", topic.trim());
+  const res = await fetch(`/api/explore/local-signals?${params.toString()}`);
   const data = (await res.json()) as LocalSignalsApiResponse;
   const posts: ExplorePost[] = (data.signals ?? []).map((s, i) => ({
     id: `live-${data.source}-${Date.now()}-${i}`,

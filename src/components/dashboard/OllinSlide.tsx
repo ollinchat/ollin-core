@@ -26,6 +26,11 @@ import {
   ChevronUp,
   Menu,
   MessageSquare,
+  Calculator,
+  Ruler,
+  DollarSign,
+  X,
+  GripVertical,
 } from "lucide-react";
 import { t } from "@/lib/translations";
 import { PollCreator } from "@/components/board/PollCreator";
@@ -36,23 +41,52 @@ import { generateUUID } from "@/lib/uuid";
 const EASE_SMOOTH = [0.32, 0.72, 0, 1];
 const TRANSITION_MS = 300;
 
+const OLLIN_SLIDE_TOOLS_KEY = "ollin_slide_tools";
+
 type FeatureItem = {
   key: string;
   labelEn: string;
   labelHe: string;
   icon: typeof ScanLine;
   href?: string;
-  action?: "scanner" | "converter" | "poll";
+  action?: "scanner" | "converter" | "poll" | "task" | "event";
 };
 
-const FEATURE_GRID: FeatureItem[] = [
+const DEFAULT_TOOL_KEYS = ["scanner", "invoices", "files", "sign", "poll", "converter"];
+
+/** Full tool library: grid tools + addable tools (Calculator, Meter, Currency, Task, Event) */
+const TOOL_LIBRARY: FeatureItem[] = [
   { key: "scanner", labelEn: "Quick Scan", labelHe: "סריקה מהירה", icon: ScanLine, action: "scanner" },
   { key: "invoices", labelEn: "Invoices", labelHe: "חשבוניות", icon: FileText, href: "/dashboard?panel=0" },
   { key: "files", labelEn: "Files", labelHe: "קבצים", icon: FileStack, href: "/dashboard/folders" },
   { key: "sign", labelEn: "Sign Docs", labelHe: "חתימת מסמכים", icon: PenLine, href: "/dashboard/documents/sign" },
   { key: "poll", labelEn: "Create Poll", labelHe: "סקרים", icon: BarChart2, action: "poll" },
   { key: "converter", labelEn: "File Converter", labelHe: "המרת קבצים", icon: FileOutput, action: "converter" },
+  { key: "calculator", labelEn: "Calculator", labelHe: "מחשבון", icon: Calculator, href: "/dashboard/convert" },
+  { key: "meter", labelEn: "Measure", labelHe: "מדידה", icon: Ruler, href: "/dashboard" },
+  { key: "currency", labelEn: "Currency", labelHe: "מטבע", icon: DollarSign, href: "/dashboard/convert" },
+  { key: "task", labelEn: "Task", labelHe: "משימה", icon: ListTodo, action: "task" },
+  { key: "event", labelEn: "Event", labelHe: "אירוע", icon: CalendarDays, action: "event" },
 ];
+
+function loadToolKeys(): string[] {
+  if (typeof window === "undefined") return DEFAULT_TOOL_KEYS;
+  try {
+    const raw = localStorage.getItem(OLLIN_SLIDE_TOOLS_KEY);
+    if (!raw) return DEFAULT_TOOL_KEYS;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_TOOL_KEYS;
+    return parsed.filter((k): k is string => typeof k === "string");
+  } catch {
+    return DEFAULT_TOOL_KEYS;
+  }
+}
+
+function saveToolKeys(keys: string[]) {
+  try {
+    localStorage.setItem(OLLIN_SLIDE_TOOLS_KEY, JSON.stringify(keys));
+  } catch {}
+}
 
 const PLUS_ACTIONS: { action: "poll" | "event" | "task" | "converter"; labelEn: string; labelHe: string; icon: typeof BarChart2 }[] = [
   { action: "poll", labelEn: "Poll", labelHe: "סקר", icon: BarChart2 },
@@ -88,9 +122,56 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
   const [placeholderDots, setPlaceholderDots] = useState("");
   const [topicsSidebarOpen, setTopicsSidebarOpen] = useState(false);
   const [topics, setTopics] = useState<{ id: string; title: string }[]>([]);
+  const [visibleToolKeys, setVisibleToolKeys] = useState<string[]>(() => loadToolKeys());
+  const [toolsEditMode, setToolsEditMode] = useState(false);
+  const [addToolMenuOpen, setAddToolMenuOpen] = useState(false);
+  const [draggedToolIndex, setDraggedToolIndex] = useState<number | null>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const topInputRef = useRef<HTMLTextAreaElement>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const dashboardScrollRef = useRef<HTMLDivElement>(null);
+
+  const toolItems = visibleToolKeys.map((key) => TOOL_LIBRARY.find((t) => t.key === key)).filter(Boolean) as FeatureItem[];
+  const availableToAdd = TOOL_LIBRARY.filter((t) => !visibleToolKeys.includes(t.key));
+
+  const persistTools = useCallback((keys: string[]) => {
+    setVisibleToolKeys(keys);
+    saveToolKeys(keys);
+  }, []);
+
+  const removeTool = useCallback((key: string) => {
+    persistTools(visibleToolKeys.filter((k) => k !== key));
+  }, [visibleToolKeys, persistTools]);
+
+  const addTool = useCallback((key: string) => {
+    if (visibleToolKeys.includes(key)) return;
+    persistTools([...visibleToolKeys, key]);
+    setAddToolMenuOpen(false);
+  }, [visibleToolKeys, persistTools]);
+
+  const reorderTools = useCallback((fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) return;
+    const next = [...visibleToolKeys];
+    const [removed] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, removed);
+    persistTools(next);
+    setDraggedToolIndex(null);
+  }, [visibleToolKeys, persistTools]);
+
+  const handleToolLongPress = useCallback(() => {
+    longPressTimerRef.current = setTimeout(() => setToolsEditMode(true), 500);
+  }, []);
+
+  const cancelLongPress = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => { if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current); };
+  }, []);
 
   // Animated "waiting/thinking" dots for placeholder
   useEffect(() => {
@@ -271,33 +352,92 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
       >
           <div className="flex-shrink-0 pb-2 pt-1">
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-              {FEATURE_GRID.map(({ key, href, action, labelEn, labelHe, icon: Icon }) => {
-                const tileClass = "flex flex-col items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl bg-white/70 backdrop-blur-sm border border-[#008080]/15 hover:bg-white/95 hover:border-[#008080]/30 text-gray-700 hover:text-gray-900 transition-all shadow-sm";
-                if (key === "files") {
-                  return (
-                    <Link key={key} href="/dashboard/folders" className={tileClass}>
-                      <div className="w-9 h-9 rounded-xl bg-[#008080]/10 flex items-center justify-center">
-                        <Icon className="w-4 h-4 text-[#008080]" strokeWidth={2} />
-                      </div>
-                      <span className="text-[11px] font-medium text-center leading-tight text-gray-700">{isHe ? labelHe : labelEn}</span>
-                    </Link>
-                  );
-                }
+              {toolItems.map((item, index) => {
+                const { key, href, action, labelEn, labelHe, icon: Icon } = item;
+                const tileBase = "flex flex-col items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl bg-white/70 backdrop-blur-sm border border-[#008080]/15 hover:bg-white/95 hover:border-[#008080]/30 text-gray-700 hover:text-gray-900 transition-all shadow-sm relative";
+                const tileClass = toolsEditMode ? `${tileBase} animate-wiggle cursor-grab active:cursor-grabbing` : tileBase;
                 const tileContent = (
                   <>
+                    {toolsEditMode && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); removeTool(key); }}
+                        className="absolute -top-1 -right-1 z-10 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center shadow"
+                        aria-label={isHe ? "הסר" : "Remove"}
+                      >
+                        <X className="w-3 h-3" strokeWidth={2.5} />
+                      </button>
+                    )}
+                    {toolsEditMode && (
+                      <span className="absolute left-1 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden>
+                        <GripVertical className="w-4 h-4" strokeWidth={2} />
+                      </span>
+                    )}
                     <div className="w-9 h-9 rounded-xl bg-[#008080]/10 flex items-center justify-center">
                       <Icon className="w-4 h-4 text-[#008080]" strokeWidth={2} />
                     </div>
                     <span className="text-[11px] font-medium text-center leading-tight text-gray-700">{isHe ? labelHe : labelEn}</span>
                   </>
                 );
+                const handleClick = () => {
+                  if (toolsEditMode) return;
+                  if (action === "task") { addFormMessage("task"); return; }
+                  if (action === "event") { setMeetingModalOpen(true); return; }
+                };
+                const handleContextMenu = (e: React.MouseEvent) => {
+                  e.preventDefault();
+                  setToolsEditMode(true);
+                };
+                const handleTouchStart = () => handleToolLongPress();
+                const handleTouchEnd = () => cancelLongPress();
+
+                const dragProps = toolsEditMode ? {
+                  draggable: true,
+                  onDragStart: () => setDraggedToolIndex(index),
+                  onDragEnd: () => setDraggedToolIndex(null),
+                  onDragOver: (e: React.DragEvent) => {
+                    e.preventDefault();
+                    if (draggedToolIndex === null || draggedToolIndex === index) return;
+                    reorderTools(draggedToolIndex, index);
+                    setDraggedToolIndex(index);
+                  },
+                } : {};
+
+                if (key === "files") {
+                  return (
+                    <div
+                      key={key}
+                      className={tileClass}
+                      onContextMenu={handleContextMenu}
+                      onTouchStart={handleTouchStart}
+                      onTouchEnd={handleTouchEnd}
+                      onTouchCancel={cancelLongPress}
+                      {...dragProps}
+                    >
+                      {toolsEditMode ? (
+                        <div className="w-full h-full flex flex-col items-center justify-center gap-1.5">
+                          {tileContent}
+                        </div>
+                      ) : (
+                        <Link href="/dashboard/folders" className="w-full h-full flex flex-col items-center justify-center gap-1.5">
+                          {tileContent}
+                        </Link>
+                      )}
+                    </div>
+                  );
+                }
                 if (action === "scanner" && onOpenScanner) {
                   return (
                     <button
                       key={key}
                       type="button"
-                      onClick={onOpenScanner}
+                      onClick={toolsEditMode ? undefined : onOpenScanner}
+                      onContextMenu={handleContextMenu}
+                      onTouchStart={handleTouchStart}
+                      onTouchEnd={handleTouchEnd}
+                      onTouchCancel={cancelLongPress}
                       className={tileClass}
+                      {...(toolsEditMode ? dragProps : {})}
                     >
                       {tileContent}
                     </button>
@@ -305,9 +445,23 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
                 }
                 if (action === "converter") {
                   return (
-                    <Link key={key} href="/dashboard/convert" className={tileClass}>
-                      {tileContent}
-                    </Link>
+                    <div
+                      key={key}
+                      className={tileClass}
+                      onContextMenu={handleContextMenu}
+                      onTouchStart={handleTouchStart}
+                      onTouchEnd={handleTouchEnd}
+                      onTouchCancel={cancelLongPress}
+                      {...dragProps}
+                    >
+                      {toolsEditMode ? (
+                        <div className="w-full h-full flex flex-col items-center justify-center gap-1.5">{tileContent}</div>
+                      ) : (
+                        <Link href="/dashboard/convert" className="w-full h-full flex flex-col items-center justify-center gap-1.5">
+                          {tileContent}
+                        </Link>
+                      )}
+                    </div>
                   );
                 }
                 if (action === "poll") {
@@ -316,23 +470,100 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
                       key={key}
                       type="button"
                       onClick={(e) => {
+                        if (toolsEditMode) return;
                         e.preventDefault();
                         e.stopPropagation();
                         setPollModalOpen(true);
                       }}
-                      className={`${tileClass} cursor-pointer`}
-                      style={{ pointerEvents: "auto" }}
+                      onContextMenu={handleContextMenu}
+                      onTouchStart={handleTouchStart}
+                      onTouchEnd={handleTouchEnd}
+                      onTouchCancel={cancelLongPress}
+                      className={tileClass}
+                      {...(toolsEditMode ? dragProps : {})}
+                    >
+                      {tileContent}
+                    </button>
+                  );
+                }
+                if (action === "task" || action === "event") {
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={handleClick}
+                      onContextMenu={handleContextMenu}
+                      onTouchStart={handleTouchStart}
+                      onTouchEnd={handleTouchEnd}
+                      onTouchCancel={cancelLongPress}
+                      className={tileClass}
+                      {...(toolsEditMode ? dragProps : {})}
                     >
                       {tileContent}
                     </button>
                   );
                 }
                 return (
-                  <Link key={key} href={href ?? "/dashboard"} className={tileClass}>
-                    {tileContent}
-                  </Link>
+                  <div
+                    key={key}
+                    className={tileClass}
+                    onContextMenu={handleContextMenu}
+                    onTouchStart={handleTouchStart}
+                    onTouchEnd={handleTouchEnd}
+                    onTouchCancel={cancelLongPress}
+                    {...dragProps}
+                  >
+                    {toolsEditMode ? (
+                      <div className="w-full h-full flex flex-col items-center justify-center gap-1.5">{tileContent}</div>
+                    ) : (
+                      <Link href={href ?? "/dashboard"} className="w-full h-full flex flex-col items-center justify-center gap-1.5">
+                        {tileContent}
+                      </Link>
+                    )}
+                  </div>
                 );
               })}
+            </div>
+            {toolsEditMode && (
+              <button
+                type="button"
+                onClick={() => setToolsEditMode(false)}
+                className="mt-2 w-full py-2 rounded-xl border border-[#008080]/30 text-[#008080] text-sm font-medium"
+              >
+                {isHe ? "סיום עריכה" : "Done"}
+              </button>
+            )}
+            <div className="relative mt-2">
+              <button
+                type="button"
+                onClick={() => setAddToolMenuOpen((o) => !o)}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-[#008080]/30 text-[#008080] hover:bg-[#008080]/5 text-sm font-medium"
+              >
+                <Plus className="w-4 h-4" strokeWidth={2.5} />
+                {isHe ? "הוסף כלי" : "Add Tool"}
+              </button>
+              {addToolMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setAddToolMenuOpen(false)} aria-hidden />
+                  <div className="absolute left-0 right-0 top-full mt-1 z-50 rounded-xl bg-white border border-[#008080]/20 shadow-lg py-2 max-h-48 overflow-y-auto">
+                    {availableToAdd.length === 0 ? (
+                      <p className="px-3 py-2 text-xs text-gray-500">{isHe ? "כל הכלים נוספו" : "All tools added."}</p>
+                    ) : (
+                      availableToAdd.map(({ key: k, labelEn: le, labelHe: lh, icon: Ico }) => (
+                        <button
+                          key={k}
+                          type="button"
+                          onClick={() => addTool(k)}
+                          className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-[#008080]/10"
+                        >
+                          <Ico className="w-4 h-4 text-[#008080]" strokeWidth={2} />
+                          {isHe ? lh : le}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           </div>
           <div className="flex-shrink-0 pt-2 border-t border-[#008080]/10">

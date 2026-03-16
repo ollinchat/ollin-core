@@ -44,8 +44,8 @@ function formatDistance(meters: number): string {
   return `${(meters / 1000).toFixed(1).replace(/\.0$/, "")}km`;
 }
 
-/** Feed tab id: 'all' or a category filter. Used in customizable sub-menu. */
-export type ExploreFeedTabId = "all" | "news" | "local_gossip" | "jobs" | "deals" | "pros";
+/** Feed tab id: 'all', category filter, or custom topic (e.g. custom_real_estate). */
+export type ExploreFeedTabId = "all" | "news" | "local_gossip" | "jobs" | "deals" | "pros" | (string & {});
 
 const RADII_OPTIONS = [1, 3, 5, 10, 25, 50];
 
@@ -530,7 +530,7 @@ function getInitial(name: string): string {
   return (name || "?").replace(/\s+.*$/, "").slice(0, 1).toUpperCase();
 }
 
-/** Map feed tab id to post category for filtering */
+/** Map feed tab id to post category for filtering; custom_* tabs use "all" and are filtered by topic posts. */
 function feedTabToCategory(tabId: ExploreFeedTabId): PostCategory | "all" {
   if (tabId === "all") return "all";
   if (tabId === "local_gossip") return "gossip";
@@ -538,6 +538,7 @@ function feedTabToCategory(tabId: ExploreFeedTabId): PostCategory | "all" {
   if (tabId === "jobs") return "jobs";
   if (tabId === "deals") return "deals";
   if (tabId === "pros") return "pros";
+  if (String(tabId).startsWith("custom_")) return "all";
   return "all";
 }
 
