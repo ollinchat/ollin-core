@@ -13,6 +13,7 @@ import {
   Eye,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
   Star,
   Briefcase,
   Phone,
@@ -43,12 +44,24 @@ function formatDistance(meters: number): string {
   return `${(meters / 1000).toFixed(1).replace(/\.0$/, "")}km`;
 }
 
-type ExploreTab = "all" | "deals" | "gossip" | "jobs" | "pros";
+/** Feed tab id: 'all' or a category filter. Used in customizable sub-menu. */
+export type ExploreFeedTabId = "all" | "news" | "local_gossip" | "jobs" | "deals" | "pros";
 
 const RADII_OPTIONS = [1, 3, 5, 10, 25, 50];
 
+const EXPLORE_TABS_STORAGE_KEY = "ollin_explore_custom_tabs";
+const EXPLORE_INTERACTIONS_KEY = "ollin_explore_interactions";
+
+const DEFAULT_FEED_TABS: { id: ExploreFeedTabId; labelEn: string; labelHe: string }[] = [
+  { id: "all", labelEn: "All", labelHe: "הכל" },
+  { id: "news", labelEn: "News", labelHe: "חדשות" },
+  { id: "local_gossip", labelEn: "Local Gossip", labelHe: "רכילות מקומית" },
+  { id: "jobs", labelEn: "Jobs", labelHe: "משרות" },
+  { id: "deals", labelEn: "Deals", labelHe: "מבצעים" },
+];
+
 // --- Post & comment types ---
-export type PostCategory = "deals" | "gossip" | "jobs" | "pros";
+export type PostCategory = "deals" | "gossip" | "jobs" | "pros" | "news";
 
 export interface PostComment {
   id: string;
@@ -103,6 +116,10 @@ export interface ExplorePost {
   /** Coordinates for distance calculation (from geolocation/geocode) */
   lat?: number;
   lng?: number;
+  /** AI Match Score 0–100 for personalization (e.g. 88) */
+  matchScore?: number;
+  /** Short AI-generated summary as 3 bullets for card preview */
+  summaryBullets?: string[];
 }
 
 // --- Sample posts (3-4 per category) ---
@@ -451,13 +468,116 @@ const SAMPLE_POSTS: ExplorePost[] = [
     sourceLabel: "Sourced from: Ollin Pro Network, Local Reviews",
     commentsList: [],
   },
+  // NEWS (curated professional & general)
+  {
+    id: "n1",
+    category: "news",
+    authorName: "Tech Today",
+    timestamp: "1 hour ago",
+    title: "Israeli Startups Raise $1.2B in Q1 — Sector Roundup",
+    description: "Funding rounds and key moves in cybersecurity, fintech, and AI. Top deals and hiring trends for the quarter.",
+    likes: 89,
+    comments: 12,
+    shares: 24,
+    views: 1203,
+    generatedByAI: true,
+    aiSummary: "Q1 funding roundup: cybersecurity and fintech lead; hiring remains strong.",
+    sourceLabel: "Sourced from: Calcalist, Globes, company announcements",
+    summaryBullets: ["$1.2B total raised across 40+ rounds", "Cybersecurity and fintech lead", "Hiring trends positive for engineers"],
+    matchScore: 92,
+    commentsList: [],
+  },
+  {
+    id: "n2",
+    category: "news",
+    authorName: "Ollin AI",
+    timestamp: "3 hours ago",
+    title: "Local Council Updates: Parking, Events, and Roadworks",
+    description: "This week: new parking rules in central Tel Aviv, weekend events in Haifa, and roadworks on Route 4.",
+    likes: 45,
+    comments: 8,
+    shares: 5,
+    views: 567,
+    location: "Tel Aviv",
+    generatedByAI: true,
+    aiSummary: "Council updates: parking, events, and roadworks in your area.",
+    sourceLabel: "Sourced from: Municipality RSS, Local Gov",
+    summaryBullets: ["New parking rules in central Tel Aviv", "Weekend events in Haifa", "Roadworks on Route 4 — expect delays"],
+    matchScore: 85,
+    commentsList: [],
+  },
+  {
+    id: "n3",
+    category: "news",
+    authorName: "Business Daily",
+    timestamp: "5 hours ago",
+    title: "Remote Work Tax Benefits Extended Through 2025",
+    description: "Knesset extends tax incentives for remote workers and digital nomads. What you need to know.",
+    likes: 156,
+    comments: 34,
+    shares: 89,
+    views: 2100,
+    generatedByAI: true,
+    aiSummary: "Tax benefits for remote workers extended; key eligibility and deadlines.",
+    sourceLabel: "Sourced from: Tax Authority, business press",
+    summaryBullets: ["Incentives extended through 2025", "Eligibility criteria unchanged", "Deadline to apply: June 30"],
+    matchScore: 78,
+    commentsList: [],
+  },
 ];
 
 function getInitial(name: string): string {
   return (name || "?").replace(/\s+.*$/, "").slice(0, 1).toUpperCase();
 }
 
-/** Copyright-safe image placeholder by category: brand (deals/jobs), news (gossip), pro */
+/** Map feed tab id to post category for filtering */
+function feedTabToCategory(tabId: ExploreFeedTabId): PostCategory | "all" {
+  if (tabId === "all") return "all";
+  if (tabId === "local_gossip") return "gossip";
+  if (tabId === "news") return "news";
+  if (tabId === "jobs") return "jobs";
+  if (tabId === "deals") return "deals";
+  if (tabId === "pros") return "pros";
+  return "all";
+}
+
+function loadStoredTabs(): { id: ExploreFeedTabId; labelEn: string; labelHe: string }[] {
+  if (typeof window === "undefined") return DEFAULT_FEED_TABS;
+  try {
+    const raw = localStorage.getItem(EXPLORE_TABS_STORAGE_KEY);
+    if (!raw) return DEFAULT_FEED_TABS;
+    const parsed = JSON.parse(raw) as { id: ExploreFeedTabId; labelEn: string; labelHe: string }[];
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_FEED_TABS;
+  } catch {
+    return DEFAULT_FEED_TABS;
+  }
+}
+
+function saveTabs(tabs: { id: ExploreFeedTabId; labelEn: string; labelHe: string }[]) {
+  try {
+    localStorage.setItem(EXPLORE_TABS_STORAGE_KEY, JSON.stringify(tabs));
+  } catch {}
+}
+
+function loadInteractions(): Record<string, number> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = localStorage.getItem(EXPLORE_INTERACTIONS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, number>;
+    return typeof parsed === "object" && parsed !== null ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveInteractions(interactions: Record<string, number>) {
+  try {
+    localStorage.setItem(EXPLORE_INTERACTIONS_KEY, JSON.stringify(interactions));
+  } catch {}
+}
+
+/** Copyright-safe image placeholder by category: brand (deals/jobs), news (gossip/news), pro */
 function PostImagePlaceholder({
   category,
   trending,
@@ -469,7 +589,7 @@ function PostImagePlaceholder({
   imageUrl?: string;
   className?: string;
 }) {
-  const isNews = category === "gossip";
+  const isNews = category === "gossip" || category === "news";
   const isLarge = isNews && trending;
   const base = "flex items-center justify-center bg-gray-100 text-gray-400 overflow-hidden " + className;
   if (imageUrl) {
@@ -486,7 +606,7 @@ function PostImagePlaceholder({
       </div>
     );
   }
-  if (category === "gossip") {
+  if (category === "gossip" || category === "news") {
     return (
       <div className={base + " bg-gradient-to-br from-amber-100/80 to-gray-200 backdrop-blur-sm"}>
         <MapPin className="w-8 h-8 text-amber-600/60" strokeWidth={1.5} />
@@ -507,6 +627,69 @@ function formatRelative(t: string | number | Date | null | undefined): string {
   if (typeof t === "number") return String(t);
   if (typeof t === "object" && "toISOString" in t) return (t as Date).toISOString();
   return String(t);
+}
+
+/** Derive 3 bullets for card from post (summaryBullets, aiSummary, or description) */
+function getSummaryBullets(post: ExplorePost): string[] {
+  if (post.summaryBullets && post.summaryBullets.length > 0) return post.summaryBullets.slice(0, 3);
+  if (post.aiSummary) return [post.aiSummary];
+  const d = post.description || "";
+  const sentences = d.split(/[.!?]+/).map((s) => s.trim()).filter(Boolean).slice(0, 3);
+  return sentences.length > 0 ? sentences : [post.title];
+}
+
+/** Action label by category for CTA button */
+function getActionLabel(category: PostCategory, isHe: boolean): string {
+  if (category === "jobs") return isHe ? "הגש מועמדות" : "Apply";
+  if (category === "deals") return isHe ? "צפה במבצע" : "View Deal";
+  if (category === "news") return isHe ? "קרא עוד" : "Read more";
+  if (category === "gossip") return isHe ? "קרא עוד" : "Read more";
+  if (category === "pros") return isHe ? "צור קשר" : "Contact";
+  return isHe ? "פרטים" : "Details";
+}
+
+/** Sleek Smart Content Card: title, 3 bullets, match score, CTA. Click opens detail. */
+function SmartContentCard({
+  post,
+  isHe,
+  onClick,
+}: {
+  post: ExplorePost;
+  isHe: boolean;
+  onClick: () => void;
+}) {
+  const bullets = getSummaryBullets(post);
+  const score = post.matchScore ?? Math.min(95, 60 + Math.floor(Math.random() * 35));
+  const actionLabel = getActionLabel(post.category, isHe);
+
+  return (
+    <article
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => e.key === "Enter" && onClick()}
+      className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm hover:shadow-md hover:border-[#008080]/30 transition-all cursor-pointer text-left"
+    >
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <h3 className="font-semibold text-gray-900 text-sm leading-tight line-clamp-2 flex-1 min-w-0">{post.title}</h3>
+        <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full bg-[#008080]/10 text-[#008080] text-xs font-bold">
+          {score}% {isHe ? "התאמה" : "Match"}
+        </span>
+      </div>
+      <ul className="space-y-1 mb-3 text-xs text-gray-600 list-disc list-inside">
+        {bullets.slice(0, 3).map((b, i) => (
+          <li key={i} className="leading-snug">{b}</li>
+        ))}
+      </ul>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onClick(); }}
+        className="w-full py-2.5 rounded-xl bg-[#008080] text-white text-sm font-medium hover:bg-[#006666] transition-colors"
+      >
+        {actionLabel}
+      </button>
+    </article>
+  );
 }
 
 /** Modal: show route from My Location to destination; Open in Maps link */
@@ -668,6 +851,21 @@ const INSIGHT_TEMPLATES: Omit<ExplorePost, "id" | "timestamp" | "commentsList">[
     aiSummary: "Web scan result: 20% discount at Cafe Neto (Haifa) nearby.",
     sourceLabel: "Source: Facebook Marketplace, Local business pages",
   },
+  {
+    category: "news",
+    authorName: "Ollin AI",
+    title: "Breaking: Market update",
+    description: "Curated headline from business and local news. Tap to read full story.",
+    likes: 0,
+    comments: 0,
+    shares: 0,
+    views: 0,
+    generatedByAI: true,
+    aiSummary: "Curated professional and general news for your feed.",
+    sourceLabel: "Sourced from: News APIs, business press",
+    summaryBullets: ["Market and policy updates", "Local and national headlines", "Personalized to your interests"],
+    matchScore: 82,
+  },
 ];
 
 // --- Post card: proximity badge, Get Directions, address, glassmorphism, status pills ---
@@ -695,7 +893,7 @@ function PostCard({
     setShowReplies((prev) => ({ ...prev, [commentId]: !prev[commentId] }));
   };
 
-  const isTrendingGossip = post.category === "gossip" && post.trending;
+  const isTrendingGossip = (post.category === "gossip" || post.category === "news") && post.trending;
   const sourceHref = post.sourceLink || (post.generatedByAI ? "#" : undefined);
   const sourceDisplayName = post.sourceName || (post.sourceLabel?.replace(/^Sourced from:?\s*/i, "").split(",")[0]?.trim()) || "Original";
   const hasProximity = (post.category === "deals" || post.category === "jobs" || post.category === "pros") && post.distanceMeters != null;
@@ -708,7 +906,7 @@ function PostCard({
   };
 
   const handleCopy = useCallback(() => {
-    const title = post.category === "gossip" && post.generatedByAI ? (post.aiSummary || post.title) : post.title;
+    const title = (post.category === "gossip" || post.category === "news") && post.generatedByAI ? (post.aiSummary || post.title) : post.title;
     const summary = post.aiSummary || post.description;
     const text = [title, summary].filter(Boolean).join("\n\n");
     navigator.clipboard.writeText(text).then(() => {
@@ -731,7 +929,7 @@ function PostCard({
         <div className="absolute bottom-0 left-0 right-0 p-3 pointer-events-none">
           <div className="backdrop-blur-md bg-white/20 rounded-lg px-2.5 py-1.5 border border-white/30">
             <span className="text-sm font-bold text-white drop-shadow-md line-clamp-2">
-              {post.category === "gossip" ? (post.aiSummary || post.title) : post.title}
+              {(post.category === "gossip" || post.category === "news") ? (post.aiSummary || post.title) : post.title}
             </span>
           </div>
         </div>
@@ -775,13 +973,13 @@ function PostCard({
 
           {/* Content: bold headers + clear source attribution — selectable text for copy/long-press */}
           <div className="px-3 py-2 lg:px-4 lg:py-3 select-text">
-            <h3 className={`mb-1 ${post.category === "gossip" || post.category === "deals" ? "text-sm font-bold text-gray-900 uppercase tracking-tight leading-tight" : "font-bold text-gray-900 text-sm"}`}>
-              {post.category === "gossip" && post.generatedByAI ? (post.aiSummary || post.title) : post.title}
+            <h3 className={`mb-1 ${post.category === "gossip" || post.category === "news" || post.category === "deals" ? "text-sm font-bold text-gray-900 uppercase tracking-tight leading-tight" : "font-bold text-gray-900 text-sm"}`}>
+              {(post.category === "gossip" || post.category === "news") && post.generatedByAI ? (post.aiSummary || post.title) : post.title}
             </h3>
             {post.generatedByAI && post.sourceLabel && (
               <p className="text-[10px] text-gray-500 font-medium mb-1">{post.sourceLabel}</p>
             )}
-            {post.category === "gossip" && post.generatedByAI && post.aiSummary && post.title !== post.aiSummary && (
+            {(post.category === "gossip" || post.category === "news") && post.generatedByAI && post.aiSummary && post.title !== post.aiSummary && (
               <p className="text-xs text-amber-800/90 italic leading-snug mb-1">{post.title}</p>
             )}
             {post.category !== "gossip" && post.generatedByAI && post.aiSummary && (
@@ -874,10 +1072,10 @@ function PostCard({
             )}
           </>
         )}
-        {post.category === "gossip" && (
+        {(post.category === "gossip" || post.category === "news") && (
           <>
             <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-amber-200 text-amber-900 text-[10px] font-bold uppercase tracking-wide">
-              {isHe ? "צהובון" : "Yellow Press"}
+              {post.category === "news" ? (isHe ? "חדשות" : "News") : (isHe ? "צהובון" : "Yellow Press")}
             </span>
             {post.trending && (
               <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-amber-100 text-amber-800 text-xs font-medium">
@@ -1030,6 +1228,14 @@ function PostCard({
           </button>
         </div>
       )}
+      {post.category === "news" && (
+        <div className="px-4 pb-4">
+          <button type="button" className="w-full py-2.5 rounded-xl text-white text-sm font-medium bg-[#008080] hover:bg-[#006666] flex items-center justify-center gap-2">
+            <ExternalLink className="w-4 h-4" strokeWidth={2} />
+            {isHe ? "קרא עוד" : "Read more"}
+          </button>
+        </div>
+      )}
       {post.category === "jobs" && (
         <div className="px-3 pb-3 space-y-2">
           {post.sourceLink && post.sourceName && (
@@ -1062,7 +1268,6 @@ function PostCard({
           </button>
         </div>
       )}
-
           {/* View Original / Source link — every AI post; clearly marked as leaving the app */}
           {post.generatedByAI && sourceHref && (
             <div className="px-3 pb-3 pt-0 border-t border-gray-50">
@@ -1089,7 +1294,8 @@ function PostCard({
 
 export function ExplorePanel() {
   const { locale } = useLocale();
-  const [tab, setTab] = useState<ExploreTab>("all");
+  const [feedTabs, setFeedTabs] = useState<{ id: ExploreFeedTabId; labelEn: string; labelHe: string }[]>(() => loadStoredTabs());
+  const [activeFeedTab, setActiveFeedTab] = useState<ExploreFeedTabId>("all");
   const [location, setLocation] = useState("");
   const [radiusKm, setRadiusKm] = useState(5);
   const [locationPillOpen, setLocationPillOpen] = useState(false);
@@ -1112,6 +1318,9 @@ export function ExplorePanel() {
   const [lastAiQuery, setLastAiQuery] = useState<string>("");
   const [devModeOpen, setDevModeOpen] = useState(false);
   const [refineToast, setRefineToast] = useState(false);
+  const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+  const [interactions, setInteractions] = useState<Record<string, number>>(() => loadInteractions());
+  const [manageTabsOpen, setManageTabsOpen] = useState(false);
   const interactionLogRef = React.useRef({ jobCardsViewed: 0, applyClicks: 0, directionsClicks: 0, dealCardsViewed: 0, sourceClicks: 0 });
 
   useEffect(() => {
@@ -1167,30 +1376,23 @@ export function ExplorePanel() {
   const isHe = locale === "he";
   const cityName = location.trim() || "Haifa";
   const { state: architectState, setExploreSortByDistance, setExploreContextForArchitect } = useArchitect();
+  const categoryFilter = feedTabToCategory(activeFeedTab);
 
-  const tabs: { id: ExploreTab; labelEn: string; labelHe: string }[] = [
-    { id: "all", labelEn: "ALL", labelHe: "הכל" },
-    { id: "deals", labelEn: "Deals", labelHe: "מבצעים" },
-    { id: "gossip", labelEn: "Gossip", labelHe: "רכילות" },
-    { id: "jobs", labelEn: "Jobs", labelHe: "משרות" },
-    { id: "pros", labelEn: "Pros", labelHe: "מקצוענים" },
-  ];
-
-  // Filter sample posts by tab and location
+  // Filter sample posts by active feed tab and location
   const filteredPosts = useMemo(() => {
     let list: ExplorePost[] = SAMPLE_POSTS;
-    if (tab !== "all") list = list.filter((p) => p.category === tab);
+    if (categoryFilter !== "all") list = list.filter((p) => p.category === categoryFilter);
     if (location.trim()) {
       const locLower = location.trim().toLowerCase();
       list = list.filter((p) => p.location?.toLowerCase().includes(locLower));
     }
     return list;
-  }, [tab, location]);
+  }, [categoryFilter, location]);
 
   // Merge insights + live signals + samples; filter by tab & search; apply real distance from userCoords
   const displayPosts = useMemo(() => {
-    const insights = insightPosts.filter((p) => tab === "all" || p.category === tab);
-    const live = liveSignalPosts.filter((p) => tab === "all" || p.category === tab);
+    const insights = insightPosts.filter((p) => categoryFilter === "all" || p.category === categoryFilter);
+    const live = liveSignalPosts.filter((p) => categoryFilter === "all" || p.category === categoryFilter);
     const merged = [...insights, ...live, ...filteredPosts];
     let list = merged;
     if (searchQuery.trim()) {
@@ -1213,27 +1415,75 @@ export function ExplorePanel() {
       return { ...p, distanceMeters };
     });
     return result;
-  }, [insightPosts, liveSignalPosts, filteredPosts, tab, searchQuery, userCoords]);
+  }, [insightPosts, liveSignalPosts, filteredPosts, categoryFilter, searchQuery, userCoords]);
 
+  // Personalization: sort by interaction count (clicks) then by distance/date
   const displayPostsSorted = useMemo(() => {
-    if (!architectState.exploreSortByDistance) return displayPosts;
-    return [...displayPosts].sort((a, b) => {
-      const da = a.distanceMeters ?? Infinity;
-      const db = b.distanceMeters ?? Infinity;
-      return da - db;
+    const withScores = displayPosts.map((p) => ({
+      post: p,
+      interactionCount: interactions[p.id] ?? 0,
+      distance: p.distanceMeters ?? Infinity,
+    }));
+    const byInteraction = [...withScores].sort((a, b) => b.interactionCount - a.interactionCount);
+    if (architectState.exploreSortByDistance) {
+      return byInteraction.sort((a, b) => {
+        if (b.interactionCount !== a.interactionCount) return b.interactionCount - a.interactionCount;
+        return a.distance - b.distance;
+      }).map((x) => x.post);
+    }
+    return byInteraction.map((x) => x.post);
+  }, [displayPosts, interactions, architectState.exploreSortByDistance]);
+
+  // Clear detail view when selected post is no longer in the filtered list
+  useEffect(() => {
+    if (!selectedPostId) return;
+    const exists = displayPostsSorted.some((p) => p.id === selectedPostId);
+    if (!exists) setSelectedPostId(null);
+  }, [selectedPostId, displayPostsSorted]);
+
+  const recordCardClick = useCallback((postId: string) => {
+    setInteractions((prev) => {
+      const next = { ...prev, [postId]: (prev[postId] ?? 0) + 1 };
+      saveInteractions(next);
+      return next;
     });
-  }, [displayPosts, architectState.exploreSortByDistance]);
+  }, []);
+
+  const removeFeedTab = useCallback((id: ExploreFeedTabId) => {
+    if (id === "all") return;
+    setFeedTabs((prev) => {
+      const next = prev.filter((t) => t.id !== id);
+      saveTabs(next);
+      if (activeFeedTab === id) setActiveFeedTab("all");
+      return next;
+    });
+  }, [activeFeedTab]);
+
+  const addFeedTab = useCallback((tab: { id: ExploreFeedTabId; labelEn: string; labelHe: string }) => {
+    setFeedTabs((prev) => {
+      if (prev.some((t) => t.id === tab.id)) return prev;
+      const next = [...prev, tab];
+      saveTabs(next);
+      return next;
+    });
+    setManageTabsOpen(false);
+  }, []);
+
+  const availableToAdd = useMemo(() => {
+    const used = new Set(feedTabs.map((t) => t.id));
+    return DEFAULT_FEED_TABS.filter((t) => t.id !== "all" && !used.has(t.id));
+  }, [feedTabs]);
 
   // Global State Bridge: when Architect has bridge enabled, push Explore context so it can offer relevant AI prompts
   useEffect(() => {
     if (!architectState.exploreBridgeEnabled) return;
     setExploreContextForArchitect({
-      lastCategory: tab,
+      lastCategory: activeFeedTab,
       lastQuery: searchQuery.trim() || undefined,
       recentItemIds: displayPosts.slice(0, 20).map((p) => p.id),
       updatedAt: Date.now(),
     });
-  }, [architectState.exploreBridgeEnabled, tab, searchQuery, displayPosts, setExploreContextForArchitect]);
+  }, [architectState.exploreBridgeEnabled, activeFeedTab, searchQuery, displayPosts, setExploreContextForArchitect]);
 
   // Interaction log for Dev Mode: track views vs clicks
   useEffect(() => {
@@ -1269,7 +1519,7 @@ export function ExplorePanel() {
 
   const handleRefineView = useCallback(() => {
     const state = {
-      tab,
+      tab: activeFeedTab,
       location: cityName,
       radiusKm,
       searchQuery,
@@ -1279,7 +1529,7 @@ export function ExplorePanel() {
     navigator.clipboard.writeText(JSON.stringify(state, null, 2));
     setRefineToast(true);
     setTimeout(() => setRefineToast(false), 3000);
-  }, [tab, cityName, radiusKm, searchQuery, displayPosts]);
+  }, [activeFeedTab, cityName, radiusKm, searchQuery, displayPosts]);
 
   const mapCenter = userCoords ?? HAIFA_CENTER;
   const mapBbox = `${mapCenter.lng - 0.05},${mapCenter.lat - 0.04},${mapCenter.lng + 0.05},${mapCenter.lat + 0.04}`;
@@ -1295,6 +1545,42 @@ export function ExplorePanel() {
           onClose={() => setDirectionsTarget(null)}
           isHe={isHe}
         />
+      )}
+
+      {/* Manage feed tabs: add/remove sub-tabs */}
+      {manageTabsOpen && (
+        <>
+          <div className="fixed inset-0 z-50 bg-black/40" onClick={() => setManageTabsOpen(false)} aria-hidden />
+          <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white border border-gray-200 shadow-xl p-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-semibold text-gray-900 mb-3">{isHe ? "נהל טאבים" : "Customize feed tabs"}</h3>
+            <p className="text-xs text-gray-500 mb-3">{isHe ? "הוסף או הסר טאבים מהתפריט." : "Add or remove tabs from the sub-menu."}</p>
+            <ul className="space-y-1 mb-4">
+              {feedTabs.map(({ id, labelEn, labelHe }) => (
+                <li key={id} className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-gray-50">
+                  <span className="text-sm font-medium text-gray-800">{isHe ? labelHe : labelEn}</span>
+                  {id !== "all" && (
+                    <button type="button" onClick={() => removeFeedTab(id)} className="text-xs text-red-600 hover:bg-red-50 px-2 py-1 rounded">× {isHe ? "הסר" : "Remove"}</button>
+                  )}
+                </li>
+              ))}
+            </ul>
+            {availableToAdd.length > 0 && (
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-2">{isHe ? "הוסף טאב" : "Add tab"}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {availableToAdd.map((tab) => (
+                    <button key={tab.id} type="button" onClick={() => addFeedTab(tab)} className="px-3 py-1.5 rounded-xl bg-[#008080]/10 text-[#008080] text-sm font-medium hover:bg-[#008080]/20">
+                      {isHe ? tab.labelHe : tab.labelEn}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <button type="button" onClick={() => setManageTabsOpen(false)} className="mt-4 w-full py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50">
+              {isHe ? "סגור" : "Done"}
+            </button>
+          </div>
+        </>
       )}
 
       {/* Developer Mode: interaction gaps + AI logic (Ctrl+Shift+D / Cmd+Shift+D) */}
@@ -1350,21 +1636,28 @@ export function ExplorePanel() {
         </div>
       )}
 
-      {/* Desktop: fixed left sidebar — Navigation Tabs (Deals, Gossip, Jobs, Pros) */}
+      {/* Desktop: fixed left sidebar — customizable feed tabs */}
       <aside className="hidden lg:flex lg:flex-col lg:w-52 lg:shrink-0 border-r border-gray-200 bg-gray-50/50 py-4">
-        <div className="px-3 mb-2">
+        <div className="px-3 mb-2 flex items-center justify-between">
           <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wide">{isHe ? "גילוי" : "Explore"}</h2>
+          <button type="button" onClick={() => setManageTabsOpen((o) => !o)} className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-500" aria-label={isHe ? "נהל טאבים" : "Manage tabs"}>
+            <Plus className="w-4 h-4" strokeWidth={2} />
+          </button>
         </div>
         <nav className="flex flex-col gap-0.5 px-2">
-          {tabs.map(({ id, labelEn, labelHe }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setTab(id)}
-              className={`text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${tab === id ? "bg-[#008080] text-white" : "text-gray-600 hover:bg-gray-200"}`}
-            >
-              {isHe ? labelHe : labelEn}
-            </button>
+          {feedTabs.map(({ id, labelEn, labelHe }) => (
+            <div key={id} className="flex items-center gap-0.5 group">
+              <button
+                type="button"
+                onClick={() => setActiveFeedTab(id)}
+                className={`flex-1 text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${activeFeedTab === id ? "bg-[#008080] text-white" : "text-gray-600 hover:bg-gray-200"}`}
+              >
+                {isHe ? labelHe : labelEn}
+              </button>
+              {id !== "all" && (
+                <button type="button" onClick={() => removeFeedTab(id)} className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-100 text-gray-400 hover:text-red-600 text-xs" aria-label={isHe ? "הסר" : "Remove"}>×</button>
+              )}
+            </div>
           ))}
         </nav>
       </aside>
@@ -1440,17 +1733,20 @@ export function ExplorePanel() {
               </header>
               <div className="lg:hidden flex items-center gap-2 border-b border-gray-200 p-2 overflow-hidden">
                 <div className="flex overflow-x-auto gap-0.5 min-w-0 flex-1 scrollbar-hide">
-                  {tabs.map(({ id, labelEn, labelHe }) => (
+                  {feedTabs.map(({ id, labelEn, labelHe }) => (
                     <button
                       key={id}
                       type="button"
-                      onClick={() => setTab(id)}
-                      className={`flex-shrink-0 px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-colors ${tab === id ? "bg-[#008080] text-white" : "text-gray-600 hover:bg-gray-100"}`}
+                      onClick={() => setActiveFeedTab(id)}
+                      className={`flex-shrink-0 px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-colors ${activeFeedTab === id ? "bg-[#008080] text-white" : "text-gray-600 hover:bg-gray-100"}`}
                     >
                       {isHe ? labelHe : labelEn}
                     </button>
                   ))}
                 </div>
+                <button type="button" onClick={() => setManageTabsOpen(true)} className="p-2 rounded-xl shrink-0 text-gray-500 hover:bg-gray-100" aria-label={isHe ? "נהל טאבים" : "Manage tabs"}>
+                  <Plus className="w-4 h-4" strokeWidth={2} />
+                </button>
               </div>
             </>
           }
@@ -1462,7 +1758,7 @@ export function ExplorePanel() {
           <SkeletonFeed count={3} />
         ) : (
           <>
-            {tab === "pros" && (
+            {activeFeedTab === "pros" && (
               <>
                 <p className="text-xs text-gray-500 mb-2">{isHe ? "חיפוש מקצוענים עם מסננים" : "Search pros with filters"}</p>
                 <div className="flex gap-2 mb-3">
@@ -1480,7 +1776,7 @@ export function ExplorePanel() {
               </>
             )}
 
-            {tab === "jobs" && (
+            {activeFeedTab === "jobs" && (
               <>
                 <p className="text-xs text-gray-500 mb-2">{isHe ? "חיפוש משרות עם מסננים" : "Search jobs with filters"}</p>
                 <div className="flex gap-2 mb-3">
@@ -1557,30 +1853,59 @@ export function ExplorePanel() {
               <p className="text-xs text-[#008080] font-medium mb-2 text-center">{isHe ? "מצב הועתק ללוח — מוכן לאיטרציה של AI" : "State copied to clipboard — ready for AI iteration"}</p>
             )}
 
-            {/* Social feed: single centered column (Facebook/LinkedIn style) */}
-            <div className="space-y-5 lg:space-y-6">
-              {architectState.exploreSortByDistance && (
-                <div className="flex items-center gap-2 mb-3 px-1">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#008080]/15 text-[#008080] text-xs font-semibold">
-                    {isHe ? "קרוב אליי קודם" : "Near me first"}
-                  </span>
-                  <button type="button" onClick={() => setExploreSortByDistance(false)} className="text-xs text-gray-500 hover:text-gray-700 underline">
-                    {isHe ? "בטל" : "Turn off"}
-                  </button>
+            {/* Detail view: full card when one is selected (like email detail) */}
+            {selectedPostId ? (() => {
+              const selectedPost = displayPostsSorted.find((p) => p.id === selectedPostId);
+              if (!selectedPost) return null;
+              return (
+                <div className="animate-in fade-in duration-200">
+                  <div className="flex items-center gap-2 mb-4">
+                    <button type="button" onClick={() => setSelectedPostId(null)} className="p-2 rounded-xl hover:bg-gray-100 text-gray-700 flex items-center gap-1.5" aria-label={isHe ? "חזרה" : "Back"}>
+                      <ChevronLeft className="w-5 h-5" strokeWidth={2} />
+                      <span className="text-sm font-medium">{isHe ? "חזרה" : "Back"}</span>
+                    </button>
+                  </div>
+                  <PostCard post={selectedPost} isHe={isHe} onLike={handleLike} liked={liked} onSourceClick={handleSourceClick} onGetDirections={handleGetDirections} onApplyClick={handleApplyClick} />
                 </div>
-              )}
-              {displayPostsSorted.length === 0 ? (
-                <div className="rounded-xl border border-gray-200 p-8 text-center text-sm text-gray-500">
-                  {location.trim()
-                    ? (isHe ? "אין פוסטים התואמים את המיקום שנבחר." : "No posts match the selected location.")
-                    : (isHe ? "אין פוסטים להצגה." : "No posts to show.")}
+              );
+            })() : (
+              <>
+                {/* Smart feed: masonry-style grid of cards */}
+                <div className="space-y-4">
+                  {architectState.exploreSortByDistance && (
+                    <div className="flex items-center gap-2 mb-3 px-1">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#008080]/15 text-[#008080] text-xs font-semibold">
+                        {isHe ? "קרוב אליי קודם" : "Near me first"}
+                      </span>
+                      <button type="button" onClick={() => setExploreSortByDistance(false)} className="text-xs text-gray-500 hover:text-gray-700 underline">
+                        {isHe ? "בטל" : "Turn off"}
+                      </button>
+                    </div>
+                  )}
+                  {displayPostsSorted.length === 0 ? (
+                    <div className="rounded-xl border border-gray-200 p-8 text-center text-sm text-gray-500">
+                      {location.trim()
+                        ? (isHe ? "אין פוסטים התואמים את המיקום שנבחר." : "No posts match the selected location.")
+                        : (isHe ? "אין פוסטים להצגה." : "No posts to show.")}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {displayPostsSorted.map((post) => (
+                        <SmartContentCard
+                          key={post.id}
+                          post={post}
+                          isHe={isHe}
+                          onClick={() => {
+                            recordCardClick(post.id);
+                            setSelectedPostId(post.id);
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
-              ) : (
-                displayPostsSorted.map((post) => (
-                  <PostCard key={post.id} post={post} isHe={isHe} onLike={handleLike} liked={liked} onSourceClick={handleSourceClick} onGetDirections={handleGetDirections} onApplyClick={handleApplyClick} />
-                ))
-              )}
-            </div>
+              </>
+            )}
           </>
         )}
             </div>
