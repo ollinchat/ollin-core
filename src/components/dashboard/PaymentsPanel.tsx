@@ -314,7 +314,7 @@ export function PaymentsPanel({ onOpenBoard, initialTab }: PaymentsPanelProps) {
 
       {activeTab === "memberships" && <MembershipsTab isHe={isHe} fd={fd} setFd={setFd} />}
 
-      {activeTab === "home" && <HomeFixedTab isHe={isHe} fd={fd} setFd={setFd} />}
+      {activeTab === "home" && <HomeFixedTab isHe={isHe} fd={fd} setFd={setFd} bills={bills} />}
 
       {activeTab === "auto" && <AutoTab isHe={isHe} fd={fd} setFd={setFd} />}
 

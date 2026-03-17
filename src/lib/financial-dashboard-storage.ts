@@ -55,6 +55,14 @@ export interface InvestmentRow {
   costBasis: number;
 }
 
+/** Caps for progress bars (ILS). */
+export interface FinancialDashboardSettings {
+  autoMonthlyCap: number;
+  appsMonthlyCap: number;
+  membershipsMonthlyCap: number;
+  homeMonthlyCap: number;
+}
+
 export interface FinancialDashboardState {
   dailyTransactions: DailyTransaction[];
   subscriptions: SubscriptionRow[];
@@ -62,6 +70,7 @@ export interface FinancialDashboardState {
   homeFixed: HomeFixedRow[];
   autoExpenses: AutoExpenseRow[];
   investments: InvestmentRow[];
+  settings: FinancialDashboardSettings;
 }
 
 const STORAGE_KEY = "ollin_financial_dashboard_v1";
@@ -116,7 +125,15 @@ export const DEFAULT_FINANCIAL_DASHBOARD: FinancialDashboardState = {
     { id: id(), name: "BTC", kind: "crypto", value: 12500, costBasis: 14200 },
     { id: id(), name: "Emergency fund", kind: "savings", value: 85000, costBasis: 85000 },
   ],
+  settings: {
+    autoMonthlyCap: 4200,
+    appsMonthlyCap: 650,
+    membershipsMonthlyCap: 600,
+    homeMonthlyCap: 8200,
+  },
 };
+
+const DEFAULT_SETTINGS: FinancialDashboardSettings = DEFAULT_FINANCIAL_DASHBOARD.settings;
 
 export function loadFinancialDashboard(): FinancialDashboardState {
   if (typeof window === "undefined") return DEFAULT_FINANCIAL_DASHBOARD;
@@ -124,6 +141,10 @@ export function loadFinancialDashboard(): FinancialDashboardState {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_FINANCIAL_DASHBOARD;
     const p = JSON.parse(raw) as Partial<FinancialDashboardState>;
+    const settings: FinancialDashboardSettings = {
+      ...DEFAULT_SETTINGS,
+      ...(p.settings && typeof p.settings === "object" ? p.settings : {}),
+    };
     return {
       dailyTransactions: Array.isArray(p.dailyTransactions) ? p.dailyTransactions : DEFAULT_FINANCIAL_DASHBOARD.dailyTransactions,
       subscriptions: Array.isArray(p.subscriptions) ? p.subscriptions : DEFAULT_FINANCIAL_DASHBOARD.subscriptions,
@@ -131,6 +152,7 @@ export function loadFinancialDashboard(): FinancialDashboardState {
       homeFixed: Array.isArray(p.homeFixed) ? p.homeFixed : DEFAULT_FINANCIAL_DASHBOARD.homeFixed,
       autoExpenses: Array.isArray(p.autoExpenses) ? p.autoExpenses : DEFAULT_FINANCIAL_DASHBOARD.autoExpenses,
       investments: Array.isArray(p.investments) ? p.investments : DEFAULT_FINANCIAL_DASHBOARD.investments,
+      settings,
     };
   } catch {
     return DEFAULT_FINANCIAL_DASHBOARD;
