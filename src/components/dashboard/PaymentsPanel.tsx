@@ -8,8 +8,38 @@ import { useBoard } from "@/contexts/BoardContext";
 import { useArchitect } from "@/contexts/ArchitectContext";
 import type { BillCategory } from "@/contexts/BillsContext";
 import { parseBillFromFile, type BillExtraction } from "@/lib/bill-parser";
-import { Wallet, Plus, Image as ImageIcon, Calendar, Sparkles, ListTodo, Check, X, BarChart3, FileText } from "lucide-react";
+import {
+  Wallet,
+  Plus,
+  Image as ImageIcon,
+  Calendar,
+  Sparkles,
+  ListTodo,
+  Check,
+  X,
+  BarChart3,
+  FileText,
+  LayoutGrid,
+  Dumbbell,
+  Home,
+  Car,
+  TrendingUp,
+} from "lucide-react";
 import { PanelWrapper } from "@/components/dashboard/PanelWrapper";
+import {
+  loadFinancialDashboard,
+  saveFinancialDashboard,
+  DEFAULT_FINANCIAL_DASHBOARD,
+  type FinancialDashboardState,
+} from "@/lib/financial-dashboard-storage";
+import {
+  FinancialOverview,
+  AppsSubscriptionsTab,
+  MembershipsTab,
+  HomeFixedTab,
+  AutoTab,
+  InvestmentsTab,
+} from "@/components/dashboard/financial-dashboard-ui";
 
 const CATEGORIES: { value: BillCategory; labelEn: string; labelHe: string }[] = [
   { value: "electricity", labelEn: "Electricity", labelHe: "חשמל" },
@@ -20,7 +50,26 @@ const CATEGORIES: { value: BillCategory; labelEn: string; labelHe: string }[] = 
   { value: "other", labelEn: "Other", labelHe: "אחר" },
 ];
 
-export type PaymentsTabId = "overview" | "payments" | "invoices";
+export type PaymentsTabId =
+  | "overview"
+  | "payments"
+  | "invoices"
+  | "apps"
+  | "memberships"
+  | "home"
+  | "auto"
+  | "investments";
+
+const PAYMENTS_TAB_IDS: PaymentsTabId[] = [
+  "overview",
+  "payments",
+  "invoices",
+  "apps",
+  "memberships",
+  "home",
+  "auto",
+  "investments",
+];
 
 type PaymentsPanelProps = {
   onOpenBoard?: () => void;
@@ -33,7 +82,9 @@ export function PaymentsPanel({ onOpenBoard, initialTab }: PaymentsPanelProps) {
   const { bills, addBill, updateBill, removeBill } = useBills();
   const { addGivenTask } = useBoard();
   const { state: architectState, setSuggestedBillId } = useArchitect();
-  const [activeTab, setActiveTab] = useState<PaymentsTabId>(initialTab ?? "overview");
+  const [activeTab, setActiveTab] = useState<PaymentsTabId>(() =>
+    initialTab && PAYMENTS_TAB_IDS.includes(initialTab) ? initialTab : "overview"
+  );
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<BillCategory | "">("");
@@ -47,9 +98,21 @@ export function PaymentsPanel({ onOpenBoard, initialTab }: PaymentsPanelProps) {
   const [scanResult, setScanResult] = useState<BillExtraction | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const aiFileInputRef = useRef<HTMLInputElement>(null);
+  const [fd, setFd] = useState<FinancialDashboardState>(DEFAULT_FINANCIAL_DASHBOARD);
+  const [fdReady, setFdReady] = useState(false);
 
   useEffect(() => {
-    if (initialTab) setActiveTab(initialTab);
+    setFd(loadFinancialDashboard());
+    setFdReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!fdReady) return;
+    saveFinancialDashboard(fd);
+  }, [fd, fdReady]);
+
+  useEffect(() => {
+    if (initialTab && PAYMENTS_TAB_IDS.includes(initialTab)) setActiveTab(initialTab);
   }, [initialTab]);
 
   useEffect(() => {
@@ -181,7 +244,12 @@ export function PaymentsPanel({ onOpenBoard, initialTab }: PaymentsPanelProps) {
 
   const tabLabels: { id: PaymentsTabId; labelEn: string; labelHe: string }[] = [
     { id: "overview", labelEn: "Overview", labelHe: "סקירה" },
-    { id: "payments", labelEn: "Payments", labelHe: "תשלומים" },
+    { id: "apps", labelEn: "Apps & subs", labelHe: "אפליקציות" },
+    { id: "memberships", labelEn: "Memberships", labelHe: "מנויים" },
+    { id: "home", labelEn: "Home", labelHe: "בית" },
+    { id: "auto", labelEn: "Auto", labelHe: "רכב" },
+    { id: "investments", labelEn: "Invest", labelHe: "השקעות" },
+    { id: "payments", labelEn: "Bills", labelHe: "חשבונות" },
     { id: "invoices", labelEn: "Invoices", labelHe: "חשבוניות" },
   ];
 
@@ -190,7 +258,7 @@ export function PaymentsPanel({ onOpenBoard, initialTab }: PaymentsPanelProps) {
       <div className="px-4 py-3 border-b border-[var(--clean-border)] bg-white flex items-center justify-between">
         <h2 className="text-lg font-semibold text-[var(--clean-text)] tracking-wide flex items-center gap-2">
           <Wallet className="w-5 h-5 text-[var(--clean-accent)]" strokeWidth={1.75} />
-          {isHe ? "מרכז פיננסי" : "Payments"}
+          {isHe ? "מרכז פיננסי" : "Finance"}
         </h2>
         {activeTab === "payments" && (
           <button
@@ -221,9 +289,14 @@ export function PaymentsPanel({ onOpenBoard, initialTab }: PaymentsPanelProps) {
                 : "border-transparent text-[var(--clean-text-secondary)] hover:text-[var(--clean-text)]"
             }`}
           >
-            {id === "overview" && <BarChart3 className="w-3.5 h-3.5" strokeWidth={1.75} />}
-            {id === "payments" && <Wallet className="w-3.5 h-3.5" strokeWidth={1.75} />}
-            {id === "invoices" && <FileText className="w-3.5 h-3.5" strokeWidth={1.75} />}
+            {id === "overview" && <BarChart3 className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />}
+            {id === "apps" && <LayoutGrid className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />}
+            {id === "memberships" && <Dumbbell className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />}
+            {id === "home" && <Home className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />}
+            {id === "auto" && <Car className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />}
+            {id === "investments" && <TrendingUp className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />}
+            {id === "payments" && <Wallet className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />}
+            {id === "invoices" && <FileText className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />}
             {isHe ? labelHe : labelEn}
           </button>
         ))}
@@ -234,17 +307,18 @@ export function PaymentsPanel({ onOpenBoard, initialTab }: PaymentsPanelProps) {
   return (
     <PanelWrapper header={header} className="clean-app border border-[var(--clean-border)] bg-white flex flex-col">
       {activeTab === "overview" && (
-        <div className="flex-1 min-h-0 overflow-y-auto p-4 bg-white space-y-4">
-          <div className="border border-[var(--clean-border)] bg-white p-5">
-            <p className="text-xs font-medium text-[var(--clean-text-secondary)] uppercase tracking-wider mb-1">{isHe ? "סה״כ לתשלום (חשבונות)" : "Total Due (Bills)"}</p>
-            <p className="text-2xl font-semibold text-[var(--clean-text)] tabular-nums">{totalDue.toFixed(2)} ₪</p>
-            <p className="text-xs text-[var(--clean-text-secondary)] mt-1">{isHe ? "חשבונות ממתינים" : "Pending bills"}</p>
-          </div>
-          <p className="text-[13px] text-[var(--clean-text-secondary)]">
-            {isHe ? "עבור ל'תשלומים' כדי לראות רשימת חשבונות, או ל'חשבוניות' לניהול מסמכים." : "Go to Payments for the bills list, or Invoices for document management."}
-          </p>
-        </div>
+        <FinancialOverview isHe={isHe} totalDue={totalDue} fd={fd} setFd={setFd} />
       )}
+
+      {activeTab === "apps" && <AppsSubscriptionsTab isHe={isHe} fd={fd} setFd={setFd} />}
+
+      {activeTab === "memberships" && <MembershipsTab isHe={isHe} fd={fd} setFd={setFd} />}
+
+      {activeTab === "home" && <HomeFixedTab isHe={isHe} fd={fd} setFd={setFd} />}
+
+      {activeTab === "auto" && <AutoTab isHe={isHe} fd={fd} setFd={setFd} />}
+
+      {activeTab === "investments" && <InvestmentsTab isHe={isHe} fd={fd} setFd={setFd} />}
 
       {activeTab === "payments" && (
         <>
