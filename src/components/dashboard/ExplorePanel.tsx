@@ -61,6 +61,18 @@ const DEFAULT_FEED_TABS: { id: ExploreFeedTabId; labelEn: string; labelHe: strin
   { id: "deals", labelEn: "Deals", labelHe: "מבצעים" },
 ];
 
+/** Quick-select chips for the new-topic modal (English label used for tab + AI query). */
+const EXPLORE_SUGGESTED_TOPICS: { labelEn: string; labelHe: string }[] = [
+  { labelEn: "Real Estate", labelHe: "נדל״ן" },
+  { labelEn: "Tech News", labelHe: "חדשות טק" },
+  { labelEn: "Nightlife", labelHe: "חיי לילה" },
+  { labelEn: "Local Jobs", labelHe: "משרות מקומיות" },
+  { labelEn: "Food & Dining", labelHe: "אוכל ומסעדות" },
+  { labelEn: "Fitness", labelHe: "כושר" },
+  { labelEn: "Family & Kids", labelHe: "משפחה וילדים" },
+  { labelEn: "Shopping Deals", labelHe: "קניות ומבצעים" },
+];
+
 // --- Post & comment types ---
 export type PostCategory = "deals" | "gossip" | "jobs" | "pros" | "news";
 
@@ -1400,13 +1412,99 @@ export function ExplorePanel() {
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [interactions, setInteractions] = useState<Record<string, number>>(() => loadInteractions());
   const [newTopicInput, setNewTopicInput] = useState("");
-  const [newTopicInputVisible, setNewTopicInputVisible] = useState(false);
+  const [newTopicModalOpen, setNewTopicModalOpen] = useState(false);
+  const [tabsEditMode, setTabsEditMode] = useState(false);
   const [addingTopic, setAddingTopic] = useState(false);
   const [customTopicPosts, setCustomTopicPosts] = useState<Record<string, ExplorePost[]>>({});
   const [draggedTabIndex, setDraggedTabIndex] = useState<number | null>(null);
   const newTopicInputRef = React.useRef<HTMLInputElement>(null);
   const tabDragHappenedRef = React.useRef(false);
+  const tabLongPressTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suppressNextTabClickRef = React.useRef(false);
+  const mobileTabsStripRef = React.useRef<HTMLDivElement>(null);
+  const desktopTabsSidebarRef = React.useRef<HTMLElement>(null);
   const interactionLogRef = React.useRef({ jobCardsViewed: 0, applyClicks: 0, directionsClicks: 0, dealCardsViewed: 0, sourceClicks: 0 });
+
+  const clearTabLongPressTimer = useCallback(() => {
+    if (tabLongPressTimerRef.current) {
+      clearTimeout(tabLongPressTimerRef.current);
+      tabLongPressTimerRef.current = null;
+    }
+  }, []);
+
+  const onTabPointerDown = useCallback(() => {
+    if (tabsEditMode) return;
+    clearTabLongPressTimer();
+    tabLongPressTimerRef.current = setTimeout(() => {
+      tabLongPressTimerRef.current = null;
+      suppressNextTabClickRef.current = true;
+      setTabsEditMode(true);
+    }, 500);
+  }, [tabsEditMode, clearTabLongPressTimer]);
+
+  const onTabPointerUp = useCallback(() => {
+    clearTabLongPressTimer();
+  }, [clearTabLongPressTimer]);
+
+  const handleTabActivate = useCallback(
+    (tabId: ExploreFeedTabId) => {
+      if (tabDragHappenedRef.current) {
+        tabDragHappenedRef.current = false;
+        return;
+      }
+      if (suppressNextTabClickRef.current) {
+        suppressNextTabClickRef.current = false;
+        return;
+      }
+      if (tabsEditMode) {
+        setActiveFeedTab(tabId);
+        setTabsEditMode(false);
+        return;
+      }
+      setActiveFeedTab(tabId);
+    },
+    [tabsEditMode]
+  );
+
+  const openNewTopicModal = useCallback(() => {
+    setTabsEditMode(false);
+    setNewTopicModalOpen(true);
+    setNewTopicInput("");
+  }, []);
+
+  useEffect(() => {
+    if (!newTopicModalOpen) return;
+    const t = setTimeout(() => newTopicInputRef.current?.focus(), 100);
+    return () => clearTimeout(t);
+  }, [newTopicModalOpen]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (newTopicModalOpen) {
+        e.preventDefault();
+        setNewTopicModalOpen(false);
+        return;
+      }
+      if (tabsEditMode) {
+        e.preventDefault();
+        setTabsEditMode(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [newTopicModalOpen, tabsEditMode]);
+
+  useEffect(() => {
+    if (!tabsEditMode) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const n = e.target as Node;
+      if (mobileTabsStripRef.current?.contains(n) || desktopTabsSidebarRef.current?.contains(n)) return;
+      setTabsEditMode(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+  }, [tabsEditMode]);
 
   useEffect(() => {
     const t = setTimeout(() => setLoading(false), 600);
@@ -1547,14 +1645,15 @@ export function ExplorePanel() {
   }, [activeFeedTab]);
 
   const addCustomTopicTab = useCallback(
-    (topicLabel: string) => {
-      const slug = topicLabel.trim().toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "") || "topic";
-      const id = `custom_${slug}` as ExploreFeedTabId;
-      const labelEn = topicLabel.trim() || "New topic";
-      const labelHe = labelEn;
+    (topicLabel: string, display?: { labelEn?: string; labelHe?: string }) => {
+      const query = topicLabel.trim() || "topic";
+      const slug = query.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+      const id = (slug && slug.length >= 2 ? `custom_${slug}` : `custom_${Date.now().toString(36)}`) as ExploreFeedTabId;
+      const labelEn = display?.labelEn ?? (query || "New topic");
+      const labelHe = (display?.labelHe ?? display?.labelEn ?? query) || labelEn;
       if (feedTabs.some((t) => t.id === id)) {
         setActiveFeedTab(id);
-        setNewTopicInputVisible(false);
+        setNewTopicModalOpen(false);
         setNewTopicInput("");
         return;
       }
@@ -1564,15 +1663,15 @@ export function ExplorePanel() {
         return next;
       });
       setActiveFeedTab(id);
-      setNewTopicInputVisible(false);
+      setNewTopicModalOpen(false);
       setNewTopicInput("");
       setAddingTopic(true);
       const city = location.trim() || "Haifa";
-      const topic = topicLabel.trim();
+      const apiTopic = query;
       const minDelay = new Promise<void>((r) => setTimeout(r, 2000));
-      const fetchPromise = analyzeLocalSignals(city, topic).then(({ posts }) => posts);
+      const fetchPromise = analyzeLocalSignals(city, apiTopic).then(({ posts }) => posts);
       Promise.all([minDelay, fetchPromise]).then(([, posts]) => {
-        const toShow = posts && posts.length >= 3 ? posts : generateMockPostsForTopic(topic || labelEn);
+        const toShow = posts && posts.length >= 3 ? posts : generateMockPostsForTopic(labelEn);
         setCustomTopicPosts((prev) => ({ ...prev, [id]: toShow }));
       }).finally(() => setAddingTopic(false));
     },
@@ -1664,6 +1763,76 @@ export function ExplorePanel() {
         />
       )}
 
+      {/* New topic modal: search + suggested chips → AI tab */}
+      {newTopicModalOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-[2px] animate-in fade-in duration-300"
+            onClick={() => setNewTopicModalOpen(false)}
+            aria-hidden
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="explore-new-topic-title"
+            className="fixed left-1/2 top-[40%] max-h-[88vh] w-[min(92vw,420px)] -translate-x-1/2 -translate-y-1/2 z-[61] rounded-2xl bg-white p-5 sm:p-6 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.2),0_0_0_1px_rgba(0,128,128,0.06)] animate-in fade-in zoom-in-95 duration-300"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <h2 id="explore-new-topic-title" className="text-lg font-semibold text-gray-900 leading-tight">
+                {isHe ? "מה תרצה לגלות?" : "Discover something new"}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setNewTopicModalOpen(false)}
+                className="p-2 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors shrink-0"
+                aria-label={isHe ? "סגור" : "Close"}
+              >
+                <X className="w-5 h-5" strokeWidth={2} />
+              </button>
+            </div>
+            <div className="relative mb-4">
+              <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#008080]/50 pointer-events-none" strokeWidth={2} />
+              <input
+                ref={newTopicInputRef}
+                type="text"
+                value={newTopicInput}
+                onChange={(e) => setNewTopicInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && newTopicInput.trim() && !addingTopic) {
+                    e.preventDefault();
+                    addCustomTopicTab(newTopicInput.trim());
+                  }
+                }}
+                placeholder={isHe ? "מה אתה מחפש היום?" : "What are you looking for today?"}
+                className="w-full ps-10 pe-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-900 placeholder:text-gray-400 bg-gray-50/50 focus:bg-white focus:ring-2 focus:ring-[#008080]/20 focus:border-[#008080]/35 outline-none transition-all"
+              />
+            </div>
+            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2.5">
+              {isHe ? "הצעות מהירות" : "Suggested topics"}
+            </p>
+            <div className="grid grid-cols-2 gap-2 max-h-[min(40vh,240px)] overflow-y-auto pb-1">
+              {EXPLORE_SUGGESTED_TOPICS.map((chip) => (
+                <button
+                  key={chip.labelEn}
+                  type="button"
+                  disabled={addingTopic}
+                  onClick={() =>
+                    addCustomTopicTab(chip.labelEn, { labelEn: chip.labelEn, labelHe: chip.labelHe })
+                  }
+                  className="px-3 py-2.5 rounded-xl text-sm font-medium text-left border border-gray-200 bg-white text-gray-800 hover:border-[#008080]/40 hover:bg-[#008080]/5 hover:text-[#008080] transition-all disabled:opacity-50 shadow-sm"
+                >
+                  {isHe ? chip.labelHe : chip.labelEn}
+                </button>
+              ))}
+            </div>
+            {addingTopic && (
+              <p className="text-xs text-[#008080] font-medium mt-3 text-center">{isHe ? "יוצר טאב..." : "Creating your feed…"}</p>
+            )}
+          </div>
+        </>
+      )}
+
       {/* Developer Mode: interaction gaps + AI logic (Ctrl+Shift+D / Cmd+Shift+D) */}
       {devModeOpen && (
         <>
@@ -1717,41 +1886,44 @@ export function ExplorePanel() {
         </div>
       )}
 
-      {/* Desktop: fixed left sidebar — browser-style tabs: X on hover, draggable */}
-      <aside className="hidden lg:flex lg:flex-col lg:w-52 lg:shrink-0 border-r border-gray-200 bg-gray-50/50 py-4">
+      {/* Desktop: sidebar tabs — long-press for edit mode (X + drag); + opens topic modal */}
+      <aside ref={desktopTabsSidebarRef} className="hidden lg:flex lg:flex-col lg:w-52 lg:shrink-0 border-r border-gray-200 bg-gray-50/50 py-4">
         <div className="px-3 mb-2">
           <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wide">{isHe ? "גילוי" : "Explore"}</h2>
+          {tabsEditMode && (
+            <p className="text-[10px] text-[#008080] font-medium mt-1">{isHe ? "גרור לסידור · Esc לסיום" : "Drag to reorder · Esc to exit"}</p>
+          )}
         </div>
         <nav className="flex flex-col gap-0.5 px-2 flex-1 min-h-0 overflow-y-auto">
           {feedTabs.map((tab, index) => (
             <div
               key={tab.id}
-              draggable
-              onDragStart={() => { setDraggedTabIndex(index); tabDragHappenedRef.current = true; }}
+              draggable={tabsEditMode}
+              onDragStart={() => { if (!tabsEditMode) return; setDraggedTabIndex(index); tabDragHappenedRef.current = true; }}
               onDragEnd={() => { setDraggedTabIndex(null); setTimeout(() => { tabDragHappenedRef.current = false; }, 0); }}
               onDragOver={(e) => {
                 e.preventDefault();
-                if (draggedTabIndex === null || draggedTabIndex === index) return;
+                if (!tabsEditMode || draggedTabIndex === null || draggedTabIndex === index) return;
                 reorderTabs(draggedTabIndex, index);
                 setDraggedTabIndex(index);
               }}
-              className="flex items-center gap-1 group/tab flex-shrink-0"
+              className={`flex items-center gap-1 flex-shrink-0 ${tabsEditMode ? "cursor-grab active:cursor-grabbing" : ""}`}
             >
               <button
                 type="button"
-                onClick={() => {
-                  if (tabDragHappenedRef.current) { tabDragHappenedRef.current = false; return; }
-                  setActiveFeedTab(tab.id);
-                }}
-                className={`flex-1 text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-colors truncate ${activeFeedTab === tab.id ? "bg-[#008080] text-white" : "text-gray-600 hover:bg-gray-200"}`}
+                onPointerDown={onTabPointerDown}
+                onPointerUp={onTabPointerUp}
+                onPointerCancel={onTabPointerUp}
+                onClick={() => handleTabActivate(tab.id)}
+                className={`flex-1 text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-colors truncate ${activeFeedTab === tab.id ? "bg-[#008080] text-white" : "text-gray-600 hover:bg-gray-200"} ${tabsEditMode ? "ring-1 ring-[#008080]/25" : ""}`}
               >
                 {isHe ? tab.labelHe : tab.labelEn}
               </button>
-              {tab.id !== "all" && (
+              {tabsEditMode && tab.id !== "all" && (
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); removeFeedTab(tab.id); }}
-                  className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 border border-gray-200 bg-white/80 text-gray-400 hover:bg-red-50 hover:border-red-200 hover:text-red-500 transition-all ${activeFeedTab === tab.id ? "opacity-100" : "opacity-0 group-hover/tab:opacity-100"}`}
+                  className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 border border-gray-200 bg-white text-gray-500 hover:bg-red-50 hover:border-red-200 hover:text-red-500 transition-colors shadow-sm"
                   aria-label={isHe ? "הסר" : "Remove"}
                 >
                   <X className="w-3 h-3" strokeWidth={2.5} />
@@ -1759,30 +1931,10 @@ export function ExplorePanel() {
               )}
             </div>
           ))}
-          {newTopicInputVisible ? (
-            <div className="flex items-center gap-1.5 mt-1 px-1">
-              <input
-                ref={newTopicInputRef}
-                type="text"
-                value={newTopicInput}
-                onChange={(e) => setNewTopicInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") addCustomTopicTab(newTopicInput);
-                  if (e.key === "Escape") setNewTopicInputVisible(false);
-                }}
-                placeholder={isHe ? "נושא חדש (למשל נדל״ן)" : "New topic (e.g. Real Estate)"}
-                className="flex-1 min-w-0 px-2.5 py-2 rounded-lg border border-gray-200 text-sm"
-              />
-              <button type="button" onClick={() => addCustomTopicTab(newTopicInput)} disabled={addingTopic || !newTopicInput.trim()} className="p-2 rounded-lg bg-[#008080] text-white disabled:opacity-50">
-                <Plus className="w-4 h-4" strokeWidth={2.5} />
-              </button>
-            </div>
-          ) : (
-            <button type="button" onClick={() => { setNewTopicInputVisible(true); setTimeout(() => newTopicInputRef.current?.focus(), 50); }} className="mt-1 flex items-center justify-center gap-1.5 w-full py-2 rounded-xl border-2 border-dashed border-[#008080]/40 text-[#008080] text-sm font-medium hover:bg-[#008080]/5">
-              <Plus className="w-4 h-4" strokeWidth={2.5} />
-              {isHe ? "הוסף טאב" : "Add tab"}
-            </button>
-          )}
+          <button type="button" onClick={openNewTopicModal} className="mt-2 flex items-center justify-center gap-1.5 w-full py-2.5 rounded-xl border-2 border-dashed border-[#008080]/40 text-[#008080] text-sm font-medium hover:bg-[#008080]/5 transition-colors">
+            <Plus className="w-4 h-4" strokeWidth={2.5} />
+            {isHe ? "הוסף טאב" : "Add tab"}
+          </button>
         </nav>
       </aside>
 
@@ -1856,37 +2008,40 @@ export function ExplorePanel() {
                   <span>{isHe ? "הגדר מיקום" : "Set location"}</span>
                 </button>
               </header>
-              <div className="lg:hidden flex items-center gap-2 border-b border-gray-200 p-2 overflow-hidden">
-                <div className="flex overflow-x-auto gap-0.5 min-w-0 flex-1 scrollbar-hide items-center">
+              <div className="lg:hidden flex flex-col gap-1 border-b border-gray-200 p-2 overflow-hidden">
+                {tabsEditMode && (
+                  <p className="text-[10px] text-[#008080] font-medium px-1">{isHe ? "לחץ מחוץ לטאבים או Esc לסיום" : "Tap outside tabs or Esc to exit"}</p>
+                )}
+                <div ref={mobileTabsStripRef} className="flex overflow-x-auto gap-1 min-w-0 flex-1 scrollbar-hide items-center">
                   {feedTabs.map((tab, index) => (
                     <div
                       key={tab.id}
-                      draggable
-                      onDragStart={() => { setDraggedTabIndex(index); tabDragHappenedRef.current = true; }}
+                      draggable={tabsEditMode}
+                      onDragStart={() => { if (!tabsEditMode) return; setDraggedTabIndex(index); tabDragHappenedRef.current = true; }}
                       onDragEnd={() => { setDraggedTabIndex(null); setTimeout(() => { tabDragHappenedRef.current = false; }, 0); }}
                       onDragOver={(e) => {
                         e.preventDefault();
-                        if (draggedTabIndex === null || draggedTabIndex === index) return;
+                        if (!tabsEditMode || draggedTabIndex === null || draggedTabIndex === index) return;
                         reorderTabs(draggedTabIndex, index);
                         setDraggedTabIndex(index);
                       }}
-                      className="flex items-center gap-1 flex-shrink-0 group/tab rounded-full border border-transparent hover:border-gray-200"
+                      className={`flex items-center gap-1 flex-shrink-0 rounded-full ${tabsEditMode ? "cursor-grab active:cursor-grabbing" : ""}`}
                     >
                       <button
                         type="button"
-                        onClick={() => {
-                          if (tabDragHappenedRef.current) { tabDragHappenedRef.current = false; return; }
-                          setActiveFeedTab(tab.id);
-                        }}
-                        className={`flex-shrink-0 px-4 py-2.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${activeFeedTab === tab.id ? "bg-[#008080] text-white" : "text-gray-600 bg-gray-100/80 hover:bg-gray-200"}`}
+                        onPointerDown={onTabPointerDown}
+                        onPointerUp={onTabPointerUp}
+                        onPointerCancel={onTabPointerUp}
+                        onClick={() => handleTabActivate(tab.id)}
+                        className={`flex-shrink-0 px-4 py-2.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${activeFeedTab === tab.id ? "bg-[#008080] text-white" : "text-gray-600 bg-gray-100/80 hover:bg-gray-200"} ${tabsEditMode ? "ring-2 ring-[#008080]/20" : ""}`}
                       >
                         {isHe ? tab.labelHe : tab.labelEn}
                       </button>
-                      {tab.id !== "all" && (
+                      {tabsEditMode && tab.id !== "all" && (
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); removeFeedTab(tab.id); }}
-                          className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 border border-gray-200 bg-white/90 text-gray-400 hover:bg-red-50 hover:border-red-200 hover:text-red-500 transition-all ${activeFeedTab === tab.id ? "opacity-100" : "opacity-0 group-hover/tab:opacity-100"}`}
+                          className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 border border-gray-200 bg-white text-gray-500 hover:bg-red-50 hover:border-red-200 hover:text-red-500 shadow-sm"
                           aria-label={isHe ? "הסר" : "Remove"}
                         >
                           <X className="w-3 h-3" strokeWidth={2.5} />
@@ -1894,29 +2049,9 @@ export function ExplorePanel() {
                       )}
                     </div>
                   ))}
-                  {newTopicInputVisible ? (
-                    <div className="flex items-center gap-1.5 flex-shrink-0 pl-1">
-                      <input
-                        ref={newTopicInputRef}
-                        type="text"
-                        value={newTopicInput}
-                        onChange={(e) => setNewTopicInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") addCustomTopicTab(newTopicInput);
-                          if (e.key === "Escape") setNewTopicInputVisible(false);
-                        }}
-                        placeholder={isHe ? "נושא" : "Topic"}
-                        className="w-24 px-2.5 py-2 rounded-lg border border-[#008080]/40 text-sm"
-                      />
-                      <button type="button" onClick={() => addCustomTopicTab(newTopicInput)} disabled={addingTopic || !newTopicInput.trim()} className="p-2 rounded-lg bg-[#008080] text-white disabled:opacity-50">
-                        <Plus className="w-4 h-4" strokeWidth={2.5} />
-                      </button>
-                    </div>
-                  ) : (
-                    <button type="button" onClick={() => { setNewTopicInputVisible(true); setTimeout(() => newTopicInputRef.current?.focus(), 50); }} className="flex-shrink-0 w-10 h-10 rounded-full border-2 border-dashed border-[#008080]/40 text-[#008080] flex items-center justify-center hover:bg-[#008080]/5" aria-label={isHe ? "הוסף טאב" : "Add tab"}>
-                      <Plus className="w-5 h-5" strokeWidth={2.5} />
-                    </button>
-                  )}
+                  <button type="button" onClick={openNewTopicModal} className="flex-shrink-0 w-10 h-10 rounded-full border-2 border-dashed border-[#008080]/40 text-[#008080] flex items-center justify-center hover:bg-[#008080]/5 transition-colors" aria-label={isHe ? "הוסף טאב" : "Add tab"}>
+                    <Plus className="w-5 h-5" strokeWidth={2.5} />
+                  </button>
                 </div>
               </div>
             </>
