@@ -95,6 +95,109 @@ const PLUS_ACTIONS: { action: "poll" | "event" | "task" | "converter"; labelEn: 
   { action: "converter", labelEn: "Converter", labelHe: "המרה", icon: FileOutput },
 ];
 
+/** Small draggable calculator overlay: title bar drag, basic + - * / = C and digits. */
+function DraggableCalculator({
+  isHe,
+  position,
+  onPositionChange,
+  onClose,
+  dragRef,
+}: {
+  isHe: boolean;
+  position: { x: number; y: number };
+  onPositionChange: (p: { x: number; y: number }) => void;
+  onClose: () => void;
+  dragRef: React.MutableRefObject<{ isDragging: boolean; startX: number; startY: number; startLeft: number; startTop: number }>;
+}) {
+  const [display, setDisplay] = useState("0");
+  const [prevValue, setPrevValue] = useState<number | null>(null);
+  const [op, setOp] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!dragRef.current.isDragging) return;
+      const dx = e.clientX - dragRef.current.startX;
+      const dy = e.clientY - dragRef.current.startY;
+      onPositionChange({ x: dragRef.current.startLeft + dx, y: dragRef.current.startTop + dy });
+    };
+    const onUp = () => { dragRef.current.isDragging = false; };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+  }, [onPositionChange, dragRef]);
+
+  const onDigit = (d: string) => {
+    setDisplay((v) => (v === "0" ? d : v + d));
+  };
+  const onClear = () => {
+    setDisplay("0");
+    setPrevValue(null);
+    setOp(null);
+  };
+  const onOperator = (nextOp: string) => {
+    const n = parseFloat(display);
+    if (prevValue != null && op) {
+      const res = op === "+" ? prevValue + n : op === "−" ? prevValue - n : op === "×" ? prevValue * n : op === "÷" ? prevValue / n : n;
+      setDisplay(String(res));
+      setPrevValue(res);
+    } else setPrevValue(n);
+    setOp(nextOp);
+    setDisplay("0");
+  };
+  const onEquals = () => {
+    const n = parseFloat(display);
+    if (prevValue == null || !op) return;
+    const res = op === "+" ? prevValue + n : op === "−" ? prevValue - n : op === "×" ? prevValue * n : op === "÷" ? (n === 0 ? 0 : prevValue / n) : n;
+    setDisplay(String(res));
+    setPrevValue(null);
+    setOp(null);
+  };
+
+  return (
+    <div
+      className="fixed z-[100] w-[240px] rounded-2xl border-2 border-[#008080]/20 bg-white shadow-xl overflow-hidden"
+      style={{ left: position.x, top: position.y }}
+    >
+      <div
+        className="flex items-center justify-between px-3 py-2 bg-[#008080]/10 border-b border-[#008080]/20 cursor-grab active:cursor-grabbing select-none"
+        onMouseDown={(e) => {
+          e.preventDefault();
+          dragRef.current = { isDragging: true, startX: e.clientX, startY: e.clientY, startLeft: position.x, startTop: position.y };
+        }}
+      >
+        <span className="text-sm font-semibold text-[#008080]">{isHe ? "מחשבון" : "Calculator"}</span>
+        <button type="button" onClick={onClose} className="p-1 rounded-lg hover:bg-[#008080]/20 text-gray-500 hover:text-gray-800">
+          <X className="w-4 h-4" strokeWidth={2.5} />
+        </button>
+      </div>
+      <div className="p-3 space-y-2">
+        <div className="h-10 rounded-xl bg-gray-100 border border-gray-200 flex items-center justify-end px-3 text-right text-lg font-mono font-semibold text-gray-900 truncate">
+          {display}
+        </div>
+        <div className="grid grid-cols-4 gap-1.5">
+          {["C", "÷", "×", "−", "7", "8", "9", "+", "4", "5", "6", "=", "1", "2", "3", "0"].map((btn) => (
+            <button
+              key={btn}
+              type="button"
+              onClick={() => {
+                if (btn === "C") onClear();
+                else if (["+", "−", "×", "÷"].includes(btn)) onOperator(btn);
+                else if (btn === "=") onEquals();
+                else onDigit(btn);
+              }}
+              className={`h-9 rounded-lg text-sm font-semibold transition-colors ${
+                btn === "C" ? "bg-red-100 text-red-700 hover:bg-red-200" : ["+", "−", "×", "÷", "="].includes(btn) ? "bg-[#008080]/15 text-[#008080] hover:bg-[#008080]/25" : "bg-gray-100 text-gray-800 hover:bg-gray-200"
+              }`}
+            >
+              {btn}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export type OllinSlideProps = {
   onOpenNote?: (noteId: string) => void;
   onNewNote?: () => void;
@@ -604,6 +707,18 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
             </ul>
           </div>
         </motion.div>
+
+      {/* Draggable calculator widget — over the slide */}
+      {calculatorOpen && createPortal(
+        <DraggableCalculator
+          isHe={isHe}
+          position={calculatorPosition}
+          onPositionChange={setCalculatorPosition}
+          onClose={() => setCalculatorOpen(false)}
+          dragRef={calculatorDragRef}
+        />,
+        document.body
+      )}
 
       {/* Blurred backdrop when expanded — subtle blur on dashboard so focus is on conversation */}
       <AnimatePresence>
