@@ -29,6 +29,9 @@ import {
   Code,
   Clipboard,
   X,
+  ArrowRight,
+  Newspaper,
+  Home,
 } from "lucide-react";
 import { SkeletonFeed } from "@/components/ui/Skeleton";
 import { analyzeLocalSignals } from "@/lib/explore/local-signals";
@@ -729,17 +732,38 @@ function getSummaryBullets(post: ExplorePost): string[] {
   return sentences.length > 0 ? sentences : [post.title];
 }
 
-/** Action label by category for CTA button */
-function getActionLabel(category: PostCategory, isHe: boolean): string {
-  if (category === "jobs") return isHe ? "הגש מועמדות" : "Apply";
-  if (category === "deals") return isHe ? "צפה במבצע" : "View Deal";
-  if (category === "news") return isHe ? "קרא עוד" : "Read more";
-  if (category === "gossip") return isHe ? "קרא עוד" : "Read more";
-  if (category === "pros") return isHe ? "צור קשר" : "Contact";
-  return isHe ? "פרטים" : "Details";
+/** Visual header for feed cards: gradient + icon (or real image when available). */
+function getExploreCardVisual(post: ExplorePost): {
+  gradient: string;
+  Icon: typeof Briefcase;
+  iconClass: string;
+} {
+  const t = `${post.title} ${post.description} ${post.aiSummary ?? ""}`.toLowerCase();
+  if (/real estate|property|rent|mortgage|apartment|housing|נדל|דירה|נכס/.test(t)) {
+    return { gradient: "from-slate-800 via-emerald-900/90 to-slate-900", Icon: Home, iconClass: "text-emerald-200/90" };
+  }
+  if (/tech|software|ai |startup|developer|engineer|data |cyber|saas|fintech/.test(t)) {
+    return { gradient: "from-violet-800 via-indigo-900 to-slate-900", Icon: Code, iconClass: "text-violet-200/90" };
+  }
+  if (/night|club|bar |restaurant|food |café|cafe|dining/.test(t)) {
+    return { gradient: "from-rose-900 via-amber-900/80 to-slate-900", Icon: Sparkles, iconClass: "text-amber-200/80" };
+  }
+  switch (post.category) {
+    case "jobs":
+      return { gradient: "from-slate-700 via-blue-900 to-slate-900", Icon: Briefcase, iconClass: "text-blue-200/90" };
+    case "deals":
+      return { gradient: "from-amber-800 via-orange-900 to-slate-900", Icon: Tag, iconClass: "text-amber-100/80" };
+    case "pros":
+      return { gradient: "from-teal-900 via-slate-800 to-slate-900", Icon: Star, iconClass: "text-teal-200/80" };
+    case "gossip":
+      return { gradient: "from-amber-900/70 via-stone-800 to-slate-900", Icon: MapPin, iconClass: "text-amber-200/70" };
+    case "news":
+    default:
+      return { gradient: "from-slate-800 via-slate-700 to-zinc-900", Icon: Newspaper, iconClass: "text-slate-200/85" };
+  }
 }
 
-/** Sleek Smart Content Card: title, 3 bullets, match score, CTA. Click opens detail. */
+/** Feed grid card: image header, bullets, minimal view icon bottom-right. */
 function SmartContentCard({
   post,
   isHe,
@@ -751,7 +775,8 @@ function SmartContentCard({
 }) {
   const bullets = getSummaryBullets(post);
   const score = post.matchScore ?? Math.min(95, 60 + Math.floor(Math.random() * 35));
-  const actionLabel = getActionLabel(post.category, isHe);
+  const { gradient, Icon, iconClass } = getExploreCardVisual(post);
+  const hasPhoto = Boolean(post.imageUrl);
 
   return (
     <article
@@ -759,26 +784,37 @@ function SmartContentCard({
       tabIndex={0}
       onClick={onClick}
       onKeyDown={(e) => e.key === "Enter" && onClick()}
-      className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm hover:shadow-md hover:border-[#008080]/30 transition-all cursor-pointer text-left"
+      className="group rounded-xl border border-gray-200/90 bg-white overflow-hidden shadow-sm hover:shadow-md hover:border-gray-300 transition-all duration-200 cursor-pointer text-left flex flex-col h-full min-h-[220px]"
     >
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <h3 className="font-semibold text-gray-900 text-sm leading-tight line-clamp-2 flex-1 min-w-0">{post.title}</h3>
-        <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full bg-[#008080]/10 text-[#008080] text-xs font-bold">
-          {score}% {isHe ? "התאמה" : "Match"}
+      <div className={`relative h-[100px] sm:h-[108px] shrink-0 overflow-hidden ${hasPhoto ? "bg-gray-100" : `bg-gradient-to-br ${gradient}`}`}>
+        {hasPhoto ? (
+          <img src={post.imageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Icon className={`w-11 h-11 sm:w-12 sm:h-12 ${iconClass} opacity-90 drop-shadow-md`} strokeWidth={1.25} />
+          </div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/35 to-transparent pointer-events-none" />
+        <span className="absolute top-2 end-2 inline-flex items-center px-2 py-0.5 rounded-full bg-white/92 text-gray-800 text-[10px] font-bold shadow-sm backdrop-blur-sm">
+          {score}% {isHe ? "התאמה" : "match"}
         </span>
       </div>
-      <ul className="space-y-1 mb-3 text-xs text-gray-600 list-disc list-inside">
-        {bullets.slice(0, 3).map((b, i) => (
-          <li key={i} className="leading-snug">{b}</li>
-        ))}
-      </ul>
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); onClick(); }}
-        className="w-full py-2.5 rounded-xl bg-[#008080] text-white text-sm font-medium hover:bg-[#006666] transition-colors"
-      >
-        {actionLabel}
-      </button>
+      <div className="p-3 sm:p-3.5 flex flex-col flex-1 min-h-0 relative">
+        <h3 className="font-semibold text-gray-900 text-[13px] sm:text-sm leading-snug line-clamp-2 mb-2 pr-10">{post.title}</h3>
+        <ul className="space-y-0.5 text-[11px] sm:text-xs text-gray-600 list-disc list-inside line-clamp-3 flex-1">
+          {bullets.slice(0, 3).map((b, i) => (
+            <li key={i} className="leading-snug">{b}</li>
+          ))}
+        </ul>
+        <div className="flex justify-end mt-2 pt-1">
+          <span
+            className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gray-900 text-white shadow-md group-hover:scale-105 transition-transform"
+            aria-hidden
+          >
+            <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.5} />
+          </span>
+        </div>
+      </div>
     </article>
   );
 }
@@ -1414,6 +1450,7 @@ export function ExplorePanel() {
   const [newTopicInput, setNewTopicInput] = useState("");
   const [newTopicModalOpen, setNewTopicModalOpen] = useState(false);
   const [tabsEditMode, setTabsEditMode] = useState(false);
+  const [tabRemoveConfirm, setTabRemoveConfirm] = useState<{ id: ExploreFeedTabId; label: string } | null>(null);
   const [addingTopic, setAddingTopic] = useState(false);
   const [customTopicPosts, setCustomTopicPosts] = useState<Record<string, ExplorePost[]>>({});
   const [draggedTabIndex, setDraggedTabIndex] = useState<number | null>(null);
@@ -1481,6 +1518,11 @@ export function ExplorePanel() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
+      if (tabRemoveConfirm) {
+        e.preventDefault();
+        setTabRemoveConfirm(null);
+        return;
+      }
       if (newTopicModalOpen) {
         e.preventDefault();
         setNewTopicModalOpen(false);
@@ -1493,7 +1535,7 @@ export function ExplorePanel() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [newTopicModalOpen, tabsEditMode]);
+  }, [tabRemoveConfirm, newTopicModalOpen, tabsEditMode]);
 
   useEffect(() => {
     if (!tabsEditMode) return;
@@ -1833,6 +1875,55 @@ export function ExplorePanel() {
         </>
       )}
 
+      {/* Remove custom tab confirmation */}
+      {tabRemoveConfirm && (
+        <>
+          <div
+            className="fixed inset-0 z-[62] bg-black/45 backdrop-blur-[2px] animate-in fade-in duration-200"
+            onClick={() => setTabRemoveConfirm(null)}
+            aria-hidden
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="explore-remove-tab-title"
+            className="fixed left-1/2 top-[42%] w-[min(90vw,360px)] -translate-x-1/2 -translate-y-1/2 z-[63] rounded-2xl bg-white p-5 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.22),0_0_0_1px_rgba(0,0,0,0.04)] animate-in fade-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="explore-remove-tab-title" className="text-base font-semibold text-gray-900 mb-2">
+              {isHe ? "להסיר את הנושא?" : "Remove this topic?"}
+            </h3>
+            <p className="text-sm text-gray-600 mb-1">
+              {isHe
+                ? "האם אתה בטוח שברצונך להסיר את הנושא הזה?"
+                : "Are you sure you want to remove this topic?"}
+            </p>
+            <p className="text-sm font-medium text-gray-900 mb-5 truncate" title={tabRemoveConfirm.label}>
+              “{tabRemoveConfirm.label}”
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setTabRemoveConfirm(null)}
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                {isHe ? "ביטול" : "Cancel"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  removeFeedTab(tabRemoveConfirm.id);
+                  setTabRemoveConfirm(null);
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 transition-colors"
+              >
+                {isHe ? "הסר" : "Remove"}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* Developer Mode: interaction gaps + AI logic (Ctrl+Shift+D / Cmd+Shift+D) */}
       {devModeOpen && (
         <>
@@ -1907,7 +1998,7 @@ export function ExplorePanel() {
                 reorderTabs(draggedTabIndex, index);
                 setDraggedTabIndex(index);
               }}
-              className={`flex items-center gap-1 flex-shrink-0 ${tabsEditMode ? "cursor-grab active:cursor-grabbing" : ""}`}
+              className={`relative flex-shrink-0 w-full rounded-xl ${tabsEditMode ? "animate-wiggle cursor-grab active:cursor-grabbing" : ""}`}
             >
               <button
                 type="button"
@@ -1915,18 +2006,22 @@ export function ExplorePanel() {
                 onPointerUp={onTabPointerUp}
                 onPointerCancel={onTabPointerUp}
                 onClick={() => handleTabActivate(tab.id)}
-                className={`flex-1 text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-colors truncate ${activeFeedTab === tab.id ? "bg-[#008080] text-white" : "text-gray-600 hover:bg-gray-200"} ${tabsEditMode ? "ring-1 ring-[#008080]/25" : ""}`}
+                className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-colors truncate ${tabsEditMode && tab.id !== "all" ? "pe-9" : ""} ${activeFeedTab === tab.id ? "bg-[#008080] text-white" : "text-gray-600 hover:bg-gray-200"} ${tabsEditMode ? "ring-1 ring-[#008080]/30" : ""}`}
               >
                 {isHe ? tab.labelHe : tab.labelEn}
               </button>
               {tabsEditMode && tab.id !== "all" && (
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); removeFeedTab(tab.id); }}
-                  className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 border border-gray-200 bg-white text-gray-500 hover:bg-red-50 hover:border-red-200 hover:text-red-500 transition-colors shadow-sm"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setTabRemoveConfirm({ id: tab.id, label: isHe ? tab.labelHe : tab.labelEn });
+                  }}
+                  className="absolute top-1.5 end-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full border border-white/40 bg-black/55 text-white shadow-md hover:bg-red-600 hover:border-red-500 transition-colors"
                   aria-label={isHe ? "הסר" : "Remove"}
                 >
-                  <X className="w-3 h-3" strokeWidth={2.5} />
+                  <X className="w-2.5 h-2.5" strokeWidth={3} />
                 </button>
               )}
             </div>
@@ -2025,7 +2120,7 @@ export function ExplorePanel() {
                         reorderTabs(draggedTabIndex, index);
                         setDraggedTabIndex(index);
                       }}
-                      className={`flex items-center gap-1 flex-shrink-0 rounded-full ${tabsEditMode ? "cursor-grab active:cursor-grabbing" : ""}`}
+                      className={`relative flex-shrink-0 ${tabsEditMode ? "animate-wiggle cursor-grab active:cursor-grabbing" : ""}`}
                     >
                       <button
                         type="button"
@@ -2033,18 +2128,22 @@ export function ExplorePanel() {
                         onPointerUp={onTabPointerUp}
                         onPointerCancel={onTabPointerUp}
                         onClick={() => handleTabActivate(tab.id)}
-                        className={`flex-shrink-0 px-4 py-2.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${activeFeedTab === tab.id ? "bg-[#008080] text-white" : "text-gray-600 bg-gray-100/80 hover:bg-gray-200"} ${tabsEditMode ? "ring-2 ring-[#008080]/20" : ""}`}
+                        className={`flex-shrink-0 px-4 py-2.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors max-w-[200px] truncate ${tabsEditMode && tab.id !== "all" ? "pe-9" : ""} ${activeFeedTab === tab.id ? "bg-[#008080] text-white" : "text-gray-600 bg-gray-100/80 hover:bg-gray-200"} ${tabsEditMode ? "ring-2 ring-[#008080]/25" : ""}`}
                       >
                         {isHe ? tab.labelHe : tab.labelEn}
                       </button>
                       {tabsEditMode && tab.id !== "all" && (
                         <button
                           type="button"
-                          onClick={(e) => { e.stopPropagation(); removeFeedTab(tab.id); }}
-                          className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 border border-gray-200 bg-white text-gray-500 hover:bg-red-50 hover:border-red-200 hover:text-red-500 shadow-sm"
+                          onPointerDown={(e) => e.stopPropagation()}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setTabRemoveConfirm({ id: tab.id, label: isHe ? tab.labelHe : tab.labelEn });
+                          }}
+                          className="absolute top-0.5 end-1 z-10 flex h-[18px] w-[18px] items-center justify-center rounded-full border border-white/50 bg-black/60 text-white shadow-sm hover:bg-red-600 hover:border-red-400 transition-colors"
                           aria-label={isHe ? "הסר" : "Remove"}
                         >
-                          <X className="w-3 h-3" strokeWidth={2.5} />
+                          <X className="w-2 h-2" strokeWidth={3} />
                         </button>
                       )}
                     </div>
@@ -2206,7 +2305,7 @@ export function ExplorePanel() {
                       </div>
                     )
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 isolate">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 isolate">
                       {displayPostsSorted.map((post) => (
                         <SmartContentCard
                           key={post.id}
