@@ -31,6 +31,7 @@ import {
   DollarSign,
   X,
   GripVertical,
+  Brain,
 } from "lucide-react";
 import { t } from "@/lib/translations";
 import { PollCreator } from "@/components/board/PollCreator";
@@ -93,6 +94,29 @@ const PLUS_ACTIONS: { action: "poll" | "event" | "task" | "converter"; labelEn: 
   { action: "event", labelEn: "Event", labelHe: "אירוע", icon: CalendarDays },
   { action: "task", labelEn: "Task", labelHe: "משימה", icon: ListTodo },
   { action: "converter", labelEn: "Converter", labelHe: "המרה", icon: FileOutput },
+];
+
+const BRAIN_MODELS: { label: string; key: string }[] = [
+  { key: "ollin-private", label: "Ollin Private" },
+  { key: "gemini-1.5-pro", label: "Gemini 1.5 Pro" },
+  { key: "gpt-4o", label: "GPT-4o" },
+  { key: "claude-3.5-sonnet", label: "Claude 3.5 Sonnet" },
+  { key: "llama-3", label: "Llama 3" },
+  { key: "mistral-large", label: "Mistral Large" },
+  { key: "perplexity", label: "Perplexity" },
+  { key: "deepseek", label: "DeepSeek" },
+  { key: "grok-1", label: "Grok-1" },
+  { key: "dall-e-3", label: "DALL-E 3" },
+  { key: "midjourney", label: "Midjourney (Image)" },
+  { key: "stable-diffusion", label: "Stable Diffusion" },
+  { key: "sora", label: "Sora (Video)" },
+  { key: "suno", label: "Suno (Music)" },
+  { key: "elevenlabs", label: "ElevenLabs (Voice)" },
+  { key: "wolframalpha", label: "WolframAlpha (Math)" },
+  { key: "github-copilot", label: "GitHub Copilot" },
+  { key: "adobe-firefly", label: "Adobe Firefly" },
+  { key: "runway-gen-3", label: "Runway Gen-3" },
+  { key: "searchgpt", label: "SearchGPT" },
 ];
 
 /** Small draggable calculator overlay: title bar drag, basic + - * / = C and digits. */
@@ -220,6 +244,8 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
   const [input, setInput] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
+  const [brainMenuOpen, setBrainMenuOpen] = useState(false);
+  const [activeBrainModel, setActiveBrainModel] = useState<string>("ollin-private");
   const [pollModalOpen, setPollModalOpen] = useState(false);
   const [gpsOpen, setGpsOpen] = useState(false);
   const [placeholderDots, setPlaceholderDots] = useState("");
@@ -237,7 +263,11 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const dashboardScrollRef = useRef<HTMLDivElement>(null);
 
-  const toolItems = visibleToolKeys.map((key) => TOOL_LIBRARY.find((t) => t.key === key)).filter(Boolean) as FeatureItem[];
+  const EXCLUDED_FROM_GRID = new Set<string>(["calculator", "currency"]);
+  const gridToolKeys = visibleToolKeys.filter((k) => !EXCLUDED_FROM_GRID.has(k)).slice(0, 6);
+  const toolItems = gridToolKeys
+    .map((key) => TOOL_LIBRARY.find((t) => t.key === key))
+    .filter(Boolean) as FeatureItem[];
   const availableToAdd = TOOL_LIBRARY.filter((t) => !visibleToolKeys.includes(t.key));
 
   const persistTools = useCallback((keys: string[]) => {
@@ -251,6 +281,11 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
 
   const addTool = useCallback((key: string) => {
     if (visibleToolKeys.includes(key)) return;
+    // Currency/Calculator must live only inside '+' pop-up, not in the main 2x3 grid.
+    if (EXCLUDED_FROM_GRID.has(key)) {
+      setPlusMenuOpen(false);
+      return;
+    }
     persistTools([...visibleToolKeys, key]);
     setAddToolMenuOpen(false);
   }, [visibleToolKeys, persistTools]);
@@ -317,43 +352,157 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
   const inputRow = (
     <div className="flex gap-2 items-center">
       <div className="flex items-center gap-2 shrink-0">
+        <button
+          type="button"
+          onClick={() => setGpsOpen(true)}
+          className="w-10 h-10 rounded-[16px] border-2 border-[#008080]/25 bg-white text-[#008080] hover:bg-[#008080]/10 flex items-center justify-center transition-colors shadow-sm"
+          aria-label={t(locale, "dashboard.gpsClock")}
+        >
+          <Clock className="w-5 h-5" strokeWidth={2} />
+        </button>
+
         <div className="relative">
-          <motion.button type="button" onClick={() => setPlusMenuOpen((o) => !o)} className="w-11 h-11 rounded-xl bg-[#008080] text-white flex items-center justify-center hover:bg-[#006666] transition-colors shadow-[0_2px_12px_rgba(0,128,128,0.28)]" whileTap={{ scale: 0.95 }} aria-label="Add">
+          <motion.button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setBrainMenuOpen((o) => !o);
+            }}
+            className="w-11 h-11 rounded-xl border-2 border-[#008080]/25 bg-white text-[#008080] hover:bg-[#008080]/10 flex items-center justify-center transition-colors shadow-sm"
+            whileTap={{ scale: 0.95 }}
+            aria-label="Brain"
+          >
+            <Brain className="w-5 h-5" strokeWidth={2} />
+          </motion.button>
+          <AnimatePresence>
+            {brainMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setBrainMenuOpen(false)} aria-hidden />
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 6 }}
+                  className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 rounded-[20px] bg-white/95 backdrop-blur-md border border-[#008080]/15 py-3 z-[60] min-w-[280px] max-w-[320px] shadow-[0_24px_60px_rgba(2,6,23,0.18)] overflow-hidden"
+                >
+                  <div className="px-4 pb-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{isHe ? "Brain" : "Brain"}</p>
+                    <p className="text-[12px] text-slate-700">{isHe ? "בחר מודל לכלי הבא" : "Choose a model/tool for your next message"}</p>
+                  </div>
+                  <div className="px-3 pb-2 grid grid-cols-2 gap-2">
+                    {BRAIN_MODELS.map((m) => {
+                      const active = m.key === activeBrainModel;
+                      return (
+                        <button
+                          key={m.key}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveBrainModel(m.key);
+                            setBrainMenuOpen(false);
+                          }}
+                          className={`rounded-[18px] px-2 py-2 border text-[11px] font-medium transition-all ${
+                            active
+                              ? "border-[#008080]/40 bg-[#008080]/10 text-[#006666]"
+                              : "border-slate-200/70 bg-white hover:bg-slate-50 text-slate-800"
+                          }`}
+                        >
+                          {m.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* '+' (Tool Hub) after Brain button */}
+        <div className="relative">
+          <motion.button
+            type="button"
+            onClick={() => setPlusMenuOpen((o) => !o)}
+            className="w-11 h-11 rounded-xl bg-gradient-to-b from-[#00a3a3] to-[#008080] text-white flex items-center justify-center hover:from-[#00b3b3] hover:to-[#006666] transition-all shadow-[0_10px_30px_rgba(0,128,128,0.14)]"
+            whileTap={{ scale: 0.95 }}
+            aria-label="Add"
+          >
             <Plus className="w-5 h-5" strokeWidth={2.5} />
           </motion.button>
           <AnimatePresence>
             {plusMenuOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setPlusMenuOpen(false)} aria-hidden />
-                <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }} className="absolute bottom-full left-0 mb-2 rounded-xl bg-white/95 backdrop-blur-md border border-[#008080]/15 py-2 z-[60] min-w-[160px] shadow-lg">
-                  {PLUS_ACTIONS.map(({ action, labelEn, labelHe, icon: Icon }) => (
-                    <button
-                      key={action}
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (action === "poll") {
-                          setPollModalOpen(true);
-                          setPlusMenuOpen(false);
-                        } else {
-                          addFormMessage(action);
-                          setPlusMenuOpen(false);
-                        }
-                      }}
-                      className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-[#008080]/10 rounded-lg"
-                    >
-                      <Icon className="w-4 h-4 text-[#008080]" strokeWidth={2} />
-                      {isHe ? labelHe : labelEn}
-                    </button>
-                  ))}
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 6 }}
+                  className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 rounded-[20px] bg-white/95 backdrop-blur-md border border-[#008080]/15 py-3 z-[60] min-w-[280px] max-w-[320px] shadow-[0_24px_60px_rgba(2,6,23,0.18)] overflow-hidden"
+                >
+                  <div className="px-4 pb-2 flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{isHe ? "Tool Hub" : "Tool Hub"}</p>
+                      <p className="text-[12px] text-slate-700">{isHe ? "מעלים כרטיסים לרשת" : "Add blocks to your grid"}</p>
+                    </div>
+                    <span className="text-[10px] font-medium text-[#008080] bg-[#008080]/10 border border-[#008080]/20 px-2 py-1 rounded-full">
+                      {visibleToolKeys.length}/10
+                    </span>
+                  </div>
+                  <div className="px-3 pb-3 grid grid-cols-3 gap-2">
+                    {TOOL_LIBRARY.map((t) => {
+                      const isAdded = visibleToolKeys.includes(t.key);
+                      const Icon = t.icon;
+                      return (
+                        <button
+                          key={t.key}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (!isAdded) addTool(t.key);
+                            setPlusMenuOpen(false);
+                          }}
+                          className="aspect-square rounded-[32px] bg-white border border-slate-200/70 hover:shadow-[0_18px_40px_rgba(2,6,23,0.08)] transition-all flex flex-col items-center justify-center gap-1"
+                          title={isHe ? t.labelHe : t.labelEn}
+                        >
+                          <div className="w-9 h-9 rounded-[20px] bg-[#008080]/10 flex items-center justify-center">
+                            <Icon className="w-4 h-4 text-[#008080]" strokeWidth={2} />
+                          </div>
+                          <span className="text-[9px] font-semibold text-slate-700 leading-tight px-1 text-center">
+                            {isHe ? t.labelHe : t.labelEn}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="px-4 pt-2 border-t border-slate-100">
+                    <p className="text-[10px] text-slate-500">{isHe ? "פעולות מהירות (טפסים בצ'אט)" : "Quick actions (chat forms)"}</p>
+                  </div>
+                  <div className="px-4 pt-3 grid grid-cols-2 gap-2">
+                    {PLUS_ACTIONS.map(({ action, labelEn, labelHe, icon: Icon }) => (
+                      <button
+                        key={action}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (action === "poll") {
+                            setPollModalOpen(true);
+                            setPlusMenuOpen(false);
+                          } else {
+                            addFormMessage(action);
+                            setPlusMenuOpen(false);
+                          }
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-[#008080]/10 rounded-xl border border-slate-200/60 transition-colors"
+                      >
+                        <Icon className="w-4 h-4 text-[#008080]" strokeWidth={2} />
+                        <span className="truncate">{isHe ? labelHe : labelEn}</span>
+                      </button>
+                    ))}
+                  </div>
                 </motion.div>
               </>
             )}
           </AnimatePresence>
         </div>
-        <button type="button" onClick={() => setGpsOpen(true)} className="w-11 h-11 rounded-xl border-2 border-[#008080]/25 bg-white text-[#008080] hover:bg-[#008080]/10 flex items-center justify-center transition-colors shadow-sm" aria-label={t(locale, "dashboard.gpsClock")}>
-          <Clock className="w-5 h-5" strokeWidth={2} />
-        </button>
       </div>
       <input
         type="text"
@@ -380,9 +529,9 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
   return (
     <div className="relative h-full min-h-0 flex flex-col overflow-hidden rounded-2xl bg-white/70 backdrop-blur-xl border border-[#008080]/10 shadow-[0_8px_32px_rgba(0,128,128,0.06)]">
       {/* Top: AI Input — static, does not scroll. No fixed/sticky. */}
-      <div ref={dashboardScrollRef} className="flex-none p-3 sm:p-4 bg-white/95 backdrop-blur-md border-b border-[#008080]/5">
+        <div ref={dashboardScrollRef} className="flex-none p-3 sm:p-4 bg-white/95 backdrop-blur-md border-b border-slate-200/70">
         <div
-          className="w-full flex flex-col overflow-hidden bg-white/95 backdrop-blur-md min-h-[176px] border-2 border-[#008080]/20 rounded-2xl shadow-[0_6px_28px_rgba(0,128,128,0.10)] focus-within:border-[#008080]/40 focus-within:shadow-[0_8px_32px_rgba(0,128,128,0.14)] cursor-text transition-[box-shadow,border-color] duration-300"
+          className="w-full flex flex-col overflow-hidden bg-white/95 backdrop-blur-md min-h-[152px] border border-slate-200/80 rounded-2xl shadow-[0_6px_28px_rgba(2,6,23,0.06)] focus-within:border-[#008080]/30 focus-within:shadow-[0_10px_36px_rgba(2,6,23,0.10)] cursor-text transition-[box-shadow,border-color] duration-300"
         >
               <div
                 role="button"
@@ -398,8 +547,8 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
                   onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
                   onClick={(e) => e.stopPropagation()}
                   placeholder={`How can I help${placeholderDots}`}
-                  rows={3}
-                  className="flex-1 min-w-0 w-full px-5 pt-5 pb-2 rounded-t-2xl border-0 bg-transparent text-gray-900 placeholder-gray-400 focus:ring-0 outline-none text-base min-h-[96px] resize-none"
+                  rows={2}
+                  className="flex-1 min-w-0 w-full px-5 pt-4 pb-2 rounded-t-2xl border-0 bg-transparent text-gray-900 placeholder-gray-400 focus:ring-0 outline-none text-base min-h-[78px] resize-none"
                 />
                 <div className="flex items-center justify-between px-3 pb-3 pt-1.5">
                   <div className="flex items-center gap-2">
@@ -453,14 +602,15 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
       <motion.div
         animate={{ opacity: expanded ? 0 : 1 }}
         transition={{ duration: TRANSITION_MS / 1000, ease: EASE_SMOOTH }}
-        className="relative z-10 flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-3 sm:px-4 pb-4 pt-1"
+        className="relative z-10 flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-3 sm:px-4 pb-3 pt-1"
         style={{ pointerEvents: expanded ? "none" : "auto" }}
       >
           <div className="flex-shrink-0 pb-2 pt-1">
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+            <div className="grid grid-cols-3 sm:grid-cols-3 gap-2">
               {toolItems.map((item, index) => {
                 const { key, href, action, labelEn, labelHe, icon: Icon } = item;
-                const tileBase = "flex flex-col items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl bg-white/70 backdrop-blur-sm border border-[#008080]/15 hover:bg-white/95 hover:border-[#008080]/30 text-gray-700 hover:text-gray-900 transition-all shadow-sm relative";
+                const tileBase =
+                  "aspect-square w-full flex flex-col items-center justify-center gap-1.5 rounded-xl bg-white border border-slate-200/80 hover:bg-slate-50 text-gray-700 transition-all shadow-[0_1px_2px_rgba(2,6,23,0.04)] hover:shadow-[0_6px_14px_rgba(2,6,23,0.06)] hover:scale-[1.01] relative";
                 const tileClass = toolsEditMode ? `${tileBase} animate-wiggle cursor-grab active:cursor-grabbing` : tileBase;
                 const tileContent = (
                   <>
@@ -468,7 +618,7 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
                       <button
                         type="button"
                         onClick={(e) => { e.preventDefault(); e.stopPropagation(); removeTool(key); }}
-                        className="absolute -top-1 -right-1 z-10 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center shadow"
+                        className="absolute -top-1 -right-1 z-10 w-5 h-5 rounded-xl bg-white text-red-600 border border-red-200 flex items-center justify-center shadow-[0_1px_6px_rgba(239,68,68,0.12)] hover:bg-red-50"
                         aria-label={isHe ? "הסר" : "Remove"}
                       >
                         <X className="w-3 h-3" strokeWidth={2.5} />
@@ -479,7 +629,7 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
                         <GripVertical className="w-4 h-4" strokeWidth={2} />
                       </span>
                     )}
-                    <div className="w-9 h-9 rounded-xl bg-[#008080]/10 flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-xl bg-[#008080]/10 flex items-center justify-center">
                       <Icon className="w-4 h-4 text-[#008080]" strokeWidth={2} />
                     </div>
                     <span className="text-[11px] font-medium text-center leading-tight text-gray-700">{isHe ? labelHe : labelEn}</span>
