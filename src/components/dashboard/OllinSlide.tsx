@@ -31,7 +31,7 @@ import {
   DollarSign,
   X,
   GripVertical,
-  // Brain removed from dashboard slide (internal chat only)
+  Brain,
 } from "lucide-react";
 import { t } from "@/lib/translations";
 import { PollCreator } from "@/components/board/PollCreator";
@@ -272,6 +272,7 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
   // Brain UI (Internal chat only). Kept here because this component hosts the "expanded" chat input.
   const [brainMenuOpen, setBrainMenuOpen] = useState(false);
   const [brainInfoOpenKey, setBrainInfoOpenKey] = useState<string | null>(null);
+  const [activeBrainModel, setActiveBrainModel] = useState<string>("ollin-private");
   const [pollModalOpen, setPollModalOpen] = useState(false);
   const [gpsOpen, setGpsOpen] = useState(false);
   const [placeholderDots, setPlaceholderDots] = useState("");
@@ -308,6 +309,13 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
     setVisibleToolKeys(keys);
     saveToolKeys(keys);
   }, []);
+
+  const addToolToFront = useCallback(
+    (key: string) => {
+      persistTools([key, ...visibleToolKeys.filter((k) => k !== key)]);
+    },
+    [persistTools, visibleToolKeys]
+  );
 
   const removeTool = useCallback((key: string) => {
     persistTools(visibleToolKeys.filter((k) => k !== key));
@@ -413,26 +421,29 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
                     </span>
                   </div>
                   <div className="px-3 pb-3 grid grid-cols-2 gap-2 max-h-[40vh] overflow-y-auto pr-1">
-                    {TOOL_LIBRARY.map((t) => {
-                      const isAdded = visibleToolKeys.includes(t.key);
-                      const Icon = t.icon;
+                    {[
+                      { key: "calculator", labelEn: "Smart Calc", labelHe: "מחשבון חכם", icon: Calculator },
+                      { key: "currency", labelEn: "FX Converter", labelHe: "המרת מטבע", icon: DollarSign },
+                      { key: "scanner", labelEn: "Quick Scan", labelHe: "סריקה מהירה", icon: ScanLine },
+                      { key: "translator", labelEn: "Translator", labelHe: "מתרגם", icon: MessageSquare },
+                    ].map(({ key, labelEn, labelHe, icon: Icon }) => {
+                      const isAdded = visibleToolKeys.includes(key);
                       return (
                         <button
-                          key={t.key}
+                          key={key}
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (!isAdded) addTool(t.key);
+                            if (!isAdded) addToolToFront(key);
                             setPlusMenuOpen(false);
                           }}
                           className="w-full h-[56px] rounded-xl bg-white border border-slate-200/80 hover:shadow-[0_6px_14px_rgba(2,6,23,0.06)] transition-all flex items-center justify-start gap-2 px-3"
-                          title={isHe ? t.labelHe : t.labelEn}
                         >
                           <div className="w-9 h-9 rounded-xl bg-[#008080]/10 flex items-center justify-center">
                             <Icon className="w-4 h-4 text-[#008080]" strokeWidth={2} />
                           </div>
                           <span className="text-[10px] font-semibold text-slate-700 leading-tight truncate">
-                            {isHe ? t.labelHe : t.labelEn}
+                            {isHe ? labelHe : labelEn}
                           </span>
                         </button>
                       );
@@ -469,6 +480,20 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
           </AnimatePresence>
         </div>
 
+        {/* Brain (expanded/internal chat only): between + and Clock */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setBrainMenuOpen((o) => !o);
+            setBrainInfoOpenKey(null);
+          }}
+          className="w-10 h-10 rounded-[16px] border-2 border-[#008080]/25 bg-white text-[#008080] hover:bg-[#008080]/10 flex items-center justify-center transition-colors shadow-sm"
+          aria-label="Brain"
+        >
+          <Brain className="w-5 h-5" strokeWidth={2} />
+        </button>
+
         {/* Clock */}
         <button
           type="button"
@@ -490,6 +515,149 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
       <motion.button type="button" onClick={handleSend} className="w-11 h-11 rounded-xl bg-[#008080] text-white hover:bg-[#006666] transition-colors shrink-0 flex items-center justify-center shadow-[0_2px_12px_rgba(0,128,128,0.28)]" whileTap={{ scale: 0.95 }} aria-label="Send">
         <Send className="w-5 h-5" strokeWidth={2} />
       </motion.button>
+
+      {/* Brain centered modal (internal chat only) */}
+      {typeof document !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {brainMenuOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-[999998] bg-black/20 backdrop-blur-sm"
+                  onClick={() => {
+                    setBrainInfoOpenKey(null);
+                    setBrainMenuOpen(false);
+                  }}
+                  aria-hidden
+                />
+                <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[999999] w-[92vw] max-w-[560px] rounded-2xl bg-white/95 backdrop-blur-sm border border-slate-200 shadow-2xl overflow-hidden">
+                  {/*
+                    Keep centering on the outer fixed container.
+                    Framer Motion's scale can override Tailwind's translate() transform,
+                    which can make the modal visually drift off-center.
+                  */}
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.98 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.98 }}
+                    className="w-full h-full"
+                  >
+                    <div className="sr-only" aria-hidden>
+                      Brain modal
+                    </div>
+
+                    {!brainInfoOpenKey && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBrainInfoOpenKey(null);
+                          setBrainMenuOpen(false);
+                        }}
+                        className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center text-slate-600 hover:text-slate-900"
+                        aria-label="Close"
+                      >
+                        <X className="w-4 h-4" strokeWidth={2.5} />
+                      </button>
+                    )}
+
+                    <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+                      <p className="text-[12px] font-semibold text-slate-700">Brain</p>
+                      <span aria-hidden className="w-8 h-8" />
+                    </div>
+
+                    {!brainInfoOpenKey ? (
+                      <div className="p-4 max-h-[calc(80vh-120px)] overflow-y-auto">
+                        <div className="grid grid-cols-2 gap-2">
+                          {BRAIN_MODELS.map((m) => {
+                            const active = m.key === activeBrainModel;
+                            const creditsRaw =
+                              typeof window !== "undefined" ? localStorage.getItem("ollin_credits") : null;
+                            const credits = creditsRaw ? parseFloat(creditsRaw) : 0;
+                            const locked = !credits || credits <= 0;
+                            return (
+                              <button
+                                key={m.key}
+                                type="button"
+                                onClick={() => {
+                                  setActiveBrainModel(m.key);
+                                  setBrainMenuOpen(false);
+                                }}
+                                className={`rounded-xl px-2 py-2 border text-[11px] font-medium transition-all ${
+                                  active
+                                    ? "border-[#008080]/40 bg-[#008080]/10 text-[#006666]"
+                                    : "border-slate-200/70 bg-white hover:bg-slate-50 text-slate-800"
+                                }`}
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="truncate">{m.label}</span>
+                                  <span className="flex items-center gap-2 shrink-0">
+                                    {locked && (
+                                      <a
+                                        href="/billing"
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="text-[10px] font-semibold text-[#008080] hover:underline"
+                                      >
+                                        Upgrade
+                                      </a>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setBrainInfoOpenKey(m.key);
+                                      }}
+                                      className="w-4 h-4 rounded-full border border-slate-200 text-[9px] text-slate-500 flex items-center justify-center hover:text-[#008080]"
+                                      aria-label="Info"
+                                    >
+                                      i
+                                    </button>
+                                  </span>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-6 text-center max-h-[calc(80vh-120px)] overflow-y-auto font-[Inter,ui-sans-serif,system-ui,sans-serif]">
+                        <button
+                          type="button"
+                          onClick={() => setBrainInfoOpenKey(null)}
+                          className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center text-slate-600 hover:text-slate-900"
+                          aria-label="Back"
+                        >
+                          <X className="w-4 h-4" strokeWidth={2.5} />
+                        </button>
+                        <p className="text-[13px] font-semibold text-slate-800">
+                          {BRAIN_MODELS.find((x) => x.key === brainInfoOpenKey)?.label ?? "Tool"}
+                        </p>
+                        <p className="mt-2 text-[12px] text-slate-700 leading-relaxed line-clamp-2">
+                          {BRAIN_MODEL_DESCRIPTIONS[brainInfoOpenKey] ?? "AI tool description."}
+                        </p>
+                        {(() => {
+                          const creditsRaw =
+                            typeof window !== "undefined" ? localStorage.getItem("ollin_credits") : null;
+                          const credits = creditsRaw ? parseFloat(creditsRaw) : 0;
+                          if (!credits || credits <= 0) {
+                            return (
+                              <div className="mt-4">
+                                <a href="/billing" className="text-[#008080] font-semibold hover:underline">
+                                  Upgrade / Buy Credits
+                                </a>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
+                      </div>
+                    )}
+                  </motion.div>
+                </div>
+              </>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
     </div>
   );
 
@@ -526,7 +694,7 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
                   className="flex-1 min-w-0 w-full px-5 pt-4 pb-2 rounded-t-2xl border-0 bg-transparent text-gray-900 placeholder-gray-400 focus:ring-0 outline-none text-base min-h-[78px] resize-none"
                 />
                 <div className="flex items-center justify-between px-3 pb-3 pt-1.5">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-x-2">
                     <div className="relative">
                       <motion.button type="button" onClick={(e) => { e.stopPropagation(); setPlusMenuOpen((o) => !o); }} className="w-11 h-11 rounded-xl bg-[#008080] text-white flex items-center justify-center hover:bg-[#006666] transition-colors shadow-[0_2px_12px_rgba(0,128,128,0.28)]" whileTap={{ scale: 0.95 }} aria-label="Add">
                         <Plus className="w-5 h-5" strokeWidth={2.5} />
@@ -552,27 +720,30 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
                                 </span>
                               </div>
 
-                              <div className="px-3 pb-3 grid grid-cols-3 gap-2 max-h-[32vh] overflow-y-auto pr-1">
-                                {TOOL_LIBRARY.map((t) => {
-                                  const isAdded = visibleToolKeys.includes(t.key);
-                                  const Icon = t.icon;
+                              <div className="px-3 pb-3 grid grid-cols-2 gap-2 max-h-[32vh] overflow-y-auto pr-1">
+                                {[
+                                  { key: "calculator", labelEn: "Smart Calc", labelHe: "מחשבון חכם", icon: Calculator },
+                                  { key: "currency", labelEn: "FX Converter", labelHe: "המרת מטבע", icon: DollarSign },
+                                  { key: "scanner", labelEn: "Quick Scan", labelHe: "סריקה מהירה", icon: ScanLine },
+                                  { key: "translator", labelEn: "Translator", labelHe: "מתרגם", icon: MessageSquare },
+                                ].map(({ key, labelEn, labelHe, icon: Icon }) => {
+                                  const isAdded = visibleToolKeys.includes(key);
                                   return (
                                     <button
-                                      key={t.key}
+                                      key={key}
                                       type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        if (!isAdded) addTool(t.key);
+                                        if (!isAdded) addToolToFront(key);
                                         setPlusMenuOpen(false);
                                       }}
-                                      className="w-full h-[60px] rounded-xl bg-white border border-slate-200/80 hover:shadow-[0_12px_30px_rgba(2,6,23,0.10)] transition-all flex items-center justify-start gap-2 px-2"
-                                      title={isHe ? t.labelHe : t.labelEn}
+                                      className="w-full h-[56px] rounded-xl bg-white border border-slate-200/80 hover:shadow-[0_12px_30px_rgba(2,6,23,0.10)] transition-all flex items-center gap-2 px-3"
                                     >
-                                      <span className="w-10 h-10 rounded-xl bg-[#008080]/10 flex items-center justify-center shrink-0">
+                                      <span className="w-9 h-9 rounded-xl bg-[#008080]/10 flex items-center justify-center shrink-0">
                                         <Icon className="w-4 h-4 text-[#008080]" strokeWidth={2} />
                                       </span>
-                                      <span className="text-[10px] font-semibold text-slate-700 leading-tight truncate">
-                                        {isHe ? t.labelHe : t.labelEn}
+                                      <span className="text-[11px] font-semibold text-slate-700 truncate">
+                                        {isHe ? labelHe : labelEn}
                                       </span>
                                     </button>
                                   );
@@ -584,7 +755,8 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
                       </AnimatePresence>
                     </div>
 
-                    {/* Brain removed from dashboard slide. Internal chat only. */}
+                    {/* Brain: internal expanded chat only (not in dashboard view). */}
+
                     <button type="button" onClick={(e) => { e.stopPropagation(); setGpsOpen(true); }} className="w-11 h-11 rounded-xl border-2 border-[#008080]/25 bg-white text-[#008080] hover:bg-[#008080]/10 flex items-center justify-center transition-colors shadow-sm" aria-label={t(locale, "dashboard.gpsClock")}>
                       <Clock className="w-5 h-5" strokeWidth={2} />
                     </button>
@@ -610,7 +782,7 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
                 const { key, href, action, labelEn, labelHe, icon: Icon } = item;
                 const tileBase =
                   // Documents-style slim rectangles (2x3), no big circles/bubbles.
-                  "w-full h-[92px] flex flex-col items-center justify-center gap-1 rounded-2xl bg-white border border-slate-200/70 hover:bg-slate-50 text-gray-700 transition-all shadow-[0_1px_2px_rgba(2,6,23,0.03)] hover:shadow-[0_6px_14px_rgba(2,6,23,0.05)] hover:scale-[1.01] relative";
+                  "w-full h-[92px] flex flex-col items-center justify-center gap-1 rounded-xl bg-white border border-slate-200/70 hover:bg-slate-50 text-gray-700 transition-all shadow-[0_1px_2px_rgba(2,6,23,0.03)] hover:shadow-[0_6px_14px_rgba(2,6,23,0.05)] hover:scale-[1.01] relative";
                 const tileClass = toolsEditMode ? `${tileBase} animate-wiggle cursor-grab active:cursor-grabbing` : tileBase;
                 const tileContent = (
                   <>
@@ -810,7 +982,7 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
               <button
                 type="button"
                 onClick={() => setAddToolMenuOpen((o) => !o)}
-                className="w-10 h-10 rounded-full border-2 border-dashed border-[#008080]/30 text-[#008080] flex items-center justify-center hover:bg-[#008080]/5 transition-colors"
+                className="w-10 h-10 rounded-xl border border-[#008080]/30 bg-white text-[#008080] flex items-center justify-center hover:bg-[#008080]/5 transition-colors"
                 aria-label={isHe ? "הוסף כלי" : "Add Tool"}
               >
                 <Plus className="w-5 h-5" strokeWidth={2.5} />
