@@ -151,6 +151,7 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
   const [tasksTab, setTasksTab] = useState<"given" | "received">("given");
   const [taskHandshakeModal, setTaskHandshakeModal] = useState<{ contactId: string; contactName: string; text: string } | null>(null);
   const [brainMenuOpen, setBrainMenuOpen] = useState(false);
+  const [brainInfoKey, setBrainInfoKey] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [eventPopupOpen, setEventPopupOpen] = useState(false);
   const [meetingFormModalOpen, setMeetingFormModalOpen] = useState(false);
@@ -762,22 +763,164 @@ export function InternalChatPanel({ locale, compact, onSelectedContactChange, pr
                         >
                           <Mic className="w-5 h-5" strokeWidth={2} />
                         </button>
-                        <div className="relative">
-                          <button type="button" onClick={() => setBrainMenuOpen((o) => !o)} className="p-2 rounded-xl text-[#008080] hover:bg-[#008080]/10 shrink-0" aria-label={isHe ? "AI" : "AI"}>
+                          {/* Brain: Internal chat only */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setBrainMenuOpen((o) => !o);
+                              setBrainInfoKey(null);
+                            }}
+                            className="p-2 rounded-xl text-[#008080] hover:bg-[#008080]/10 shrink-0"
+                            aria-label={isHe ? "AI" : "AI"}
+                          >
                             <Brain className="w-5 h-5" strokeWidth={2} />
                           </button>
                           {brainMenuOpen && (
                             <>
-                              <div className="fixed inset-0 z-40" onClick={() => setBrainMenuOpen(false)} aria-hidden />
-                              <div className="absolute left-0 bottom-full mb-1 z-50 w-48 py-2 rounded-xl bg-white border border-gray-200 shadow-lg">
-                                <p className="px-3 py-1 text-[10px] font-semibold text-gray-500 uppercase">{isHe ? "מודל AI" : "AI Model"}</p>
-                                <button type="button" onClick={() => setBrainMenuOpen(false)} className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-[#008080]/10 rounded-lg">Ollin</button>
-                                <button type="button" onClick={() => setBrainMenuOpen(false)} className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-[#008080]/10 rounded-lg">GPT-4</button>
-                                <button type="button" onClick={() => setBrainMenuOpen(false)} className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-[#008080]/10 rounded-lg">Claude</button>
+                              <div
+                                className="fixed inset-0 z-50 bg-black/10 backdrop-blur-sm"
+                                onClick={() => {
+                                  if (brainInfoKey) setBrainInfoKey(null);
+                                  else setBrainMenuOpen(false);
+                                }}
+                                aria-hidden
+                              />
+                              <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
+                                <div className="w-full max-w-[560px] rounded-2xl bg-white/95 backdrop-blur-sm border border-slate-200 shadow-2xl overflow-hidden">
+                                  <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+                                    <p className="text-[12px] font-semibold text-slate-700">{isHe ? "Brain" : "Brain"}</p>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setBrainInfoKey(null);
+                                        setBrainMenuOpen(false);
+                                      }}
+                                      className="w-8 h-8 flex items-center justify-center text-slate-600 hover:text-slate-900"
+                                      aria-label="Close"
+                                    >
+                                      <X className="w-4 h-4" strokeWidth={2.5} />
+                                    </button>
+                                  </div>
+                                  {!brainInfoKey ? (
+                                    <div className="p-4 max-h-[300px] overflow-y-auto">
+                                      {[
+                                        "ollin-private",
+                                        "gemini-1.5-pro",
+                                        "gpt-4o",
+                                        "claude-3.5-sonnet",
+                                        "llama-3",
+                                        "mistral-large",
+                                        "perplexity",
+                                        "deepseek",
+                                        "grok-1",
+                                        "dall-e-3",
+                                        "midjourney",
+                                        "stable-diffusion",
+                                        "sora",
+                                        "suno",
+                                        "elevenlabs",
+                                        "wolframalpha",
+                                        "github-copilot",
+                                        "adobe-firefly",
+                                        "runway-gen-3",
+                                        "searchgpt",
+                                      ].map((key) => {
+                                        const labelMap: Record<string, string> = {
+                                          "ollin-private": "Ollin Private",
+                                          "gemini-1.5-pro": "Gemini 1.5 Pro",
+                                          "gpt-4o": "GPT-4o",
+                                          "claude-3.5-sonnet": "Claude 3.5 Sonnet",
+                                          "llama-3": "Llama 3",
+                                          "mistral-large": "Mistral Large",
+                                          perplexity: "Perplexity",
+                                          deepseek: "DeepSeek",
+                                          "grok-1": "Grok-1",
+                                          "dall-e-3": "DALL-E 3",
+                                          midjourney: "Midjourney (Image)",
+                                          "stable-diffusion": "Stable Diffusion",
+                                          sora: "Sora (Video)",
+                                          suno: "Suno (Music)",
+                                          elevenlabs: "ElevenLabs (Voice)",
+                                          wolframalpha: "WolframAlpha (Math)",
+                                          "github-copilot": "GitHub Copilot",
+                                          "adobe-firefly": "Adobe Firefly",
+                                          "runway-gen-3": "Runway Gen-3",
+                                          searchgpt: "SearchGPT",
+                                        };
+                                        const descMap: Record<string, string> = {
+                                          "gpt-4o": "GPT-4o: OpenAI's most advanced multimodal model for reasoning and creativity.",
+                                          sora: "Sora: AI video generation from text prompts.",
+                                          "dall-e-3": "DALL-E 3: High-end AI image generation with great prompt fidelity.",
+                                          perplexity: "Perplexity: Real-time AI search and research-style answers.",
+                                        };
+                                        const creditsRaw =
+                                          typeof window !== "undefined" ? localStorage.getItem("ollin_credits") : null;
+                                        const credits = creditsRaw ? parseFloat(creditsRaw) : 0;
+                                        const locked = !credits || credits <= 0;
+                                        return (
+                                          <div key={key} className="flex items-center justify-between gap-3 mb-2">
+                                            <div className="min-w-0 flex items-center gap-2">
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  // UI selection only; real tool integration lives elsewhere
+                                                  setBrainMenuOpen(false);
+                                                }}
+                                                className="truncate text-[12px] font-medium text-slate-800 hover:underline"
+                                              >
+                                                {labelMap[key] ?? key}
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={() => setBrainInfoKey(key)}
+                                                className="w-4 h-4 rounded-full border border-slate-200 text-[9px] text-slate-500 flex items-center justify-center hover:text-[#008080] hover:border-[#008080]/30"
+                                                aria-label="Info"
+                                              >
+                                                i
+                                              </button>
+                                            </div>
+                                            {locked && (
+                                              <a
+                                                href="/billing"
+                                                className="text-[11px] font-semibold text-[#008080] hover:underline shrink-0"
+                                                onClick={() => setBrainMenuOpen(false)}
+                                              >
+                                                Upgrade
+                                              </a>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  ) : (
+                                    <div className="p-6">
+                                      <div className="flex items-start justify-between gap-4">
+                                        <p className="text-[14px] font-semibold text-slate-800">
+                                          {brainInfoKey}
+                                        </p>
+                                        <button
+                                          type="button"
+                                          onClick={() => setBrainInfoKey(null)}
+                                          className="w-8 h-8 flex items-center justify-center text-slate-600 hover:text-slate-900"
+                                          aria-label="Close info"
+                                        >
+                                          <X className="w-4 h-4" strokeWidth={2.5} />
+                                        </button>
+                                      </div>
+                                      <p className="mt-3 text-[13px] text-slate-700 leading-relaxed">
+                                        Per key descriptions are partially mapped; add full descriptions later if needed.
+                                      </p>
+                                      <div className="mt-4">
+                                        <a href="/billing" className="text-[#008080] font-semibold hover:underline">
+                                          Upgrade / Buy Credits
+                                        </a>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </>
                           )}
-                        </div>
                       </div>
                       {isRecording && (
                         <div className="flex items-center gap-2 shrink-0 px-2 py-1 rounded-xl bg-[#008080]/10 text-[#008080]">

@@ -31,7 +31,7 @@ import {
   DollarSign,
   X,
   GripVertical,
-  Brain,
+  // Brain removed from dashboard slide (internal chat only)
 } from "lucide-react";
 import { t } from "@/lib/translations";
 import { PollCreator } from "@/components/board/PollCreator";
@@ -58,16 +58,18 @@ const DEFAULT_TOOL_KEYS = ["scanner", "invoices", "files", "sign", "poll", "conv
 /** Full tool library: grid tools + addable tools (Calculator, Meter, Currency, Task, Event) */
 const TOOL_LIBRARY: FeatureItem[] = [
   { key: "scanner", labelEn: "Quick Scan", labelHe: "סריקה מהירה", icon: ScanLine, action: "scanner" },
-  { key: "invoices", labelEn: "Invoices", labelHe: "חשבוניות", icon: FileText, href: "/dashboard?panel=0" },
+  // Jump directly to the Invoices tab/area.
+  { key: "invoices", labelEn: "Invoices", labelHe: "חשבוניות", icon: FileText, href: "/dashboard/finances/documents" },
   { key: "files", labelEn: "Files", labelHe: "קבצים", icon: FileStack, href: "/dashboard/folders" },
   { key: "sign", labelEn: "Sign Docs", labelHe: "חתימת מסמכים", icon: PenLine, href: "/dashboard/documents/sign" },
   { key: "poll", labelEn: "Create Poll", labelHe: "סקרים", icon: BarChart2, action: "poll" },
   { key: "converter", labelEn: "File Converter", labelHe: "המרת קבצים", icon: FileOutput, action: "converter" },
-  { key: "calculator", labelEn: "Calculator", labelHe: "מחשבון", icon: Calculator, href: "/dashboard/convert" },
+  { key: "calculator", labelEn: "Smart Calculator", labelHe: "מחשבון חכם", icon: Calculator, href: "/dashboard/convert" },
   { key: "meter", labelEn: "Measure", labelHe: "מדידה", icon: Ruler, href: "/dashboard" },
-  { key: "currency", labelEn: "Currency", labelHe: "מטבע", icon: DollarSign, href: "/dashboard/convert" },
+  { key: "currency", labelEn: "Real-time FX Converter", labelHe: "המרת מטבע חיה", icon: DollarSign, href: "/dashboard/convert" },
   { key: "task", labelEn: "Task", labelHe: "משימה", icon: ListTodo, action: "task" },
   { key: "event", labelEn: "Event", labelHe: "אירוע", icon: CalendarDays, action: "event" },
+  { key: "translator", labelEn: "Translator", labelHe: "מתרגם", icon: MessageSquare, href: "/dashboard/translate" },
 ];
 
 function loadToolKeys(): string[] {
@@ -118,6 +120,29 @@ const BRAIN_MODELS: { label: string; key: string }[] = [
   { key: "runway-gen-3", label: "Runway Gen-3" },
   { key: "searchgpt", label: "SearchGPT" },
 ];
+
+const BRAIN_MODEL_DESCRIPTIONS: Record<string, string> = {
+  "ollin-private": "Ollin Private: internal reasoning and personalized assistance.",
+  "gemini-1.5-pro": "Gemini 1.5 Pro: long-context multimodal understanding for deep work.",
+  "gpt-4o": "GPT-4o: OpenAI's most advanced multimodal model for reasoning and creativity.",
+  "claude-3.5-sonnet": "Claude 3.5 Sonnet: strong writing, coding, and thoughtful analysis.",
+  "llama-3": "Llama 3: fast, capable open model for general tasks.",
+  "mistral-large": "Mistral Large: high-performance general reasoning at scale.",
+  perplexity: "Perplexity: research-first answers with web exploration style.",
+  deepseek: "DeepSeek: efficient reasoning and problem solving.",
+  "grok-1": "Grok-1: real-time style conversation and analysis.",
+  "dall-e-3": "DALL-E 3: high-end AI image generation with great prompt fidelity.",
+  midjourney: "Midjourney: premium image aesthetics and creative generation.",
+  "stable-diffusion": "Stable Diffusion: customizable image generation pipeline.",
+  sora: "Sora: AI video generation from text prompts.",
+  suno: "Suno: music generation and creative songwriting.",
+  elevenlabs: "ElevenLabs: high-quality text-to-speech voice generation.",
+  wolframalpha: "WolframAlpha: math and computational knowledge engine.",
+  "github-copilot": "GitHub Copilot: coding assistance and autocomplete workflows.",
+  "adobe-firefly": "Adobe Firefly: creative tools for design and generative editing.",
+  "runway-gen-3": "Runway Gen-3: video generation and creative visual effects.",
+  searchgpt: "SearchGPT: answer summaries with search-focused intelligence.",
+};
 
 /** Small draggable calculator overlay: title bar drag, basic + - * / = C and digits. */
 function DraggableCalculator({
@@ -244,8 +269,9 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
   const [input, setInput] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
+  // Brain UI (Internal chat only). Kept here because this component hosts the "expanded" chat input.
   const [brainMenuOpen, setBrainMenuOpen] = useState(false);
-  const [activeBrainModel, setActiveBrainModel] = useState<string>("ollin-private");
+  const [brainInfoOpenKey, setBrainInfoOpenKey] = useState<string | null>(null);
   const [pollModalOpen, setPollModalOpen] = useState(false);
   const [gpsOpen, setGpsOpen] = useState(false);
   const [placeholderDots, setPlaceholderDots] = useState("");
@@ -263,8 +289,16 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const dashboardScrollRef = useRef<HTMLDivElement>(null);
 
-  const EXCLUDED_FROM_GRID = new Set<string>(["calculator", "currency"]);
-  const gridToolKeys = visibleToolKeys.filter((k) => !EXCLUDED_FROM_GRID.has(k)).slice(0, 6);
+  // Grid: exactly 2 rows x 3 blocks (6 total).
+  // If localStorage order misses core blocks, we auto-heal from defaults (without touching saved order too aggressively).
+  const GRID_SLOTS = 6;
+  const coreDefaults = DEFAULT_TOOL_KEYS.filter((k) => !["calculator", "currency"].includes(k));
+  const safeVisible = visibleToolKeys.filter((k) => !["calculator", "currency"].includes(k));
+  const merged = [...safeVisible];
+  for (const k of coreDefaults) {
+    if (!merged.includes(k)) merged.push(k);
+  }
+  const gridToolKeys = merged.slice(0, GRID_SLOTS);
   const toolItems = gridToolKeys
     .map((key) => TOOL_LIBRARY.find((t) => t.key === key))
     .filter(Boolean) as FeatureItem[];
@@ -281,11 +315,6 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
 
   const addTool = useCallback((key: string) => {
     if (visibleToolKeys.includes(key)) return;
-    // Currency/Calculator must live only inside '+' pop-up, not in the main 2x3 grid.
-    if (EXCLUDED_FROM_GRID.has(key)) {
-      setPlusMenuOpen(false);
-      return;
-    }
     persistTools([...visibleToolKeys, key]);
     setAddToolMenuOpen(false);
   }, [visibleToolKeys, persistTools]);
@@ -352,77 +381,12 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
   const inputRow = (
     <div className="flex gap-2 items-center">
       <div className="flex items-center gap-2 shrink-0">
-        <button
-          type="button"
-          onClick={() => setGpsOpen(true)}
-          className="w-10 h-10 rounded-[16px] border-2 border-[#008080]/25 bg-white text-[#008080] hover:bg-[#008080]/10 flex items-center justify-center transition-colors shadow-sm"
-          aria-label={t(locale, "dashboard.gpsClock")}
-        >
-          <Clock className="w-5 h-5" strokeWidth={2} />
-        </button>
-
-        <div className="relative">
-          <motion.button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setBrainMenuOpen((o) => !o);
-            }}
-            className="w-11 h-11 rounded-xl border-2 border-[#008080]/25 bg-white text-[#008080] hover:bg-[#008080]/10 flex items-center justify-center transition-colors shadow-sm"
-            whileTap={{ scale: 0.95 }}
-            aria-label="Brain"
-          >
-            <Brain className="w-5 h-5" strokeWidth={2} />
-          </motion.button>
-          <AnimatePresence>
-            {brainMenuOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setBrainMenuOpen(false)} aria-hidden />
-                <motion.div
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 6 }}
-                  className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 rounded-[20px] bg-white/95 backdrop-blur-md border border-[#008080]/15 py-3 z-[60] min-w-[280px] max-w-[320px] shadow-[0_24px_60px_rgba(2,6,23,0.18)] overflow-hidden"
-                >
-                  <div className="px-4 pb-2">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{isHe ? "Brain" : "Brain"}</p>
-                    <p className="text-[12px] text-slate-700">{isHe ? "בחר מודל לכלי הבא" : "Choose a model/tool for your next message"}</p>
-                  </div>
-                  <div className="px-3 pb-2 grid grid-cols-2 gap-2">
-                    {BRAIN_MODELS.map((m) => {
-                      const active = m.key === activeBrainModel;
-                      return (
-                        <button
-                          key={m.key}
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveBrainModel(m.key);
-                            setBrainMenuOpen(false);
-                          }}
-                          className={`rounded-[18px] px-2 py-2 border text-[11px] font-medium transition-all ${
-                            active
-                              ? "border-[#008080]/40 bg-[#008080]/10 text-[#006666]"
-                              : "border-slate-200/70 bg-white hover:bg-slate-50 text-slate-800"
-                          }`}
-                        >
-                          {m.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </motion.div>
-              </>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* '+' (Tool Hub) after Brain button */}
+        {/* '+' (Tool Hub) */}
         <div className="relative">
           <motion.button
             type="button"
             onClick={() => setPlusMenuOpen((o) => !o)}
-            className="w-11 h-11 rounded-xl bg-gradient-to-b from-[#00a3a3] to-[#008080] text-white flex items-center justify-center hover:from-[#00b3b3] hover:to-[#006666] transition-all shadow-[0_10px_30px_rgba(0,128,128,0.14)]"
+            className="w-10 h-10 rounded-xl bg-gradient-to-b from-[#00a3a3] to-[#008080] text-white flex items-center justify-center hover:from-[#00b3b3] hover:to-[#006666] transition-all shadow-[0_10px_30px_rgba(0,128,128,0.14)]"
             whileTap={{ scale: 0.95 }}
             aria-label="Add"
           >
@@ -432,11 +396,12 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
             {plusMenuOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setPlusMenuOpen(false)} aria-hidden />
-                <motion.div
+                    <motion.div
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 6 }}
-                  className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 rounded-[20px] bg-white/95 backdrop-blur-md border border-[#008080]/15 py-3 z-[60] min-w-[280px] max-w-[320px] shadow-[0_24px_60px_rgba(2,6,23,0.18)] overflow-hidden"
+                      className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 rounded-[20px] bg-white/95 backdrop-blur-md border border-[#008080]/15 py-3 z-[60] min-w-[280px] max-w-[320px] shadow-[0_24px_60px_rgba(2,6,23,0.18)] overflow-hidden"
+                      style={{ maxHeight: "65vh" }}
                 >
                   <div className="px-4 pb-2 flex items-center justify-between">
                     <div>
@@ -447,7 +412,7 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
                       {visibleToolKeys.length}/10
                     </span>
                   </div>
-                  <div className="px-3 pb-3 grid grid-cols-3 gap-2">
+                  <div className="px-3 pb-3 grid grid-cols-2 gap-2 max-h-[40vh] overflow-y-auto pr-1">
                     {TOOL_LIBRARY.map((t) => {
                       const isAdded = visibleToolKeys.includes(t.key);
                       const Icon = t.icon;
@@ -460,13 +425,13 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
                             if (!isAdded) addTool(t.key);
                             setPlusMenuOpen(false);
                           }}
-                          className="aspect-square rounded-[32px] bg-white border border-slate-200/70 hover:shadow-[0_18px_40px_rgba(2,6,23,0.08)] transition-all flex flex-col items-center justify-center gap-1"
+                          className="w-full h-[56px] rounded-xl bg-white border border-slate-200/80 hover:shadow-[0_6px_14px_rgba(2,6,23,0.06)] transition-all flex items-center justify-start gap-2 px-3"
                           title={isHe ? t.labelHe : t.labelEn}
                         >
-                          <div className="w-9 h-9 rounded-[20px] bg-[#008080]/10 flex items-center justify-center">
+                          <div className="w-9 h-9 rounded-xl bg-[#008080]/10 flex items-center justify-center">
                             <Icon className="w-4 h-4 text-[#008080]" strokeWidth={2} />
                           </div>
-                          <span className="text-[9px] font-semibold text-slate-700 leading-tight px-1 text-center">
+                          <span className="text-[10px] font-semibold text-slate-700 leading-tight truncate">
                             {isHe ? t.labelHe : t.labelEn}
                           </span>
                         </button>
@@ -503,6 +468,16 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
             )}
           </AnimatePresence>
         </div>
+
+        {/* Clock */}
+        <button
+          type="button"
+          onClick={() => setGpsOpen(true)}
+          className="w-10 h-10 rounded-[16px] border-2 border-[#008080]/25 bg-white text-[#008080] hover:bg-[#008080]/10 flex items-center justify-center transition-colors shadow-sm"
+          aria-label={t(locale, "dashboard.gpsClock")}
+        >
+          <Clock className="w-5 h-5" strokeWidth={2} />
+        </button>
       </div>
       <input
         type="text"
@@ -560,32 +535,56 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
                         {plusMenuOpen && (
                           <>
                             <div className="fixed inset-0 z-40" onClick={() => setPlusMenuOpen(false)} aria-hidden />
-                            <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }} className="absolute bottom-full left-0 mb-2 rounded-xl bg-white/95 backdrop-blur-md border border-[#008080]/15 py-2 z-[60] min-w-[160px] shadow-lg">
-                              {PLUS_ACTIONS.map(({ action, labelEn, labelHe, icon: Icon }) => (
-                                <button
-                                  key={action}
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (action === "poll") {
-                                      setPollModalOpen(true);
-                                      setPlusMenuOpen(false);
-                                    } else {
-                                      addFormMessage(action);
-                                      setPlusMenuOpen(false);
-                                    }
-                                  }}
-                                  className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-[#008080]/10 rounded-lg"
-                                >
-                                  <Icon className="w-4 h-4 text-[#008080]" strokeWidth={2} />
-                                  {isHe ? labelHe : labelEn}
-                                </button>
-                              ))}
+                            <motion.div
+                              initial={{ opacity: 0, y: 4 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: 4 }}
+                              className="absolute bottom-full left-0 mb-2 rounded-[20px] bg-white/95 backdrop-blur-md border border-[#008080]/15 py-3 z-[60] min-w-[320px] max-w-[360px] shadow-[0_24px_60px_rgba(2,6,23,0.18)] overflow-hidden"
+                              style={{ maxHeight: "65vh" }}
+                            >
+                              <div className="px-4 pb-2 flex items-center justify-between">
+                                <div>
+                                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Tool Hub</p>
+                                  <p className="text-[12px] text-slate-700">{isHe ? "בחר כלי" : "Pick a tool"}</p>
+                                </div>
+                                <span className="text-[10px] font-medium text-[#008080] bg-[#008080]/10 border border-[#008080]/20 px-2 py-1 rounded-full">
+                                  {visibleToolKeys.length}/10
+                                </span>
+                              </div>
+
+                              <div className="px-3 pb-3 grid grid-cols-3 gap-2 max-h-[32vh] overflow-y-auto pr-1">
+                                {TOOL_LIBRARY.map((t) => {
+                                  const isAdded = visibleToolKeys.includes(t.key);
+                                  const Icon = t.icon;
+                                  return (
+                                    <button
+                                      key={t.key}
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (!isAdded) addTool(t.key);
+                                        setPlusMenuOpen(false);
+                                      }}
+                                      className="w-full h-[60px] rounded-xl bg-white border border-slate-200/80 hover:shadow-[0_12px_30px_rgba(2,6,23,0.10)] transition-all flex items-center justify-start gap-2 px-2"
+                                      title={isHe ? t.labelHe : t.labelEn}
+                                    >
+                                      <span className="w-10 h-10 rounded-xl bg-[#008080]/10 flex items-center justify-center shrink-0">
+                                        <Icon className="w-4 h-4 text-[#008080]" strokeWidth={2} />
+                                      </span>
+                                      <span className="text-[10px] font-semibold text-slate-700 leading-tight truncate">
+                                        {isHe ? t.labelHe : t.labelEn}
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
                             </motion.div>
                           </>
                         )}
                       </AnimatePresence>
                     </div>
+
+                    {/* Brain removed from dashboard slide. Internal chat only. */}
                     <button type="button" onClick={(e) => { e.stopPropagation(); setGpsOpen(true); }} className="w-11 h-11 rounded-xl border-2 border-[#008080]/25 bg-white text-[#008080] hover:bg-[#008080]/10 flex items-center justify-center transition-colors shadow-sm" aria-label={t(locale, "dashboard.gpsClock")}>
                       <Clock className="w-5 h-5" strokeWidth={2} />
                     </button>
@@ -602,15 +601,16 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
       <motion.div
         animate={{ opacity: expanded ? 0 : 1 }}
         transition={{ duration: TRANSITION_MS / 1000, ease: EASE_SMOOTH }}
-        className="relative z-10 flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-3 sm:px-4 pb-3 pt-1"
+        className="relative z-10 flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-3 sm:px-4 pb-2 pt-1"
         style={{ pointerEvents: expanded ? "none" : "auto" }}
       >
           <div className="flex-shrink-0 pb-2 pt-1">
-            <div className="grid grid-cols-3 sm:grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 sm:grid-cols-3 gap-1">
               {toolItems.map((item, index) => {
                 const { key, href, action, labelEn, labelHe, icon: Icon } = item;
                 const tileBase =
-                  "aspect-square w-full flex flex-col items-center justify-center gap-1.5 rounded-xl bg-white border border-slate-200/80 hover:bg-slate-50 text-gray-700 transition-all shadow-[0_1px_2px_rgba(2,6,23,0.04)] hover:shadow-[0_6px_14px_rgba(2,6,23,0.06)] hover:scale-[1.01] relative";
+                  // Documents-style slim rectangles (2x3), no big circles/bubbles.
+                  "w-full h-[92px] flex flex-col items-center justify-center gap-1 rounded-2xl bg-white border border-slate-200/70 hover:bg-slate-50 text-gray-700 transition-all shadow-[0_1px_2px_rgba(2,6,23,0.03)] hover:shadow-[0_6px_14px_rgba(2,6,23,0.05)] hover:scale-[1.01] relative";
                 const tileClass = toolsEditMode ? `${tileBase} animate-wiggle cursor-grab active:cursor-grabbing` : tileBase;
                 const tileContent = (
                   <>
@@ -618,7 +618,7 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
                       <button
                         type="button"
                         onClick={(e) => { e.preventDefault(); e.stopPropagation(); removeTool(key); }}
-                        className="absolute -top-1 -right-1 z-10 w-5 h-5 rounded-xl bg-white text-red-600 border border-red-200 flex items-center justify-center shadow-[0_1px_6px_rgba(239,68,68,0.12)] hover:bg-red-50"
+                        className="absolute -top-1 -right-1 z-10 w-5 h-5 rounded-lg bg-white text-red-600 border border-red-200 flex items-center justify-center shadow-[0_1px_6px_rgba(239,68,68,0.10)] hover:bg-red-50"
                         aria-label={isHe ? "הסר" : "Remove"}
                       >
                         <X className="w-3 h-3" strokeWidth={2.5} />
@@ -629,10 +629,10 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
                         <GripVertical className="w-4 h-4" strokeWidth={2} />
                       </span>
                     )}
-                    <div className="w-10 h-10 rounded-xl bg-[#008080]/10 flex items-center justify-center">
+                    <div className="w-9 h-9 rounded-lg bg-[#008080]/10 flex items-center justify-center">
                       <Icon className="w-4 h-4 text-[#008080]" strokeWidth={2} />
                     </div>
-                    <span className="text-[11px] font-medium text-center leading-tight text-gray-700">{isHe ? labelHe : labelEn}</span>
+                    <span className="text-[10px] font-medium text-center leading-tight text-gray-700 px-1 line-clamp-2">{isHe ? labelHe : labelEn}</span>
                   </>
                 );
                 const handleClick = () => {
