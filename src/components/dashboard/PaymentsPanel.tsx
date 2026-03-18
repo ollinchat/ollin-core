@@ -24,8 +24,11 @@ import {
   Home,
   Car,
   TrendingUp,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { PanelWrapper } from "@/components/dashboard/PanelWrapper";
+import { createPortal } from "react-dom";
 import {
   loadFinancialDashboard,
   saveFinancialDashboard,
@@ -33,7 +36,7 @@ import {
   type FinancialDashboardState,
 } from "@/lib/financial-dashboard-storage";
 import {
-  FinancialOverview,
+  MinimalFinancialOverview,
   AppsSubscriptionsTab,
   MembershipsTab,
   HomeFixedTab,
@@ -82,9 +85,50 @@ export function PaymentsPanel({ onOpenBoard, initialTab }: PaymentsPanelProps) {
   const { bills, addBill, updateBill, removeBill } = useBills();
   const { addGivenTask } = useBoard();
   const { state: architectState, setSuggestedBillId } = useArchitect();
-  const [activeTab, setActiveTab] = useState<PaymentsTabId>(() =>
-    initialTab && PAYMENTS_TAB_IDS.includes(initialTab) ? initialTab : "overview"
-  );
+
+  const DEFAULT_VISIBLE_TABS: PaymentsTabId[] = ["overview", "invoices"];
+  const TABS_FOR_ADD: PaymentsTabId[] = ["apps", "memberships", "home", "auto", "investments"];
+  const STORAGE_VISIBLE_TABS_KEY = "ollin_finance_visible_tabs_v1";
+  const STORAGE_PRIVACY_KEY = "ollin_finance_privacy_v1";
+  const shouldIncludePaymentsByUrl = initialTab === "payments";
+  const BASE_VISIBLE_TABS: PaymentsTabId[] = shouldIncludePaymentsByUrl ? ["overview", "invoices", "payments"] : DEFAULT_VISIBLE_TABS;
+
+  const [visibleTabs, setVisibleTabs] = useState<PaymentsTabId[]>(() => {
+    if (typeof window === "undefined") return BASE_VISIBLE_TABS;
+    try {
+      const raw = localStorage.getItem(STORAGE_VISIBLE_TABS_KEY);
+      if (!raw) return BASE_VISIBLE_TABS;
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) return BASE_VISIBLE_TABS;
+      const safe = parsed.filter(
+        (x): x is PaymentsTabId =>
+          typeof x === "string" && PAYMENTS_TAB_IDS.includes(x as PaymentsTabId) && (shouldIncludePaymentsByUrl ? true : x !== "payments")
+      );
+      const next = Array.from(new Set([...BASE_VISIBLE_TABS, ...safe]));
+      return next.filter((t) => (shouldIncludePaymentsByUrl ? true : t !== "payments"));
+    } catch {
+      return BASE_VISIBLE_TABS;
+    }
+  });
+
+  const [activeTab, setActiveTab] = useState<PaymentsTabId>(() => {
+    if (!initialTab || !PAYMENTS_TAB_IDS.includes(initialTab)) return BASE_VISIBLE_TABS[0];
+    return initialTab;
+  });
+
+  const [tabsEditMode, setTabsEditMode] = useState(false);
+  const [addTabsOpen, setAddTabsOpen] = useState(false);
+  const [draggingTab, setDraggingTab] = useState<PaymentsTabId | null>(null);
+  const tabLongPressTimerRef = useRef<number | null>(null);
+
+  const [privacyMode, setPrivacyMode] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return localStorage.getItem(STORAGE_PRIVACY_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<BillCategory | "">("");
@@ -112,8 +156,28 @@ export function PaymentsPanel({ onOpenBoard, initialTab }: PaymentsPanelProps) {
   }, [fd, fdReady]);
 
   useEffect(() => {
-    if (initialTab && PAYMENTS_TAB_IDS.includes(initialTab)) setActiveTab(initialTab);
+    if (!initialTab || !PAYMENTS_TAB_IDS.includes(initialTab)) return;
+    setVisibleTabs((prev) => (prev.includes(initialTab) ? prev : [...prev, initialTab]));
+    setActiveTab(initialTab);
   }, [initialTab]);
+
+  useEffect(() => {
+    if (!visibleTabs.includes(activeTab)) setActiveTab(visibleTabs[0] ?? "overview");
+  }, [visibleTabs, activeTab]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(STORAGE_VISIBLE_TABS_KEY, JSON.stringify(visibleTabs));
+    } catch {}
+  }, [visibleTabs]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(STORAGE_PRIVACY_KEY, privacyMode ? "1" : "0");
+    } catch {}
+  }, [privacyMode]);
 
   useEffect(() => {
     if (activeTab === "invoices") router.push("/dashboard/finances/documents");
@@ -242,72 +306,183 @@ export function PaymentsPanel({ onOpenBoard, initialTab }: PaymentsPanelProps) {
     setShowForm(true);
   };
 
-  const tabLabels: { id: PaymentsTabId; labelEn: string; labelHe: string }[] = [
-    { id: "overview", labelEn: "Overview", labelHe: "סקירה" },
-    { id: "apps", labelEn: "Apps & subs", labelHe: "אפליקציות" },
-    { id: "memberships", labelEn: "Memberships", labelHe: "מנויים" },
-    { id: "home", labelEn: "Home", labelHe: "בית" },
-    { id: "auto", labelEn: "Auto", labelHe: "רכב" },
-    { id: "investments", labelEn: "Invest", labelHe: "השקעות" },
-    { id: "payments", labelEn: "Bills", labelHe: "חשבונות" },
-    { id: "invoices", labelEn: "Invoices", labelHe: "חשבוניות" },
-  ];
+  const tabLabel = (id: PaymentsTabId) => {
+    const map: Record<PaymentsTabId, { labelEn: string; labelHe: string }> = {
+      overview: { labelEn: "Overview", labelHe: "סקירה" },
+      payments: { labelEn: "Bills", labelHe: "חשבונות" },
+      invoices: { labelEn: "Invoices", labelHe: "חשבוניות" },
+      apps: { labelEn: "Apps & subs", labelHe: "אפליקציות" },
+      memberships: { labelEn: "Memberships", labelHe: "מנויים" },
+      home: { labelEn: "Home", labelHe: "בית" },
+      auto: { labelEn: "Auto", labelHe: "רכב" },
+      investments: { labelEn: "Invest", labelHe: "השקעות" },
+    };
+    const v = map[id];
+    return isHe ? v.labelHe : v.labelEn;
+  };
+
+  const deletableTab = (id: PaymentsTabId) => id !== "overview" && id !== "invoices";
 
   const header = (
     <>
       <div className="px-4 py-3 border-b border-[var(--clean-border)] bg-white flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-[var(--clean-text)] tracking-wide flex items-center gap-2">
-          <Wallet className="w-5 h-5 text-[var(--clean-accent)]" strokeWidth={1.75} />
+        <h2 className="text-lg font-semibold text-[var(--clean-text)] tracking-wide">
           {isHe ? "מרכז פיננסי" : "Finance"}
         </h2>
-        {activeTab === "payments" && (
-          <button
-            type="button"
-            onClick={() => setShowForm((o) => !o)}
-            className="p-2 border border-[var(--clean-accent)] bg-[var(--clean-accent)] text-white hover:bg-[var(--clean-accent-hover)] transition-colors"
-            aria-label={isHe ? "הוסף חשבון" : "Add bill"}
+        <button
+          type="button"
+          onClick={() => setPrivacyMode((o) => !o)}
+          className="p-2 rounded-xl border border-[var(--clean-border)] bg-white text-[var(--clean-accent)] hover:bg-[#008080]/5 transition-colors"
+          aria-label={isHe ? "פרטיות (טשטוש)" : "Privacy (blur)"}
+        >
+          {privacyMode ? <EyeOff className="w-5 h-5" strokeWidth={2} /> : <Eye className="w-5 h-5" strokeWidth={2} />}
+        </button>
+      </div>
+
+      <div className="flex border-b border-[var(--clean-border)] bg-white overflow-x-auto scrollbar-hide px-2 items-center">
+        <div className="flex-1 flex items-end gap-1 py-2 overflow-x-auto scrollbar-hide">
+          {visibleTabs.map((id) => (
+            <div key={id} className="relative">
+              <button
+                type="button"
+                draggable={tabsEditMode}
+                onDragStart={() => setDraggingTab(id)}
+                onDragOver={(e) => {
+                  if (!tabsEditMode) return;
+                  e.preventDefault();
+                  if (!draggingTab || draggingTab === id) return;
+                  setVisibleTabs((prev) => {
+                    const fromIndex = prev.indexOf(draggingTab);
+                    const toIndex = prev.indexOf(id);
+                    if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return prev;
+                    const next = [...prev];
+                    const [moved] = next.splice(fromIndex, 1);
+                    next.splice(toIndex, 0, moved);
+                    return next;
+                  });
+                }}
+                onClick={() => {
+                  if (id === "invoices") router.push("/dashboard/finances/documents");
+                  else setActiveTab(id);
+                }}
+                onPointerDown={() => {
+                  if (tabsEditMode) return;
+                  if (tabLongPressTimerRef.current) window.clearTimeout(tabLongPressTimerRef.current);
+                  tabLongPressTimerRef.current = window.setTimeout(() => setTabsEditMode(true), 520);
+                }}
+                onPointerUp={() => {
+                  if (tabLongPressTimerRef.current) window.clearTimeout(tabLongPressTimerRef.current);
+                  tabLongPressTimerRef.current = null;
+                }}
+                onPointerLeave={() => {
+                  if (tabLongPressTimerRef.current) window.clearTimeout(tabLongPressTimerRef.current);
+                  tabLongPressTimerRef.current = null;
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setTabsEditMode(true);
+                }}
+                className={`px-4 py-2.5 text-[13px] font-medium whitespace-nowrap transition-all border-b-2 -mb-px ${
+                  activeTab === id
+                    ? "border-[var(--clean-accent)] text-[var(--clean-accent)]"
+                    : "border-transparent text-[var(--clean-text-secondary)] hover:text-[var(--clean-text)]"
+                } ${tabsEditMode ? "animate-wiggle" : ""}`}
+              >
+                {tabLabel(id)}
+              </button>
+
+              {tabsEditMode && deletableTab(id) && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setVisibleTabs((prev) => {
+                      const next = prev.filter((t) => t !== id);
+                      return next.length >= 1 ? next : prev;
+                    });
+                    if (activeTab === id) setActiveTab("overview");
+                  }}
+                  className="absolute -top-1 -right-1 z-10 w-5 h-5 rounded-lg bg-white text-red-600 border border-red-200 flex items-center justify-center shadow-[0_1px_6px_rgba(239,68,68,0.10)] hover:bg-red-50"
+                  aria-label={isHe ? "מחק טאבים" : "Delete tab"}
+                >
+                  <X className="w-3 h-3" strokeWidth={2.5} />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setAddTabsOpen(true)}
+          className="w-10 h-10 rounded-xl border border-[var(--clean-accent)] bg-white text-[var(--clean-accent)] hover:bg-[#008080]/5 transition-colors flex items-center justify-center shrink-0"
+          aria-label={isHe ? "הוסף טאבים" : "Add tabs"}
+        >
+          <Plus className="w-5 h-5" strokeWidth={2.25} />
+        </button>
+      </div>
+
+      {addTabsOpen &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/20 backdrop-blur-sm"
+            onClick={() => setAddTabsOpen(false)}
+            aria-hidden
           >
-            <Plus className="w-5 h-5" strokeWidth={1.75} />
-          </button>
+            <div
+              className="w-[92vw] max-w-[520px] rounded-2xl bg-white/95 border border-slate-200 shadow-2xl overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+                <p className="text-[13px] font-semibold text-slate-700">{isHe ? "הוסף טאבים" : "Add tabs"}</p>
+                <button
+                  type="button"
+                  onClick={() => setAddTabsOpen(false)}
+                  className="w-8 h-8 flex items-center justify-center text-slate-600 hover:text-slate-900"
+                  aria-label={isHe ? "סגור" : "Close"}
+                >
+                  <X className="w-4 h-4" strokeWidth={2.5} />
+                </button>
+              </div>
+
+              <div className="p-4">
+                <div className="grid grid-cols-2 gap-2">
+                  {TABS_FOR_ADD.filter((t) => !visibleTabs.includes(t)).map((id) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => {
+                        setVisibleTabs((prev) => [...prev, id]);
+                        setActiveTab(id);
+                        setAddTabsOpen(false);
+                      }}
+                      className="px-3 py-3 rounded-2xl border border-slate-200/70 bg-white hover:bg-slate-50 transition-colors text-left"
+                    >
+                      <div className="text-[13px] font-semibold text-slate-800">{tabLabel(id)}</div>
+                      <div className="text-[11px] text-slate-500 mt-1">
+                        {isHe ? "הוסף ללוח" : "Add to dashboard"}
+                      </div>
+                    </button>
+                  ))}
+                  {TABS_FOR_ADD.filter((t) => !visibleTabs.includes(t)).length === 0 && (
+                    <div className="col-span-2 text-center text-[13px] text-slate-600 py-6">
+                      {isHe ? "כל הטאבים כבר מופיעים" : "All tabs already added"}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>,
+          document.body
         )}
-      </div>
-      <div className="flex border-b border-[var(--clean-border)] bg-white overflow-x-auto scrollbar-hide">
-        {tabLabels.map(({ id, labelEn, labelHe }) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => {
-              if (id === "invoices") {
-                router.push("/dashboard/finances/documents");
-                return;
-              }
-              setActiveTab(id);
-            }}
-            className={`flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-medium whitespace-nowrap transition-all border-b-2 -mb-px ${
-              activeTab === id
-                ? "border-[var(--clean-accent)] text-[var(--clean-accent)]"
-                : "border-transparent text-[var(--clean-text-secondary)] hover:text-[var(--clean-text)]"
-            }`}
-          >
-            {id === "overview" && <BarChart3 className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />}
-            {id === "apps" && <LayoutGrid className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />}
-            {id === "memberships" && <Dumbbell className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />}
-            {id === "home" && <Home className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />}
-            {id === "auto" && <Car className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />}
-            {id === "investments" && <TrendingUp className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />}
-            {id === "payments" && <Wallet className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />}
-            {id === "invoices" && <FileText className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />}
-            {isHe ? labelHe : labelEn}
-          </button>
-        ))}
-      </div>
     </>
   );
 
   return (
     <PanelWrapper header={header} className="clean-app border border-[var(--clean-border)] bg-white flex flex-col">
       {activeTab === "overview" && (
-        <FinancialOverview isHe={isHe} totalDue={totalDue} fd={fd} setFd={setFd} />
+        <MinimalFinancialOverview isHe={isHe} fd={fd} privacyMode={privacyMode} />
       )}
 
       {activeTab === "apps" && <AppsSubscriptionsTab isHe={isHe} fd={fd} setFd={setFd} />}

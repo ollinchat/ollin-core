@@ -35,6 +35,8 @@ type DocumentCardProps = {
   effectiveStatus?: string;
   date: string;
   dueDate?: string;
+  /** When enabled, blur all monetary amounts in the card (Privacy Mode). */
+  privacyMode?: boolean;
   /** Document title (subject) – shown prominently when provided */
   title?: string;
   borderAccent?: "teal" | "amber" | "gold" | "slate";
@@ -59,6 +61,7 @@ export function DocumentCard({
   effectiveStatus,
   date,
   dueDate,
+  privacyMode = false,
   title: docTitle,
   borderAccent = "teal",
   onView,
@@ -114,7 +117,9 @@ export function DocumentCard({
             ) : null}
             <p className={`font-medium text-gray-700 ${docTitle != null && docTitle.trim() ? "text-xs mt-0.5" : "mt-1"}`}>#{number}</p>
             <p className="text-sm text-gray-600 truncate">{clientName}</p>
-            <p className="text-sm font-medium text-gray-900 mt-0.5">
+            <p
+              className={`text-sm font-medium text-gray-900 mt-0.5 ${privacyMode ? "blur-[3px] select-none" : ""}`}
+            >
               {typeof total === "number" ? total.toFixed(2) : total}
             </p>
           </div>

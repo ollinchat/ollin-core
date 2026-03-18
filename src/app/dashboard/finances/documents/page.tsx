@@ -1440,6 +1440,9 @@ export default function DocumentsPage() {
   const [filterClientId, setFilterClientId] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<"" | "paid" | "pending" | "overdue">("");
+  const [privacyMode, setPrivacyMode] = useState(false);
+  const [showInvoiceSearch, setShowInvoiceSearch] = useState(false);
+  const lastScrollYRef = useRef(0);
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [loadingDocId, setLoadingDocId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -1676,6 +1679,46 @@ export default function DocumentsPage() {
     setFilterClientId("");
     setFilterStatus("");
   }, []);
+
+  // Privacy Mode (blur all monetary amounts) - driven by localStorage so it also affects this Documents route.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const read = () => {
+      const raw = localStorage.getItem("ollin_finance_privacy_v1");
+      setPrivacyMode(raw === "1");
+    };
+    read();
+    window.addEventListener("storage", read);
+    return () => window.removeEventListener("storage", read);
+  }, []);
+
+  // Invoice search bar appears only while scrolling UP.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (activeTab !== "invoices") {
+      setShowInvoiceSearch(false);
+      return;
+    }
+
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = window.requestAnimationFrame(() => {
+        const y = window.scrollY;
+        const last = lastScrollYRef.current;
+        // If user is moving "up" the page, last scrollY is bigger.
+        setShowInvoiceSearch(y < last - 6);
+        lastScrollYRef.current = y;
+        raf = 0;
+      });
+    };
+    lastScrollYRef.current = window.scrollY;
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      if (raf) window.cancelAnimationFrame(raf);
+      window.removeEventListener("scroll", onScroll);
+    };
+  }, [activeTab]);
 
   const handleUploadExpenseFile = useCallback(
     (file: File) => {
@@ -2066,28 +2109,34 @@ export default function DocumentsPage() {
               {/* Desktop: full horizontal bar */}
               <div className="hidden lg:flex flex-wrap items-end gap-3">
                 <div className="flex-1 min-w-[200px] flex items-end gap-0">
-                  <div className="flex-1 min-w-0">
-                    <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
-                      {locale === "he" ? "חיפוש (מס׳ מסמך / לקוח)" : "Search (document # / customer)"}
-                    </label>
-                    <input
-                      type="search"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder={locale === "he" ? "מס׳ מסמך או שם לקוח…" : "Document number or customer name…"}
-                      className="w-full rounded-none border border-gray-100 bg-white py-2 px-3 text-[13px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-[#008080] focus:ring-1 focus:ring-[#008080]"
-                      style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {}}
-                    className="shrink-0 h-[38px] px-4 rounded-none border border-l-0 border-gray-100 bg-[#008080] text-white hover:bg-[#006666] transition-colors flex items-center justify-center"
-                    style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
-                    aria-label={locale === "he" ? "חפש" : "Search"}
-                  >
-                    <Search className="w-4 h-4" />
-                  </button>
+                  {activeTab !== "invoices" || showInvoiceSearch ? (
+                    <>
+                      <div className="flex-1 min-w-0">
+                        <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
+                          {locale === "he" ? "חיפוש (מס׳ מסמך / לקוח)" : "Search (document # / customer)"}
+                        </label>
+                        <input
+                          type="search"
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          placeholder={locale === "he" ? "מס׳ מסמך או שם לקוח…" : "Document number or customer name…"}
+                          className="w-full rounded-none border border-gray-100 bg-white py-2 px-3 text-[13px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-[#008080] focus:ring-1 focus:ring-[#008080]"
+                          style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {}}
+                        className="shrink-0 h-[38px] px-4 rounded-none border border-l-0 border-gray-100 bg-[#008080] text-white hover:bg-[#006666] transition-colors flex items-center justify-center"
+                        style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
+                        aria-label={locale === "he" ? "חפש" : "Search"}
+                      >
+                        <Search className="w-4 h-4" />
+                      </button>
+                    </>
+                  ) : (
+                    <div className="flex-1 min-w-0" />
+                  )}
                 </div>
                 <div className="min-w-[140px]">
                   <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1" style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}>
@@ -3430,6 +3479,7 @@ function LegacyFinanceDocumentsPage() {
   const { getConversationsWithMeta, currentUserId } = useInternalMessages();
   const { contacts } = useContacts();
   const [activeTab, setActiveTab] = useState<"quotes" | "invoices" | "receipts" | "delivery_notes" | "expenses">("quotes");
+  const [privacyMode, setPrivacyMode] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showAddClient, setShowAddClient] = useState(false);
   const [dateFrom, setDateFrom] = useState("");
@@ -3452,6 +3502,18 @@ function LegacyFinanceDocumentsPage() {
   const companies = useMemo(() => clients.filter((c) => c.clientType === "company" || !c.clientType), [clients]);
   const privateClients = useMemo(() => clients.filter((c) => c.clientType === "private"), [clients]);
   const selectedClient = useMemo(() => clients.find((c) => c.id === quoteClientId), [clients, quoteClientId]);
+
+  // Keep privacyMode in sync with the main Finance module toggle.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const read = () => {
+      const raw = localStorage.getItem("ollin_finance_privacy_v1");
+      setPrivacyMode(raw === "1");
+    };
+    read();
+    window.addEventListener("storage", read);
+    return () => window.removeEventListener("storage", read);
+  }, []);
 
   const chatList = useMemo(() => getConversationsWithMeta(currentUserId), [getConversationsWithMeta, currentUserId]);
   const filterClientOptions = useMemo(() => {
@@ -3684,6 +3746,7 @@ function LegacyFinanceDocumentsPage() {
                           dueDate={q.dueDate}
                           title={(q as { title?: string }).title ?? undefined}
                           borderAccent="teal"
+                          privacyMode={privacyMode}
                           primaryAction={{ label: "Convert to Tax Invoice", onClick: () => { convertQuoteToInvoice(q.id) && setActiveTab("invoices"); } }}
                           onView={() => openQuotePdf(q, companyDisplayName(companyProfile, locale), locale)}
                           onPrint={() => openQuotePdf(q, companyDisplayName(companyProfile, locale), locale)}
@@ -3710,6 +3773,7 @@ function LegacyFinanceDocumentsPage() {
                           dueDate={q.dueDate}
                           title={(q as { title?: string }).title ?? undefined}
                           borderAccent="amber"
+                          privacyMode={privacyMode}
                           primaryAction={{ label: "Convert to Tax Invoice", onClick: () => { convertQuoteToInvoice(q.id) && setActiveTab("invoices"); } }}
                           onView={() => openQuotePdf(q, companyDisplayName(companyProfile, locale), locale)}
                           onPrint={() => openQuotePdf(q, companyDisplayName(companyProfile, locale), locale)}
@@ -3746,6 +3810,7 @@ function LegacyFinanceDocumentsPage() {
                 date={new Date(rec.createdAt).toLocaleDateString()}
                 title={(rec as { title?: string }).title ?? undefined}
                 borderAccent="teal"
+                privacyMode={privacyMode}
                 onView={() => {}}
                 onShare={() => { navigator.clipboard.writeText(`${window.location.origin}/dashboard/finances/documents?receipt=${rec.id}`); }}
               />
@@ -3781,6 +3846,7 @@ function LegacyFinanceDocumentsPage() {
                             dueDate={inv.dueDate}
                             title={(inv as { title?: string }).title ?? undefined}
                             borderAccent="teal"
+                            privacyMode={privacyMode}
                             primaryAction={inv.status !== "canceled" ? { label: "Issue Receipt", onClick: () => { issueReceiptFromInvoice(inv.id) && setActiveTab("receipts"); } } : undefined}
                             onView={() => openInvoicePdf(inv, companyDisplayName(companyProfile, locale), companyProfile.signature, locale)}
                             onPrint={() => openInvoicePdf(inv, companyDisplayName(companyProfile, locale), companyProfile.signature, locale)}
@@ -3825,6 +3891,7 @@ function LegacyFinanceDocumentsPage() {
                             dueDate={inv.dueDate}
                             title={(inv as { title?: string }).title ?? undefined}
                             borderAccent="amber"
+                            privacyMode={privacyMode}
                             primaryAction={inv.status !== "canceled" ? { label: "Issue Receipt", onClick: () => { issueReceiptFromInvoice(inv.id) && setActiveTab("receipts"); } } : undefined}
                             onView={() => openInvoicePdf(inv, companyDisplayName(companyProfile, locale), companyProfile.signature, locale)}
                             onPrint={() => openInvoicePdf(inv, companyDisplayName(companyProfile, locale), companyProfile.signature, locale)}
@@ -3887,7 +3954,19 @@ function LegacyFinanceDocumentsPage() {
               <p className="text-sm text-gray-500 py-6 text-center rounded bg-gray-50">{locale === "he" ? "אין תעודות משלוח. צור אחת למעלה." : "No delivery notes. Create one above."}</p>
             )}
             {deliveryNotes.filter((d) => (d.status as string) !== "canceled").map((dn) => (
-              <DocumentCard key={dn.id} type={locale === "he" ? "תעודת משלוח" : "Delivery Note"} number={dn.number} clientName={dn.clientName} total={dn.total} status={dn.status as string} date={new Date(dn.createdAt).toLocaleDateString()} borderAccent="teal" onView={() => {}} onShare={() => { navigator.clipboard.writeText(`${window.location.origin}/dashboard/finances/documents?delivery=${dn.id}`); }} />
+              <DocumentCard
+                key={dn.id}
+                type={locale === "he" ? "תעודת משלוח" : "Delivery Note"}
+                number={dn.number}
+                clientName={dn.clientName}
+                total={dn.total}
+                status={dn.status as string}
+                date={new Date(dn.createdAt).toLocaleDateString()}
+                borderAccent="teal"
+                privacyMode={privacyMode}
+                onView={() => {}}
+                onShare={() => { navigator.clipboard.writeText(`${window.location.origin}/dashboard/finances/documents?delivery=${dn.id}`); }}
+              />
             ))}
           </div>
         )}

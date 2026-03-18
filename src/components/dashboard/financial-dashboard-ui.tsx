@@ -174,6 +174,201 @@ function billsDueWithinDays(bills: BillEntry[], days: number): number {
 const financeRoot =
   "flex-1 min-h-0 overflow-y-auto font-[Inter,ui-sans-serif,system-ui,sans-serif] text-[12px] leading-tight bg-white text-slate-800 antialiased";
 
+export function MinimalFinancialOverview({
+  isHe,
+  fd,
+  privacyMode,
+}: {
+  isHe: boolean;
+  fd: FinancialDashboardState;
+  privacyMode: boolean;
+}) {
+  const [rangeMode, setRangeMode] = useState<"monthly" | "yearly" | "custom">("monthly");
+  const [customFrom, setCustomFrom] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return dateStr(d);
+  });
+  const [customTo, setCustomTo] = useState(() => dateStr(new Date()));
+
+  const resolvedRange = useMemo(() => {
+    const now = new Date();
+    if (rangeMode === "monthly") {
+      const from = new Date(now);
+      from.setDate(from.getDate() - 30);
+      return { fromIso: dateStr(from), toIso: dateStr(now) };
+    }
+    if (rangeMode === "yearly") {
+      const from = new Date(now);
+      from.setDate(from.getDate() - 365);
+      return { fromIso: dateStr(from), toIso: dateStr(now) };
+    }
+    // custom
+    const fromIso = customFrom || dateStr(new Date(now.getTime() - 30 * 86400000));
+    const toIso = customTo || dateStr(now);
+    if (fromIso <= toIso) return { fromIso, toIso };
+    return { fromIso: toIso, toIso: fromIso };
+  }, [rangeMode, customFrom, customTo]);
+
+  const rangeDays = useMemo(() => {
+    const a = new Date(resolvedRange.fromIso);
+    const b = new Date(resolvedRange.toIso);
+    const diff = Math.floor((b.getTime() - a.getTime()) / 86400000) + 1;
+    return Math.max(1, diff);
+  }, [resolvedRange.fromIso, resolvedRange.toIso]);
+
+  const prevRange = useMemo(() => {
+    const from = new Date(resolvedRange.fromIso);
+    const to = new Date(resolvedRange.toIso);
+    const ms = Math.max(1, rangeDays) * 86400000;
+    const prevTo = new Date(from.getTime() - 1);
+    const prevFrom = new Date(prevTo.getTime() - ms + 86400000);
+    return { fromIso: dateStr(prevFrom), toIso: dateStr(prevTo) };
+  }, [rangeDays, resolvedRange.fromIso, resolvedRange.toIso]);
+
+  const inRangeIso = useMemo(() => {
+    const { fromIso, toIso } = resolvedRange;
+    return (iso: string) => iso >= fromIso && iso <= toIso;
+  }, [resolvedRange]);
+
+  const inPrevRangeIso = useMemo(() => {
+    const { fromIso, toIso } = prevRange;
+    return (iso: string) => iso >= fromIso && iso <= toIso;
+  }, [prevRange]);
+
+  const recurringMonthly =
+    fd.subscriptions.reduce((s, x) => s + x.monthlyCost, 0) +
+    fd.memberships.reduce((s, x) => s + x.monthlyCost, 0) +
+    fd.homeFixed.reduce((s, x) => s + x.monthlyAmount, 0);
+
+  const variableSpend = useMemo(() => {
+    const daily = fd.dailyTransactions.reduce((s, t) => (inRangeIso(t.date) ? s + t.amount : s), 0);
+    const auto = fd.autoExpenses.reduce((s, e) => (inRangeIso(e.date) ? s + e.amount : s), 0);
+    return daily + auto;
+  }, [fd.dailyTransactions, fd.autoExpenses, inRangeIso]);
+
+  const prevVariableSpend = useMemo(() => {
+    const daily = fd.dailyTransactions.reduce((s, t) => (inPrevRangeIso(t.date) ? s + t.amount : s), 0);
+    const auto = fd.autoExpenses.reduce((s, e) => (inPrevRangeIso(e.date) ? s + e.amount : s), 0);
+    return daily + auto;
+  }, [fd.dailyTransactions, fd.autoExpenses, inPrevRangeIso]);
+
+  const recurringForRange = recurringMonthly * (rangeDays / 30);
+  const recurringForPrev = recurringMonthly * (rangeDays / 30);
+  const spendNow = recurringForRange + variableSpend;
+  const spendPrev = recurringForPrev + prevVariableSpend;
+
+  const invPL = fd.investments.reduce((s, x) => s + (x.value - x.costBasis), 0);
+  const income = invPL > 0 ? invPL : 0;
+  const investmentLossAsExpense = invPL < 0 ? Math.abs(invPL) : 0;
+  const expenses = spendNow + investmentLossAsExpense;
+  const netGap = income - expenses;
+
+  const pctDelta = useMemo(() => {
+    if (spendPrev <= 0) return 0;
+    return ((spendPrev - spendNow) / spendPrev) * 100;
+  }, [spendNow, spendPrev]);
+
+  const summary = useMemo(() => {
+    const absPct = Math.abs(Math.round(pctDelta));
+    if (!spendPrev || spendPrev <= 0 || Number.isNaN(absPct)) {
+      return isHe ? "ההוצאה שלך בשליטה. המשך כך!" : "Your spending is on track. Keep it up!";
+    }
+    if (pctDelta >= 0) {
+      if (rangeMode === "monthly") return isHe ? `הוצאת ${absPct}% פחות מהחודש הקודם. כל הכבוד!` : `You spent ${absPct}% less than last month. Keep it up!`;
+      if (rangeMode === "yearly") return isHe ? `הוצאת ${absPct}% פחות מהשנה הקודמת. כל הכבוד!` : `You spent ${absPct}% less than last year. Keep it up!`;
+      return isHe ? `הוצאת ${absPct}% פחות מהתקופה הקודמת. כל הכבוד!` : `You spent ${absPct}% less than the previous period. Keep it up!`;
+    }
+    if (rangeMode === "monthly") return isHe ? `הוצאת ${absPct}% יותר מהחודש הקודם.` : `You spent ${absPct}% more than last month.`;
+    if (rangeMode === "yearly") return isHe ? `הוצאת ${absPct}% יותר מהשנה הקודמת.` : `You spent ${absPct}% more than last year.`;
+    return isHe ? `הוצאת ${absPct}% יותר מהתקופה הקודמת.` : `You spent ${absPct}% more than the previous period.`;
+  }, [pctDelta, spendPrev, rangeMode, isHe]);
+
+  const amountBlur = privacyMode ? "blur-[3px] select-none" : "";
+
+  const incomeText = income;
+  const expensesText = expenses;
+
+  return (
+    <div className={financeRoot}>
+      <div className="p-3 sm:p-4 max-w-4xl mx-auto space-y-3">
+        {/* Segmented time filters (text-only) */}
+        <div className="flex items-center justify-center">
+          <div className="inline-flex p-1 rounded-full border border-slate-200 bg-slate-50">
+            {(
+              [
+                { key: "monthly", en: "Monthly", he: "חודשי" },
+                { key: "yearly", en: "Yearly", he: "שנתי" },
+                { key: "custom", en: "Custom", he: "מותאם" },
+              ] as const
+            ).map((opt) => {
+              const active = rangeMode === opt.key;
+              return (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => setRangeMode(opt.key)}
+                  className={`px-4 py-1.5 rounded-full text-[13px] font-medium transition-colors ${
+                    active ? "bg-white shadow-sm text-slate-900" : "text-slate-600 hover:text-slate-800"
+                  }`}
+                >
+                  {isHe ? opt.he : opt.en}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {rangeMode === "custom" && (
+          <div className="flex items-center justify-center gap-2">
+            <input
+              type="date"
+              value={customFrom}
+              onChange={(e) => setCustomFrom(e.target.value)}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[13px]"
+            />
+            <span className="text-slate-400">–</span>
+            <input
+              type="date"
+              value={customTo}
+              onChange={(e) => setCustomTo(e.target.value)}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[13px]"
+            />
+          </div>
+        )}
+
+        {/* Big 3 blocks */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 px-4 py-4 min-h-[110px] flex flex-col justify-between">
+            <div className="text-[13px] font-medium text-emerald-700">{isHe ? "הכנסה" : "Income"}</div>
+            <div className={`text-[26px] font-black tabular-nums text-emerald-600 ${amountBlur}`}>{incomeText.toFixed(0)}₪</div>
+          </div>
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 px-4 py-4 min-h-[110px] flex flex-col justify-between">
+            <div className="text-[13px] font-medium text-rose-600">{isHe ? "הוצאות" : "Expenses"}</div>
+            <div className={`text-[26px] font-black tabular-nums text-rose-600 ${amountBlur}`}>{expensesText.toFixed(0)}₪</div>
+          </div>
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 px-4 py-4 min-h-[110px] flex flex-col justify-between">
+            <div className="text-[13px] font-medium text-slate-600">{isHe ? "פער נטו" : "Net Gap"}</div>
+            <div className={`text-[26px] font-black tabular-nums text-slate-900 ${amountBlur}`}>
+              {netGap >= 0 ? "+" : ""}
+              {netGap.toFixed(0)}₪
+            </div>
+          </div>
+        </div>
+
+        {/* Single-line quick summary */}
+        <div className="text-center text-[13px] text-slate-600 px-2">
+          {privacyMode ? (
+            <span className="inline-block blur-[3px] select-none">{summary}</span>
+          ) : (
+            <span>{summary}</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function FinancialOverview({
   isHe,
   totalDue,
