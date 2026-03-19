@@ -125,6 +125,44 @@ function ProgressMicro({
   );
 }
 
+function SparklineMono({
+  data,
+  color,
+  w = 72,
+  h = 22,
+}: {
+  data: number[];
+  color: string;
+  w?: number;
+  h?: number;
+}) {
+  const vals = data.length ? data : [0, 0, 0, 0, 0, 0, 0];
+  const max = Math.max(...vals, 1);
+  const min = Math.min(...vals, 0);
+  const range = max - min || 1;
+  const step = vals.length > 1 ? (w - 4) / (vals.length - 1) : 0;
+  const pts = vals
+    .map((v, i) => {
+      const x = 2 + i * step;
+      const y = h - 3 - ((v - min) / range) * (h - 6);
+      return `${x},${y}`;
+    })
+    .join(" ");
+
+  return (
+    <svg width={w} height={h} className="shrink-0">
+      <polyline
+        fill="none"
+        stroke={color}
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        points={pts}
+      />
+    </svg>
+  );
+}
+
 function FxCard({
   children,
   className = "",
@@ -264,6 +302,32 @@ export function MinimalFinancialOverview({
   const expenses = spendNow + investmentLossAsExpense;
   const netGap = income - expenses;
 
+  const netSeries7 = useMemo(() => {
+    const days = 7;
+    const incomePerDay = income / days;
+    const lossPerDay = investmentLossAsExpense / days;
+    const out: number[] = [];
+    const now = new Date();
+
+    for (let i = days - 1; i >= 0; i--) {
+      const t = new Date(now);
+      t.setDate(t.getDate() - i);
+      const iso = dateStr(t);
+      const dayDaily = fd.dailyTransactions.filter((x) => x.date === iso).reduce((s, x) => s + x.amount, 0);
+      const dayAuto = fd.autoExpenses.filter((x) => x.date === iso).reduce((s, x) => s + x.amount, 0);
+      const net = incomePerDay - (dayDaily + dayAuto + lossPerDay);
+      out.push(net);
+    }
+    return out;
+  }, [fd.dailyTransactions, fd.autoExpenses, income, investmentLossAsExpense]);
+
+  const recentTxns = useMemo(() => {
+    const sorted = [...fd.dailyTransactions].sort((a, b) => b.date.localeCompare(a.date));
+    const filtered = sorted.filter((t) => inRangeIso(t.date));
+    const list = filtered.length > 0 ? filtered : sorted;
+    return list.slice(0, 6);
+  }, [fd.dailyTransactions, inRangeIso]);
+
   const pctDelta = useMemo(() => {
     if (spendPrev <= 0) return 0;
     return ((spendPrev - spendNow) / spendPrev) * 100;
@@ -288,6 +352,10 @@ export function MinimalFinancialOverview({
 
   const incomeText = income;
   const expensesText = expenses;
+
+  const netAccent = "#1d4ed8";
+  const incomeAccent = "#10b981";
+  const expensesAccent = "#f43f5e";
 
   return (
     <div className={financeRoot}>
@@ -337,21 +405,45 @@ export function MinimalFinancialOverview({
           </div>
         )}
 
-        {/* Big 3 blocks */}
+        {/* Big 3 physical cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 px-4 py-4 min-h-[110px] flex flex-col justify-between">
-            <div className="text-[13px] font-medium text-emerald-700">{isHe ? "הכנסה" : "Income"}</div>
-            <div className={`text-[26px] font-black tabular-nums text-emerald-600 ${amountBlur}`}>{incomeText.toFixed(0)}₪</div>
+          <div
+            className="relative bg-white rounded-2xl shadow-lg border border-slate-100 px-6 py-5 min-h-[126px] flex flex-col justify-between overflow-hidden"
+          >
+            <div className="absolute left-0 top-0 bottom-0 w-[2px]" style={{ background: incomeAccent }} aria-hidden />
+            <div className="pl-4">
+              <div className="text-[13px] font-medium text-slate-700">{isHe ? "הכנסה" : "Income"}</div>
+              <div className={`text-[28px] font-black tabular-nums ${amountBlur}`} style={{ color: incomeAccent }}>
+                {incomeText.toFixed(0)}₪
+              </div>
+            </div>
           </div>
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 px-4 py-4 min-h-[110px] flex flex-col justify-between">
-            <div className="text-[13px] font-medium text-rose-600">{isHe ? "הוצאות" : "Expenses"}</div>
-            <div className={`text-[26px] font-black tabular-nums text-rose-600 ${amountBlur}`}>{expensesText.toFixed(0)}₪</div>
+
+          <div
+            className="relative bg-white rounded-2xl shadow-lg border border-slate-100 px-6 py-5 min-h-[126px] flex flex-col justify-between overflow-hidden"
+          >
+            <div className="absolute left-0 top-0 bottom-0 w-[2px]" style={{ background: expensesAccent }} aria-hidden />
+            <div className="pl-4">
+              <div className="text-[13px] font-medium text-slate-700">{isHe ? "הוצאות" : "Expenses"}</div>
+              <div className={`text-[28px] font-black tabular-nums ${amountBlur}`} style={{ color: expensesAccent }}>
+                {expensesText.toFixed(0)}₪
+              </div>
+            </div>
           </div>
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 px-4 py-4 min-h-[110px] flex flex-col justify-between">
-            <div className="text-[13px] font-medium text-slate-600">{isHe ? "פער נטו" : "Net Gap"}</div>
-            <div className={`text-[26px] font-black tabular-nums text-slate-900 ${amountBlur}`}>
-              {netGap >= 0 ? "+" : ""}
-              {netGap.toFixed(0)}₪
+
+          <div
+            className="relative bg-white rounded-2xl shadow-lg border border-slate-100 px-6 py-5 min-h-[126px] flex flex-col justify-between overflow-hidden"
+          >
+            <div className="absolute left-0 top-0 bottom-0 w-[2px]" style={{ background: netAccent }} aria-hidden />
+            <div className="pl-4">
+              <div className="text-[13px] font-medium text-slate-700">{isHe ? "פער נטו" : "Net Gap"}</div>
+              <div className={`text-[24px] font-black tabular-nums leading-tight ${amountBlur}`} style={{ color: netAccent }}>
+                {netGap >= 0 ? "+" : ""}
+                {netGap.toFixed(0)}₪
+              </div>
+              <div className={`mt-2 ${amountBlur}`}>
+                <SparklineMono data={netSeries7} color={netAccent} w={110} h={22} />
+              </div>
             </div>
           </div>
         </div>
@@ -363,6 +455,32 @@ export function MinimalFinancialOverview({
           ) : (
             <span>{summary}</span>
           )}
+        </div>
+
+        {/* Recent transactions (no icons) */}
+        <div className="bg-white rounded-2xl shadow-lg border border-slate-100 overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+            <p className="text-[13px] font-semibold text-slate-800">{isHe ? "עסקאות אחרונות" : "Recent Transactions"}</p>
+            <p className="text-[11px] text-slate-400">{isHe ? "5 אחרונות" : "Last 5"}</p>
+          </div>
+          <ul>
+            {recentTxns.slice(0, 5).map((t) => (
+              <li key={t.id} className="px-4 py-3 border-b border-slate-50 last:border-b-0 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[13px] font-medium text-slate-800 truncate">{t.merchant}</p>
+                  <p className="text-[11px] text-slate-400">{t.date}</p>
+                </div>
+                <div className={`text-[13px] font-semibold tabular-nums text-slate-900 ${privacyMode ? "blur-[3px] select-none" : ""}`}>
+                  {t.amount.toFixed(0)}₪
+                </div>
+              </li>
+            ))}
+            {recentTxns.length === 0 && (
+              <li className="px-4 py-5 text-center text-[13px] text-slate-500">
+                {isHe ? "אין עסקאות לתצוגה" : "No transactions to show"}
+              </li>
+            )}
+          </ul>
         </div>
       </div>
     </div>

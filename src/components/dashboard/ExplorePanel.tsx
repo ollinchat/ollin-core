@@ -784,9 +784,9 @@ function SmartContentCard({
       tabIndex={0}
       onClick={onClick}
       onKeyDown={(e) => e.key === "Enter" && onClick()}
-      className="group rounded-xl border border-gray-200/90 bg-white overflow-hidden shadow-sm hover:shadow-md hover:border-gray-300 transition-all duration-200 cursor-pointer text-left flex flex-col h-full min-h-[220px]"
+      className="group rounded-2xl border border-gray-200/80 bg-white overflow-hidden shadow-md hover:shadow-lg hover:border-gray-300 transition-all duration-200 cursor-pointer text-left flex flex-col h-full min-h-[220px]"
     >
-      <div className={`relative h-[100px] sm:h-[108px] shrink-0 overflow-hidden ${hasPhoto ? "bg-gray-100" : `bg-gradient-to-br ${gradient}`}`}>
+      <div className={`relative h-[110px] sm:h-[120px] shrink-0 overflow-hidden rounded-t-2xl ${hasPhoto ? "bg-gray-100" : `bg-gradient-to-br ${gradient}`}`}>
         {hasPhoto ? (
           <img src={post.imageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
         ) : (
@@ -794,21 +794,21 @@ function SmartContentCard({
             <Icon className={`w-11 h-11 sm:w-12 sm:h-12 ${iconClass} opacity-90 drop-shadow-md`} strokeWidth={1.25} />
           </div>
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/35 to-transparent pointer-events-none" />
-        <span className="absolute top-2 end-2 inline-flex items-center px-2 py-0.5 rounded-full bg-white/92 text-gray-800 text-[10px] font-bold shadow-sm backdrop-blur-sm">
+        <div className="absolute inset-0 bg-gradient-to-t from-black/45 to-transparent pointer-events-none" />
+        <span className="absolute top-2 end-2 inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-800 text-[10px] font-bold border border-emerald-500/25 shadow-[0_0_18px_rgba(16,185,129,0.35)] backdrop-blur-md">
           {score}% {isHe ? "התאמה" : "match"}
         </span>
       </div>
       <div className="p-3 sm:p-3.5 flex flex-col flex-1 min-h-0 relative">
-        <h3 className="font-semibold text-gray-900 text-[13px] sm:text-sm leading-snug line-clamp-2 mb-2 pr-10">{post.title}</h3>
-        <ul className="space-y-0.5 text-[11px] sm:text-xs text-gray-600 list-disc list-inside line-clamp-3 flex-1">
+        <h3 className="font-bold text-gray-900 text-[14px] sm:text-[15px] tracking-tight leading-snug line-clamp-2 mb-2 pr-10">{post.title}</h3>
+        <ul className="space-y-1 text-[11px] sm:text-xs text-gray-600 list-none line-clamp-3 flex-1">
           {bullets.slice(0, 3).map((b, i) => (
             <li key={i} className="leading-snug">{b}</li>
           ))}
         </ul>
         <div className="flex justify-end mt-2 pt-1">
           <span
-            className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gray-900 text-white shadow-md group-hover:scale-105 transition-transform"
+            className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gray-900/95 text-white shadow-lg ring-1 ring-white/10 group-hover:scale-105 transition-transform"
             aria-hidden
           >
             <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.5} />
@@ -2082,7 +2082,7 @@ export function ExplorePanel() {
                 <button type="button" onClick={() => setDevModeOpen((o) => !o)} className="p-1.5 rounded-xl hover:bg-gray-100 text-gray-400 hover:text-[#008080]" title={isHe ? "מצב מפתח (Ctrl+Shift+D)" : "Developer mode (Ctrl+Shift+D)"} aria-label="Dev mode">
                   <Code className="w-4 h-4" strokeWidth={2} />
                 </button>
-                <div className="flex-1 min-w-0 min-w-[200px] flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50/50 pl-2.5 pr-2 py-1.5 lg:max-w-xl">
+                <div className="flex-1 min-w-0 min-w-[200px] flex items-center gap-2 rounded-xl border border-gray-200 bg-white/60 backdrop-blur-md pl-2.5 pr-2 py-1.5 lg:max-w-xl">
                   <Search className="w-4 h-4 text-gray-400 shrink-0" strokeWidth={2} />
                   <input
                     type="text"
@@ -2091,23 +2091,26 @@ export function ExplorePanel() {
                     placeholder={isHe ? "חיפוש מבצעים, משרות, מקצוענים..." : "Search deals, jobs, pros..."}
                     className="flex-1 min-w-0 py-1.5 text-sm text-gray-900 placeholder-gray-400 outline-none bg-transparent"
                   />
+                  <span className="w-px h-6 bg-gray-200" aria-hidden />
+                  <button
+                    type="button"
+                    onClick={() => setLocationPillOpen((o) => !o)}
+                    className={`flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${
+                      locationPillOpen ? "bg-[#008080] text-white border-[#008080]" : "bg-transparent border-gray-200 text-gray-700 hover:bg-gray-100/80"
+                    }`}
+                    title={isHe ? "הגדר מיקום ורדיוס" : "Set location and radius"}
+                    aria-label={isHe ? "הגדר מיקום" : "Set location"}
+                  >
+                    <MapPin className="w-4 h-4 shrink-0" strokeWidth={2} />
+                    <span>{isHe ? "הגדר מיקום" : "Set location"}</span>
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setLocationPillOpen((o) => !o)}
-                  className={`flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-medium transition-colors border ${locationPillOpen ? "bg-[#008080] text-white border-[#008080]" : "bg-gray-50/90 border-gray-200 text-gray-700 hover:bg-gray-100"}`}
-                  title={isHe ? "הגדר מיקום ורדיוס" : "Set location and radius"}
-                  aria-label={isHe ? "הגדר מיקום" : "Set location"}
-                >
-                  <MapPin className="w-4 h-4 shrink-0" strokeWidth={2} />
-                  <span>{isHe ? "הגדר מיקום" : "Set location"}</span>
-                </button>
               </header>
               <div className="lg:hidden flex flex-col gap-1 border-b border-gray-200 p-2 overflow-hidden">
                 {tabsEditMode && (
                   <p className="text-[10px] text-[#008080] font-medium px-1">{isHe ? "לחץ מחוץ לטאבים או Esc לסיום" : "Tap outside tabs or Esc to exit"}</p>
                 )}
-                <div ref={mobileTabsStripRef} className="flex overflow-x-auto gap-1 min-w-0 flex-1 scrollbar-hide items-center">
+                <div ref={mobileTabsStripRef} className="flex overflow-x-auto gap-x-3 gap-y-2 min-w-0 flex-1 scrollbar-hide items-center px-1">
                   {feedTabs.map((tab, index) => (
                     <div
                       key={tab.id}
@@ -2128,7 +2131,13 @@ export function ExplorePanel() {
                         onPointerUp={onTabPointerUp}
                         onPointerCancel={onTabPointerUp}
                         onClick={() => handleTabActivate(tab.id)}
-                        className={`flex-shrink-0 px-4 py-2.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors max-w-[200px] truncate ${tabsEditMode && tab.id !== "all" ? "pe-9" : ""} ${activeFeedTab === tab.id ? "bg-[#008080] text-white" : "text-gray-600 bg-gray-100/80 hover:bg-gray-200"} ${tabsEditMode ? "ring-2 ring-[#008080]/25" : ""}`}
+                        className={`flex-shrink-0 px-4 py-2.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors transition-transform hover:scale-[1.03] max-w-[200px] truncate border ${
+                          tabsEditMode && tab.id !== "all" ? "pe-9" : ""
+                        } ${
+                          activeFeedTab === tab.id
+                            ? "bg-white text-gray-900 border-[#008080]/25 shadow-md"
+                            : "text-gray-600 bg-white border-gray-200/80 shadow-sm hover:bg-gray-50"
+                        } ${tabsEditMode ? "ring-2 ring-[#008080]/25" : ""}`}
                       >
                         {isHe ? tab.labelHe : tab.labelEn}
                       </button>
@@ -2231,9 +2240,11 @@ export function ExplorePanel() {
             )}
 
             {/* Scan Area: Ollin is scanning local signals — pulse/radar + real-time ingestion */}
-            <div className="explore-scan-radar flex items-center gap-2 px-3 py-2.5 rounded-xl bg-[#008080]/5 border border-[#008080]/20 mb-2">
+            <div className="explore-scan-radar relative flex items-center gap-2 px-3 py-2.5 rounded-2xl bg-white/70 backdrop-blur-md border border-[#008080]/20 shadow-sm mb-2">
               <span className="relative flex h-8 w-8 shrink-0 items-center justify-center">
-                <span className="absolute inline-flex h-6 w-6 rounded-full bg-[#008080]/30 animate-ping opacity-60" />
+                <span className="absolute inset-0 rounded-full border border-[#008080]/25" aria-hidden />
+                <span className="absolute inset-[2px] rounded-full border-t border-[#008080]/60 border-r-transparent border-b-transparent animate-spin" aria-hidden />
+                <span className="absolute inset-[3px] rounded-full bg-[#008080]/10 blur-sm opacity-70" aria-hidden />
                 <ScanLine className="relative h-4 w-4 text-[#008080]" strokeWidth={2} />
               </span>
               <div className="flex-1 min-w-0">
@@ -2242,15 +2253,15 @@ export function ExplorePanel() {
               </div>
               <span className="flex gap-0.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#008080] animate-pulse" style={{ animationDelay: "0ms" }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-[#008080] animate-pulse" style={{ animationDelay: "200ms" }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-[#008080] animate-pulse" style={{ animationDelay: "400ms" }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#008080] animate-pulse" style={{ animationDelay: "160ms" }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#008080] animate-pulse" style={{ animationDelay: "320ms" }} />
               </span>
             </div>
             {/* Refine this view: capture UI state for AI iteration */}
             <button
               type="button"
               onClick={handleRefineView}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-[#008080]/30 text-[#008080] text-sm font-medium hover:bg-[#008080]/5 mb-4"
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl bg-gradient-to-r from-[#008080] to-[#006666] text-white border border-white/15 shadow-[0_18px_40px_-20px_rgba(0,128,128,0.75)] hover:opacity-95 transition-all mb-4"
             >
               <Sparkles className="w-4 h-4" strokeWidth={2} />
               {isHe ? "שפר את התצוגה (העתק למה״ל)" : "Refine this view (copy state)"}

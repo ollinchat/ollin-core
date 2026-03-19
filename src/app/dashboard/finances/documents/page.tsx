@@ -1440,7 +1440,7 @@ export default function DocumentsPage() {
   const [filterClientId, setFilterClientId] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<"" | "paid" | "pending" | "overdue">("");
-  const [privacyMode, setPrivacyMode] = useState(false);
+  const [privacyMode, setPrivacyMode] = useState(true);
   const [showInvoiceSearch, setShowInvoiceSearch] = useState(false);
   const lastScrollYRef = useRef(0);
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
@@ -1481,6 +1481,21 @@ export default function DocumentsPage() {
     dueDate: string;
     documentLanguage?: "he" | "en" | "bilingual";
   } | null>(null);
+
+  // Privacy Mode sync (blur sensitive amounts).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const STORAGE_PRIVACY_KEY = "ollin_finance_privacy_v1";
+
+    const sync = () => {
+      const raw = localStorage.getItem(STORAGE_PRIVACY_KEY);
+      setPrivacyMode(raw === null ? true : raw === "1");
+    };
+
+    sync();
+    window.addEventListener("storage", sync);
+    return () => window.removeEventListener("storage", sync);
+  }, []);
 
   const showSuccessToast = useCallback((message: string) => {
     setToastMessage(message);
@@ -3479,7 +3494,7 @@ function LegacyFinanceDocumentsPage() {
   const { getConversationsWithMeta, currentUserId } = useInternalMessages();
   const { contacts } = useContacts();
   const [activeTab, setActiveTab] = useState<"quotes" | "invoices" | "receipts" | "delivery_notes" | "expenses">("quotes");
-  const [privacyMode, setPrivacyMode] = useState(false);
+  const [privacyMode, setPrivacyMode] = useState(true);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showAddClient, setShowAddClient] = useState(false);
   const [dateFrom, setDateFrom] = useState("");
@@ -3508,7 +3523,7 @@ function LegacyFinanceDocumentsPage() {
     if (typeof window === "undefined") return;
     const read = () => {
       const raw = localStorage.getItem("ollin_finance_privacy_v1");
-      setPrivacyMode(raw === "1");
+      setPrivacyMode(raw === null ? true : raw === "1");
     };
     read();
     window.addEventListener("storage", read);

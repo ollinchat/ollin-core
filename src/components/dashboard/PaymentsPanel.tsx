@@ -124,9 +124,11 @@ export function PaymentsPanel({ onOpenBoard, initialTab }: PaymentsPanelProps) {
   const [privacyMode, setPrivacyMode] = useState(() => {
     if (typeof window === "undefined") return false;
     try {
-      return localStorage.getItem(STORAGE_PRIVACY_KEY) === "1";
+      const raw = localStorage.getItem(STORAGE_PRIVACY_KEY);
+      // Privacy is ON by default (first entry).
+      return raw === null ? true : raw === "1";
     } catch {
-      return false;
+      return true;
     }
   });
   const [dateFrom, setDateFrom] = useState("");
@@ -323,6 +325,26 @@ export function PaymentsPanel({ onOpenBoard, initialTab }: PaymentsPanelProps) {
 
   const deletableTab = (id: PaymentsTabId) => id !== "overview" && id !== "invoices";
 
+  const addTabIcon = (id: PaymentsTabId) => {
+    switch (id) {
+      case "apps":
+        return <LayoutGrid className="w-5 h-5 text-[var(--clean-accent)]" strokeWidth={1.8} />;
+      case "memberships":
+        return <Dumbbell className="w-5 h-5 text-[var(--clean-accent)]" strokeWidth={1.8} />;
+      case "home":
+        return <Home className="w-5 h-5 text-[var(--clean-accent)]" strokeWidth={1.8} />;
+      case "auto":
+        return <Car className="w-5 h-5 text-[var(--clean-accent)]" strokeWidth={1.8} />;
+      case "investments":
+        return <TrendingUp className="w-5 h-5 text-[var(--clean-accent)]" strokeWidth={1.8} />;
+      case "overview":
+      case "invoices":
+      case "payments":
+      default:
+        return null;
+    }
+  };
+
   const header = (
     <>
       <div className="px-4 py-3 border-b border-[var(--clean-border)] bg-white flex items-center justify-between">
@@ -387,6 +409,7 @@ export function PaymentsPanel({ onOpenBoard, initialTab }: PaymentsPanelProps) {
                     ? "border-[var(--clean-accent)] text-[var(--clean-accent)]"
                     : "border-transparent text-[var(--clean-text-secondary)] hover:text-[var(--clean-text)]"
                 } ${tabsEditMode ? "animate-wiggle" : ""}`}
+                style={tabsEditMode ? { animationDuration: "1.15s" } : undefined}
               >
                 {tabLabel(id)}
               </button>
@@ -402,10 +425,10 @@ export function PaymentsPanel({ onOpenBoard, initialTab }: PaymentsPanelProps) {
                     });
                     if (activeTab === id) setActiveTab("overview");
                   }}
-                  className="absolute -top-1 -right-1 z-10 w-5 h-5 rounded-lg bg-white text-red-600 border border-red-200 flex items-center justify-center shadow-[0_1px_6px_rgba(239,68,68,0.10)] hover:bg-red-50"
+                  className="absolute -top-1 -right-1 z-10 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center shadow-[0_1px_6px_rgba(239,68,68,0.20)] hover:bg-red-600"
                   aria-label={isHe ? "מחק טאבים" : "Delete tab"}
                 >
-                  <X className="w-3 h-3" strokeWidth={2.5} />
+                  <X className="w-2.5 h-2.5" strokeWidth={3} />
                 </button>
               )}
             </div>
@@ -415,7 +438,7 @@ export function PaymentsPanel({ onOpenBoard, initialTab }: PaymentsPanelProps) {
         <button
           type="button"
           onClick={() => setAddTabsOpen(true)}
-          className="w-10 h-10 rounded-xl border border-[var(--clean-accent)] bg-white text-[var(--clean-accent)] hover:bg-[#008080]/5 transition-colors flex items-center justify-center shrink-0"
+          className="w-10 h-10 rounded-xl border border-gray-200 bg-gray-50 text-[var(--clean-accent)] hover:bg-gray-100 transition-colors flex items-center justify-center shrink-0 shadow-sm"
           aria-label={isHe ? "הוסף טאבים" : "Add tabs"}
         >
           <Plus className="w-5 h-5" strokeWidth={2.25} />
@@ -457,11 +480,18 @@ export function PaymentsPanel({ onOpenBoard, initialTab }: PaymentsPanelProps) {
                         setActiveTab(id);
                         setAddTabsOpen(false);
                       }}
-                      className="px-3 py-3 rounded-2xl border border-slate-200/70 bg-white hover:bg-slate-50 transition-colors text-left"
+                      className="p-3 rounded-2xl border border-slate-200/70 bg-white hover:bg-slate-50 transition-colors text-left shadow-sm"
                     >
-                      <div className="text-[13px] font-semibold text-slate-800">{tabLabel(id)}</div>
-                      <div className="text-[11px] text-slate-500 mt-1">
-                        {isHe ? "הוסף ללוח" : "Add to dashboard"}
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center">
+                          {addTabIcon(id)}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[13px] font-semibold text-slate-800 truncate">{tabLabel(id)}</div>
+                          <div className="text-[11px] text-slate-500 mt-1">
+                            {isHe ? "הוסף ללוח" : "Add to dashboard"}
+                          </div>
+                        </div>
                       </div>
                     </button>
                   ))}
