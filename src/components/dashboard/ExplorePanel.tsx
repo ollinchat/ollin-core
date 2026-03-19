@@ -784,9 +784,11 @@ function SmartContentCard({
       tabIndex={0}
       onClick={onClick}
       onKeyDown={(e) => e.key === "Enter" && onClick()}
-      className="group rounded-3xl border border-gray-200/80 bg-white overflow-hidden shadow-lg hover:shadow-xl hover:border-gray-300 transition-all duration-200 cursor-pointer text-left flex flex-col h-full min-h-[220px]"
+      className="group rounded-[32px] border border-gray-200/80 bg-white overflow-hidden shadow-lg hover:shadow-xl hover:border-gray-300 transition-all duration-200 cursor-pointer text-left flex flex-col min-h-[220px]"
     >
-      <div className={`relative aspect-[4/5] shrink-0 overflow-hidden rounded-t-3xl ${hasPhoto ? "bg-gray-100" : `bg-gradient-to-br ${gradient}`}`}>
+      <div
+        className={`relative aspect-square shrink-0 overflow-hidden rounded-t-[32px] ${hasPhoto ? "bg-gray-100" : `bg-gradient-to-br ${gradient}`}`}
+      >
         {hasPhoto ? (
           <img src={post.imageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
         ) : (
@@ -795,13 +797,13 @@ function SmartContentCard({
           </div>
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/45 to-transparent pointer-events-none" />
-        <span className="absolute top-2 end-2 inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-800 text-[10px] font-bold border border-emerald-500/25 shadow-[0_0_18px_rgba(16,185,129,0.35)] backdrop-blur-md">
+        <span className="absolute top-2 end-2 inline-flex items-center px-2 py-0.5 rounded-full bg-slate-900/5 text-slate-700 text-[10px] font-bold border border-slate-200 shadow-sm backdrop-blur-md">
           {score}% {isHe ? "התאמה" : "match"}
         </span>
       </div>
-      <div className="p-3 sm:p-3.5 flex flex-col flex-1 min-h-0 relative rounded-b-3xl">
-        <h3 className="font-extrabold text-gray-900 text-[13px] sm:text-[14px] tracking-tight leading-snug line-clamp-2 mb-1.5 pr-10">{post.title}</h3>
-        <ul className="space-y-1 text-[11px] sm:text-xs text-gray-600 list-none line-clamp-3 flex-1">
+      <div className="p-4 flex flex-col flex-1 min-h-0 relative rounded-b-[32px]">
+        <h3 className="text-base font-semibold text-gray-900 tracking-tight leading-snug line-clamp-2 mb-1.5 pr-10">{post.title}</h3>
+        <ul className="space-y-1 text-sm text-slate-500 list-none line-clamp-3 flex-1">
           {bullets.slice(0, 3).map((b, i) => (
             <li key={i} className="leading-snug">{b}</li>
           ))}
@@ -1453,7 +1455,11 @@ export function ExplorePanel() {
   const [addingTopic, setAddingTopic] = useState(false);
   const [customTopicPosts, setCustomTopicPosts] = useState<Record<string, ExplorePost[]>>({});
   const [draggedTabIndex, setDraggedTabIndex] = useState<number | null>(null);
+  const [showFloatingSearch, setShowFloatingSearch] = useState(false);
   const newTopicInputRef = React.useRef<HTMLInputElement>(null);
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
+  const feedScrollRef = React.useRef<HTMLDivElement>(null);
+  const lastFeedScrollTopRef = React.useRef(0);
   const tabDragHappenedRef = React.useRef(false);
   const tabLongPressTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const suppressNextTabClickRef = React.useRef(false);
@@ -1506,6 +1512,25 @@ export function ExplorePanel() {
     setTabsEditMode(false);
     setNewTopicModalOpen(true);
     setNewTopicInput("");
+  }, []);
+
+  const handleFeedScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const y = e.currentTarget.scrollTop;
+    const lastY = lastFeedScrollTopRef.current;
+    const delta = y - lastY;
+
+    if (y < 80) setShowFloatingSearch(false);
+    else if (delta > 8) setShowFloatingSearch(true);
+    else if (delta < -8) setShowFloatingSearch(false);
+
+    lastFeedScrollTopRef.current = y;
+  }, []);
+
+  const handleFloatingSearchClick = useCallback(() => {
+    const scroller = feedScrollRef.current;
+    if (!scroller) return;
+    scroller.scrollTo({ top: 0, behavior: "smooth" });
+    window.setTimeout(() => searchInputRef.current?.focus(), 220);
   }, []);
 
   useEffect(() => {
@@ -2011,7 +2036,9 @@ export function ExplorePanel() {
               )}
             </div>
           ))}
-          <button className='p-2 text-slate-400 hover:text-slate-600 transition-colors'><Plus size={20} /></button>
+          <button type="button" onClick={openNewTopicModal} className="p-0" aria-label={isHe ? "הוסף טאב" : "Add tab"}>
+            <Plus size={20} className="text-slate-400 hover:text-slate-600 transition-colors cursor-pointer" />
+          </button>
         </nav>
       </aside>
 
@@ -2056,99 +2083,110 @@ export function ExplorePanel() {
 
         <PanelWrapper
           fillParent
-          header={
-            <>
-              <header className="px-3 py-2.5 lg:px-6 border-b border-gray-200 flex flex-wrap items-center gap-2">
-                <Compass className="w-5 h-5 text-[#008080] shrink-0" strokeWidth={2} />
-                <h2 className="text-lg font-semibold text-gray-900 shrink-0 lg:hidden">{isHe ? "גילוי" : "Explore"}</h2>
-                <button type="button" onClick={() => setDevModeOpen((o) => !o)} className="p-1.5 rounded-xl hover:bg-gray-100 text-gray-400 hover:text-[#008080]" title={isHe ? "מצב מפתח (Ctrl+Shift+D)" : "Developer mode (Ctrl+Shift+D)"} aria-label="Dev mode">
-                  <Code className="w-4 h-4" strokeWidth={2} />
-                </button>
-                <div className="flex-1 min-w-0 min-w-[200px] flex items-center gap-2 rounded-xl border border-gray-200 bg-white/60 backdrop-blur-md pl-2.5 pr-2 py-1.5 lg:max-w-xl">
-                  <Search className="w-4 h-4 text-gray-400 shrink-0" strokeWidth={2} />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder={isHe ? "חיפוש מבצעים, משרות, מקצוענים..." : "Search deals, jobs, pros..."}
-                    className="flex-1 min-w-0 py-1.5 text-sm text-gray-900 placeholder-gray-400 outline-none bg-transparent"
-                  />
-                  <span className="w-px h-6 bg-gray-200" aria-hidden />
-                  <button
-                    type="button"
-                    onClick={() => setLocationPillOpen((o) => !o)}
-                    className={`flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${
-                      locationPillOpen ? "bg-[#008080] text-white border-[#008080]" : "bg-transparent border-gray-200 text-slate-400 hover:bg-gray-100/80 hover:text-slate-600"
-                    }`}
-                    title={isHe ? "הגדר מיקום ורדיוס" : "Set location and radius"}
-                    aria-label={isHe ? "הגדר מיקום" : "Set location"}
-                  >
-                    <MapPin className="w-4 h-4 shrink-0" strokeWidth={2} />
-                    <span>{isHe ? "הגדר מיקום" : "Set location"}</span>
-                  </button>
-                </div>
-              </header>
-              <div className="lg:hidden flex flex-col gap-1 border-b border-gray-200 p-2 overflow-hidden">
-                {tabsEditMode && (
-                  <p className="text-[10px] text-[#008080] font-medium px-1">{isHe ? "לחץ מחוץ לטאבים או Esc לסיום" : "Tap outside tabs or Esc to exit"}</p>
-                )}
-                <div ref={mobileTabsStripRef} className="flex overflow-x-auto gap-x-3 gap-y-2 min-w-0 flex-1 scrollbar-hide items-center px-1">
-                  {feedTabs.map((tab, index) => (
-                    <div
-                      key={tab.id}
-                      draggable={tabsEditMode}
-                      onDragStart={() => { if (!tabsEditMode) return; setDraggedTabIndex(index); tabDragHappenedRef.current = true; }}
-                      onDragEnd={() => { setDraggedTabIndex(null); setTimeout(() => { tabDragHappenedRef.current = false; }, 0); }}
-                      onDragOver={(e) => {
-                        e.preventDefault();
-                        if (!tabsEditMode || draggedTabIndex === null || draggedTabIndex === index) return;
-                        reorderTabs(draggedTabIndex, index);
-                        setDraggedTabIndex(index);
-                      }}
-                      className={`relative flex-shrink-0 ${tabsEditMode ? "animate-wiggle cursor-grab active:cursor-grabbing" : ""}`}
-                    >
-                      <button
-                        type="button"
-                        onPointerDown={onTabPointerDown}
-                        onPointerUp={onTabPointerUp}
-                        onPointerCancel={onTabPointerUp}
-                        onClick={() => handleTabActivate(tab.id)}
-                        className={`flex-shrink-0 px-4 py-2.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors transition-transform hover:scale-[1.03] max-w-[200px] truncate border ${
-                          tabsEditMode && tab.id !== "all" ? "pe-9" : ""
-                        } ${
-                          activeFeedTab === tab.id
-                            ? "bg-white text-gray-900 border-[#008080]/25 shadow-md"
-                            : "text-gray-600 bg-white border-gray-200/80 shadow-sm hover:bg-gray-50"
-                        } ${tabsEditMode ? "ring-2 ring-[#008080]/25" : ""}`}
-                      >
-                        {isHe ? tab.labelHe : tab.labelEn}
-                      </button>
-                      {tabsEditMode && tab.id !== "all" && (
-                        <button
-                          type="button"
-                          onPointerDown={(e) => e.stopPropagation()}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setTabRemoveConfirm({ id: tab.id, label: isHe ? tab.labelHe : tab.labelEn });
-                          }}
-                          className="absolute top-0.5 end-1 z-10 flex h-[18px] w-[18px] items-center justify-center rounded-full border border-white/50 bg-black/60 text-white shadow-sm hover:bg-red-600 hover:border-red-400 transition-colors"
-                          aria-label={isHe ? "הסר" : "Remove"}
-                        >
-                          <X className="w-2 h-2" strokeWidth={3} />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  <button className='p-2 text-slate-400 hover:text-slate-600 transition-colors'><Plus size={20} /></button>
-                </div>
-              </div>
-            </>
-          }
           className="min-w-0 flex-1 min-h-0"
         >
-            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden h-full" style={{ WebkitOverflowScrolling: "touch" }}>
+            <div
+              ref={feedScrollRef}
+              onScroll={handleFeedScroll}
+              className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden h-full"
+              style={{ WebkitOverflowScrolling: "touch" }}
+            >
+            <header className="px-3 py-2.5 lg:px-6 flex flex-wrap items-center gap-2">
+              <Compass className="w-5 h-5 text-[#008080] shrink-0" strokeWidth={2} />
+              <h2 className="text-lg font-semibold text-gray-900 shrink-0 lg:hidden">{isHe ? "גילוי" : "Explore"}</h2>
+              <button type="button" onClick={() => setDevModeOpen((o) => !o)} className="p-1.5 rounded-xl hover:bg-gray-100 text-gray-400 hover:text-[#008080]" title={isHe ? "מצב מפתח (Ctrl+Shift+D)" : "Developer mode (Ctrl+Shift+D)"} aria-label="Dev mode">
+                <Code className="w-4 h-4" strokeWidth={2} />
+              </button>
+            </header>
+            <div className="lg:hidden flex flex-col gap-1 border-b border-gray-200 p-2 overflow-hidden">
+              {tabsEditMode && (
+                <p className="text-[10px] text-[#008080] font-medium px-1">{isHe ? "לחץ מחוץ לטאבים או Esc לסיום" : "Tap outside tabs or Esc to exit"}</p>
+              )}
+              <div ref={mobileTabsStripRef} className="flex overflow-x-auto gap-x-3 gap-y-2 min-w-0 flex-1 scrollbar-hide items-center px-1">
+                {feedTabs.map((tab, index) => (
+                  <div
+                    key={tab.id}
+                    draggable={tabsEditMode}
+                    onDragStart={() => { if (!tabsEditMode) return; setDraggedTabIndex(index); tabDragHappenedRef.current = true; }}
+                    onDragEnd={() => { setDraggedTabIndex(null); setTimeout(() => { tabDragHappenedRef.current = false; }, 0); }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      if (!tabsEditMode || draggedTabIndex === null || draggedTabIndex === index) return;
+                      reorderTabs(draggedTabIndex, index);
+                      setDraggedTabIndex(index);
+                    }}
+                    className={`relative flex-shrink-0 ${tabsEditMode ? "animate-wiggle cursor-grab active:cursor-grabbing" : ""}`}
+                  >
+                    <button
+                      type="button"
+                      onPointerDown={onTabPointerDown}
+                      onPointerUp={onTabPointerUp}
+                      onPointerCancel={onTabPointerUp}
+                      onClick={() => handleTabActivate(tab.id)}
+                      className={`flex-shrink-0 px-4 py-2.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors transition-transform hover:scale-[1.03] max-w-[200px] truncate border ${
+                        tabsEditMode && tab.id !== "all" ? "pe-9" : ""
+                      } ${
+                        activeFeedTab === tab.id
+                          ? "bg-white text-gray-900 border-[#008080]/25 shadow-md"
+                          : "text-gray-600 bg-white border-gray-200/80 shadow-sm hover:bg-gray-50"
+                      } ${tabsEditMode ? "ring-2 ring-[#008080]/25" : ""}`}
+                    >
+                      {isHe ? tab.labelHe : tab.labelEn}
+                    </button>
+                    {tabsEditMode && tab.id !== "all" && (
+                      <button
+                        type="button"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setTabRemoveConfirm({ id: tab.id, label: isHe ? tab.labelHe : tab.labelEn });
+                        }}
+                        className="absolute top-0.5 end-1 z-10 flex h-[18px] w-[18px] items-center justify-center rounded-full border border-white/50 bg-black/60 text-white shadow-sm hover:bg-red-600 hover:border-red-400 transition-colors"
+                        aria-label={isHe ? "הסר" : "Remove"}
+                      >
+                        <X className="w-2 h-2" strokeWidth={3} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={openNewTopicModal}
+                  className="p-0"
+                  aria-label={isHe ? "הוסף טאב" : "Add tab"}
+                >
+                  <Plus size={20} className="text-slate-400 hover:text-slate-600 transition-colors cursor-pointer" />
+                </button>
+              </div>
+            </div>
+            <div className="px-3 py-2.5 lg:px-6 border-b border-gray-200">
+              <div className="flex-1 min-w-0 min-w-[200px] flex items-center gap-2 rounded-xl border border-gray-200 bg-white/60 backdrop-blur-md pl-2.5 pr-2 py-1.5 lg:max-w-xl">
+                <Search className="w-4 h-4 text-gray-400 shrink-0" strokeWidth={2} />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={isHe ? "חיפוש מבצעים, משרות, מקצוענים..." : "Search deals, jobs, pros..."}
+                  className="flex-1 min-w-0 py-1.5 text-sm text-gray-900 placeholder-gray-400 outline-none bg-transparent"
+                />
+                <span className="w-px h-6 bg-gray-200" aria-hidden />
+                <button
+                  type="button"
+                  onClick={() => setLocationPillOpen((o) => !o)}
+                  className={`flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${
+                    locationPillOpen ? "bg-[#008080] text-white border-[#008080]" : "bg-transparent border-gray-200 text-slate-400 hover:bg-gray-100/80 hover:text-slate-600"
+                  }`}
+                  title={isHe ? "הגדר מיקום ורדיוס" : "Set location and radius"}
+                  aria-label={isHe ? "הגדר מיקום" : "Set location"}
+                >
+                  <MapPin className="w-4 h-4 shrink-0" strokeWidth={2} />
+                  <span>{isHe ? "הגדר מיקום" : "Set location"}</span>
+                </button>
+              </div>
+            </div>
             <div className="flex justify-center p-4 lg:px-6">
-            <div className="w-full max-w-[700px]">
+            <div className="w-full max-w-[480px] mx-auto">
         {loading ? (
           <SkeletonFeed count={3} />
         ) : (
@@ -2283,7 +2321,7 @@ export function ExplorePanel() {
                       </div>
                     )
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-10 isolate">
+                    <div className="grid grid-cols-1 gap-y-12 isolate w-full">
                       {displayPostsSorted.map((post) => (
                         <SmartContentCard
                           key={post.id}
@@ -2307,14 +2345,25 @@ export function ExplorePanel() {
             </div>
         </PanelWrapper>
 
+          {showFloatingSearch && (
+            <button
+              type="button"
+              onClick={handleFloatingSearchClick}
+              className="fixed bottom-36 right-4 z-30 w-12 h-12 rounded-full bg-white/90 backdrop-blur-sm border border-slate-100 text-slate-400 shadow-md hover:bg-white/80 flex items-center justify-center lg:w-14 lg:h-14 lg:bottom-24 lg:right-6"
+              aria-label={isHe ? "חיפוש" : "Search"}
+            >
+              <Search className="w-5 h-5 lg:w-6 lg:h-6 text-slate-400" strokeWidth={2} />
+            </button>
+          )}
+
           {/* Floating map FAB — collapsible map */}
           <button
             type="button"
             onClick={() => setMapOpen((o) => !o)}
-            className="fixed bottom-20 right-4 z-30 w-12 h-12 rounded-full bg-[#008080] text-white shadow-lg hover:bg-[#006666] flex items-center justify-center lg:w-14 lg:h-14 lg:bottom-6 lg:right-6"
+            className="fixed bottom-20 right-4 z-30 w-12 h-12 rounded-full bg-white/90 backdrop-blur-sm border border-slate-100 text-slate-400 shadow-md hover:bg-white/80 flex items-center justify-center lg:w-14 lg:h-14 lg:bottom-6 lg:right-6"
             aria-label={isHe ? "הצג מפה" : "Show map"}
           >
-            <MapPin className="w-5 h-5 lg:w-6 lg:h-6" strokeWidth={2} />
+            <MapPin className="w-5 h-5 lg:w-6 lg:h-6 text-slate-400" strokeWidth={2} />
           </button>
 
           {/* Collapsible map drawer (right sidebar) */}
