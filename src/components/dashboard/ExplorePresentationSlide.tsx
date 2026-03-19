@@ -16,7 +16,6 @@ import {
   X,
   Check,
   ScanLine,
-  GitBranch,
   Building2,
   Plus,
   Newspaper,
@@ -115,20 +114,6 @@ export function ExplorePresentationSlide() {
   const [radius, setRadius] = useState(10);
   const radiusDisplay = useMemo(() => formatDistance(radius), [radius]);
 
-  const [refineCopied, setRefineCopied] = useState(false);
-  const handleRefine = useCallback(() => {
-    const state = {
-      tabs: tabs.map((t) => ({ id: t.id, labelEn: t.labelEn, labelHe: t.labelHe })),
-      activeTab,
-      radius,
-      locale,
-      timestamp: new Date().toISOString(),
-    };
-    navigator.clipboard.writeText(JSON.stringify(state, null, 2));
-    setRefineCopied(true);
-    setTimeout(() => setRefineCopied(false), 2600);
-  }, [tabs, activeTab, radius, locale]);
-
   const label = (tab: TabEntry) => (isHe ? tab.labelHe : tab.labelEn);
 
   return (
@@ -142,7 +127,7 @@ export function ExplorePresentationSlide() {
       }}
       dir={isHe ? "rtl" : "ltr"}
     >
-      {/* Top Fixed Area: Header, Search, Location, Tab Bar, Scanning Hero, Refine, Radius */}
+      {/* Top Fixed Area: Header, Search, Location, Tab Bar, Scanning Hero, Radius */}
       <div className="shrink-0 flex flex-col" style={{ backgroundColor: BG_WHITE }}>
         <header
           className="flex items-center justify-between px-4 py-3 border-b"
@@ -347,28 +332,6 @@ export function ExplorePresentationSlide() {
               </p>
             )}
           </div>
-        </div>
-
-        {/* Refine Button (copy state for investor proof) */}
-        <div className="px-4 mb-4">
-          <button
-            type="button"
-            onClick={handleRefine}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border-2 font-semibold text-sm"
-            style={{
-              borderColor: `${OLLIN_EMERALD}40`,
-              color: OLLIN_EMERALD,
-              backgroundColor: `${OLLIN_EMERALD}08`,
-            }}
-          >
-            <GitBranch className="w-5 h-5" strokeWidth={2} />
-            {isHe ? "שפר תצוגה זו (העתק מצב)" : "Refine this view (copy state)"}
-          </button>
-          {refineCopied && (
-            <p className="text-xs font-medium mt-2 text-center" style={{ color: OLLIN_EMERALD }}>
-              {isHe ? "מצב הועתק" : "State copied"}
-            </p>
-          )}
         </div>
 
         {/* Radius */}

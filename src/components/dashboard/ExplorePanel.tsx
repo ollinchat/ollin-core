@@ -784,9 +784,9 @@ function SmartContentCard({
       tabIndex={0}
       onClick={onClick}
       onKeyDown={(e) => e.key === "Enter" && onClick()}
-      className="group rounded-2xl border border-gray-200/80 bg-white overflow-hidden shadow-md hover:shadow-lg hover:border-gray-300 transition-all duration-200 cursor-pointer text-left flex flex-col h-full min-h-[220px]"
+      className="group rounded-3xl border border-gray-200/80 bg-white overflow-hidden shadow-lg hover:shadow-xl hover:border-gray-300 transition-all duration-200 cursor-pointer text-left flex flex-col h-full min-h-[220px]"
     >
-      <div className={`relative h-[110px] sm:h-[120px] shrink-0 overflow-hidden rounded-t-2xl ${hasPhoto ? "bg-gray-100" : `bg-gradient-to-br ${gradient}`}`}>
+      <div className={`relative aspect-[4/5] shrink-0 overflow-hidden rounded-t-3xl ${hasPhoto ? "bg-gray-100" : `bg-gradient-to-br ${gradient}`}`}>
         {hasPhoto ? (
           <img src={post.imageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
         ) : (
@@ -799,8 +799,8 @@ function SmartContentCard({
           {score}% {isHe ? "התאמה" : "match"}
         </span>
       </div>
-      <div className="p-3 sm:p-3.5 flex flex-col flex-1 min-h-0 relative">
-        <h3 className="font-bold text-gray-900 text-[14px] sm:text-[15px] tracking-tight leading-snug line-clamp-2 mb-2 pr-10">{post.title}</h3>
+      <div className="p-3 sm:p-3.5 flex flex-col flex-1 min-h-0 relative rounded-b-3xl">
+        <h3 className="font-extrabold text-gray-900 text-[13px] sm:text-[14px] tracking-tight leading-snug line-clamp-2 mb-1.5 pr-10">{post.title}</h3>
         <ul className="space-y-1 text-[11px] sm:text-xs text-gray-600 list-none line-clamp-3 flex-1">
           {bullets.slice(0, 3).map((b, i) => (
             <li key={i} className="leading-snug">{b}</li>
@@ -1444,7 +1444,6 @@ export function ExplorePanel() {
   const [liveSignalsSource, setLiveSignalsSource] = useState<string>("");
   const [lastAiQuery, setLastAiQuery] = useState<string>("");
   const [devModeOpen, setDevModeOpen] = useState(false);
-  const [refineToast, setRefineToast] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [interactions, setInteractions] = useState<Record<string, number>>(() => loadInteractions());
   const [newTopicInput, setNewTopicInput] = useState("");
@@ -1775,20 +1774,6 @@ export function ExplorePanel() {
     interactionLogRef.current.applyClicks += 1;
   }, []);
 
-  const handleRefineView = useCallback(() => {
-    const state = {
-      tab: activeFeedTab,
-      location: cityName,
-      radiusKm,
-      searchQuery,
-      visiblePostIds: displayPosts.slice(0, 15).map((p) => p.id),
-      timestamp: new Date().toISOString(),
-    };
-    navigator.clipboard.writeText(JSON.stringify(state, null, 2));
-    setRefineToast(true);
-    setTimeout(() => setRefineToast(false), 3000);
-  }, [activeFeedTab, cityName, radiusKm, searchQuery, displayPosts]);
-
   const mapCenter = userCoords ?? HAIFA_CENTER;
   const mapBbox = `${mapCenter.lng - 0.05},${mapCenter.lat - 0.04},${mapCenter.lng + 0.05},${mapCenter.lat + 0.04}`;
   const osmEmbedUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${mapBbox}&layer=mapnik&marker=${mapCenter.lat},${mapCenter.lng}`;
@@ -2026,10 +2011,7 @@ export function ExplorePanel() {
               )}
             </div>
           ))}
-          <button type="button" onClick={openNewTopicModal} className="mt-2 flex items-center justify-center gap-1.5 w-full py-2.5 rounded-xl border-2 border-dashed border-[#008080]/40 text-[#008080] text-sm font-medium hover:bg-[#008080]/5 transition-colors">
-            <Plus className="w-4 h-4" strokeWidth={2.5} />
-            {isHe ? "הוסף טאב" : "Add tab"}
-          </button>
+          <button className='p-2 text-slate-400 hover:text-slate-600 transition-colors'><Plus size={20} /></button>
         </nav>
       </aside>
 
@@ -2096,7 +2078,7 @@ export function ExplorePanel() {
                     type="button"
                     onClick={() => setLocationPillOpen((o) => !o)}
                     className={`flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${
-                      locationPillOpen ? "bg-[#008080] text-white border-[#008080]" : "bg-transparent border-gray-200 text-gray-700 hover:bg-gray-100/80"
+                      locationPillOpen ? "bg-[#008080] text-white border-[#008080]" : "bg-transparent border-gray-200 text-slate-400 hover:bg-gray-100/80 hover:text-slate-600"
                     }`}
                     title={isHe ? "הגדר מיקום ורדיוס" : "Set location and radius"}
                     aria-label={isHe ? "הגדר מיקום" : "Set location"}
@@ -2157,9 +2139,7 @@ export function ExplorePanel() {
                       )}
                     </div>
                   ))}
-                  <button type="button" onClick={openNewTopicModal} className="flex-shrink-0 w-10 h-10 rounded-full border-2 border-dashed border-[#008080]/40 text-[#008080] flex items-center justify-center hover:bg-[#008080]/5 transition-colors" aria-label={isHe ? "הוסף טאב" : "Add tab"}>
-                    <Plus className="w-5 h-5" strokeWidth={2.5} />
-                  </button>
+                  <button className='p-2 text-slate-400 hover:text-slate-600 transition-colors'><Plus size={20} /></button>
                 </div>
               </div>
             </>
@@ -2209,7 +2189,7 @@ export function ExplorePanel() {
                 <button
                   type="button"
                   onClick={() => setShowTenderForm((o) => !o)}
-                  className="w-full flex items-center justify-center gap-2 py-4 rounded-xl border-2 border-dashed border-[#008080]/40 text-[#008080] font-medium text-sm hover:bg-[#008080]/5 mb-4"
+                  className="w-full flex items-center justify-center gap-2 py-4 rounded-xl border border-slate-200 text-slate-700 font-medium text-sm hover:bg-slate-50 mb-4 transition-colors"
                 >
                   <Plus className="w-5 h-5" strokeWidth={2} />
                   {isHe ? "פרסום מכרז אישי (משרה למקצוענים)" : "Post Personal Tender"}
@@ -2257,19 +2237,6 @@ export function ExplorePanel() {
                 <span className="w-1.5 h-1.5 rounded-full bg-[#008080] animate-pulse" style={{ animationDelay: "320ms" }} />
               </span>
             </div>
-            {/* Refine this view: capture UI state for AI iteration */}
-            <button
-              type="button"
-              onClick={handleRefineView}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl bg-gradient-to-r from-[#008080] to-[#006666] text-white border border-white/15 shadow-[0_18px_40px_-20px_rgba(0,128,128,0.75)] hover:opacity-95 transition-all mb-4"
-            >
-              <Sparkles className="w-4 h-4" strokeWidth={2} />
-              {isHe ? "שפר את התצוגה (העתק למה״ל)" : "Refine this view (copy state)"}
-            </button>
-            {refineToast && (
-              <p className="text-xs text-[#008080] font-medium mb-2 text-center">{isHe ? "מצב הועתק ללוח — מוכן לאיטרציה של AI" : "State copied to clipboard — ready for AI iteration"}</p>
-            )}
-
             {/* Detail view: full card when one is selected (like email detail) — fast, no lag */}
             {selectedPostId ? (() => {
               const selectedPost = displayPostsSorted.find((p) => p.id === selectedPostId);
@@ -2288,7 +2255,7 @@ export function ExplorePanel() {
             })() : (
               <>
                 {/* Smart feed: masonry-style grid of cards */}
-                <div className="space-y-4">
+                <div className="space-y-8">
                   {architectState.exploreSortByDistance && (
                     <div className="flex items-center gap-2 mb-3 px-1">
                       <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#008080]/15 text-[#008080] text-xs font-semibold">
@@ -2316,7 +2283,7 @@ export function ExplorePanel() {
                       </div>
                     )
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 isolate">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-10 isolate">
                       {displayPostsSorted.map((post) => (
                         <SmartContentCard
                           key={post.id}
