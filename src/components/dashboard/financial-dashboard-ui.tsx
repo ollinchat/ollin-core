@@ -35,6 +35,7 @@ import type {
   HomeFixedType,
   AutoExpenseType,
   InvestmentKind,
+  DailyTransaction,
 } from "@/lib/financial-dashboard-storage";
 import { newFinancialId } from "@/lib/financial-dashboard-storage";
 import type { BillEntry } from "@/contexts/BillsContext";
@@ -214,6 +215,142 @@ function billsDueWithinDays(bills: BillEntry[], days: number): number {
 const financeRoot =
   "flex-1 min-h-0 overflow-y-auto font-[Inter,ui-sans-serif,system-ui,sans-serif] text-[12px] leading-tight bg-white text-slate-800 antialiased";
 
+/** Top-level spend / transaction grouping (matches expense + transaction sections). */
+type ParentCat = "food" | "transport" | "rent" | "shopping" | "other";
+
+const PARENT_ORDER: ParentCat[] = ["food", "transport", "rent", "shopping", "other"];
+
+const GROUP_SECTION_TITLES: Record<ParentCat, { en: string; he: string }> = {
+  food: { en: "Food & Dining", he: "מזון ומסעדות" },
+  transport: { en: "Transport", he: "תחבורה" },
+  rent: { en: "Housing & Rent", he: "דיור ושכירות" },
+  shopping: { en: "Shopping", he: "קניות" },
+  other: { en: "Bills & Other", he: "חשבונות ואחר" },
+};
+
+const CAT_LABELS: Record<ParentCat, { en: string; he: string }> = {
+  food: { en: "Food", he: "מזון" },
+  transport: { en: "Transport", he: "תחבורה" },
+  rent: { en: "Rent", he: "שכירות" },
+  shopping: { en: "Shopping", he: "קניות" },
+  other: { en: "Other", he: "אחר" },
+};
+
+/** Infer parent + sub-category from merchant (dynamic sub-labels for lists). */
+function classifyMerchant(merchant: string): { parent: ParentCat; subEn: string; subHe: string } {
+  const m = merchant.toLowerCase();
+  let parent: ParentCat = "other";
+  let subEn = "General";
+  let subHe = "כללי";
+
+  if (
+    /supermarket|grocery|market|food|restaurant|cafe|coffee|bakery|dining|delivery|wolt|uber\s*eats|pizza|sushi|bistro|grill/.test(
+      m
+    )
+  ) {
+    parent = "food";
+    if (/coffee|cafe|starbucks/.test(m)) {
+      subEn = "Cafés & coffee";
+      subHe = "בתי קפה";
+    } else if (/supermarket|grocery|shufersal|victory|rami|ketzoet/.test(m)) {
+      subEn = "Supermarkets";
+      subHe = "סופרמרקטים";
+    } else if (/restaurant|bistro|grill|dining/.test(m)) {
+      subEn = "Restaurants";
+      subHe = "מסעדות";
+    } else if (/delivery|wolt|uber\s*eats/.test(m)) {
+      subEn = "Deliveries";
+      subHe = "משלוחים";
+    } else {
+      subEn = "Groceries & other food";
+      subHe = "מכולת ומזון";
+    }
+  } else if (/fuel|parking|toll|highway|gas|uber|taxi|station|car wash|vehicle/.test(m)) {
+    parent = "transport";
+    if (/fuel|gas|station|diesel|petrol/.test(m)) {
+      subEn = "Fuel";
+      subHe = "דלק";
+    } else if (/parking/.test(m)) {
+      subEn = "Parking";
+      subHe = "חניה";
+    } else if (/toll|highway/.test(m)) {
+      subEn = "Tolls";
+      subHe = "אגרות";
+    } else if (/uber|taxi|bus|train|transit/.test(m)) {
+      subEn = "Transit";
+      subHe = "תחבורה ציבורית";
+    } else {
+      subEn = "Vehicle & transport";
+      subHe = "רכב ותנועה";
+    }
+  } else if (/^rent|rent transfer|lease|landlord|דיור/.test(m)) {
+    parent = "rent";
+    subEn = "Rent & lease";
+    subHe = "שכירות";
+  } else if (
+    /electronic|tech|computer|phone|gadget|amazon|mall|shopping|online|order|retail|cloth|apparel|fashion|zara|shein|wear|h&m/.test(
+      m
+    )
+  ) {
+    parent = "shopping";
+    if (/cloth|apparel|fashion|zara|shein|wear|h&m/.test(m)) {
+      subEn = "Clothing";
+      subHe = "ביגוד";
+    } else if (/electronic|tech|computer|phone|gadget|apple|samsung/.test(m)) {
+      subEn = "Electronics";
+      subHe = "אלקטרוניקה";
+    } else if (/online|amazon|order|ebay|aliexpress/.test(m)) {
+      subEn = "Online retail";
+      subHe = "קניות מקוונות";
+    } else {
+      subEn = "Retail";
+      subHe = "קמעונאות";
+    }
+  }
+  return { parent, subEn, subHe };
+}
+
+function autoExpenseParentSub(type: AutoExpenseType): { parent: ParentCat; subEn: string; subHe: string } {
+  if (type === "fuel") return { parent: "transport", subEn: "Fuel", subHe: "דלק" };
+  if (type === "tolls") return { parent: "transport", subEn: "Tolls", subHe: "אגרות" };
+  if (type === "repair") return { parent: "transport", subEn: "Repairs", subHe: "תיקונים" };
+  return { parent: "other", subEn: "Insurance & fees", subHe: "ביטוחים ועמלות" };
+}
+
+type MergedOverviewTxn = {
+  id: string;
+  merchant: string;
+  date: string;
+  amount: number;
+  parent: ParentCat;
+  kind: "daily" | "auto";
+  channel: SpendChannel;
+  autoType?: AutoExpenseType;
+};
+
+function TransactionRowIcon({
+  kind,
+  channel,
+  autoType,
+}: {
+  kind: "daily" | "auto";
+  channel: SpendChannel;
+  autoType?: AutoExpenseType;
+}) {
+  const cls = "w-3.5 h-3.5 text-slate-400 shrink-0";
+  if (kind === "daily") {
+    return (
+      <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg border border-slate-200 bg-slate-50">
+        <ChannelIcon ch={channel} />
+      </span>
+    );
+  }
+  if (autoType === "fuel") return <Fuel className={cls} strokeWidth={2} />;
+  if (autoType === "tolls") return <Milestone className={cls} strokeWidth={2} />;
+  if (autoType === "repair") return <Wrench className={cls} strokeWidth={2} />;
+  return <Shield className={cls} strokeWidth={2} />;
+}
+
 export function MinimalFinancialOverview({
   isHe,
   fd,
@@ -323,12 +460,59 @@ export function MinimalFinancialOverview({
     return out;
   }, [fd.dailyTransactions, fd.autoExpenses, income, investmentLossAsExpense]);
 
-  const recentTxns = useMemo(() => {
-    const sorted = [...fd.dailyTransactions].sort((a, b) => b.date.localeCompare(a.date));
-    const filtered = sorted.filter((t) => inRangeIso(t.date));
-    const list = filtered.length > 0 ? filtered : sorted;
-    return list.slice(0, 6);
-  }, [fd.dailyTransactions, inRangeIso]);
+  /** Portfolio / holdings total as “account balance” proxy (no bank field in model). */
+  const totalBalance = useMemo(
+    () => fd.investments.reduce((s, x) => s + x.value, 0),
+    [fd.investments]
+  );
+  const totalBalanceColor = totalBalance > 0 ? BRAND_TURQUOISE : "#0f172a";
+
+  const mergedRecentTxns = useMemo((): MergedOverviewTxn[] => {
+    const daily: MergedOverviewTxn[] = fd.dailyTransactions
+      .filter((t) => inRangeIso(t.date))
+      .map((t) => ({
+        id: t.id,
+        merchant: t.merchant,
+        date: t.date,
+        amount: t.amount,
+        parent: classifyMerchant(t.merchant).parent,
+        kind: "daily" as const,
+        channel: t.channel,
+      }));
+    const auto: MergedOverviewTxn[] = fd.autoExpenses
+      .filter((e) => inRangeIso(e.date))
+      .map((e) => {
+        const ps = autoExpenseParentSub(e.type);
+        return {
+          id: e.id,
+          merchant: e.label,
+          date: e.date,
+          amount: e.amount,
+          parent: ps.parent,
+          kind: "auto" as const,
+          channel: "bank" as SpendChannel,
+          autoType: e.type,
+        };
+      });
+    return [...daily, ...auto].sort((a, b) => b.date.localeCompare(a.date) || b.amount - a.amount).slice(0, 28);
+  }, [fd.dailyTransactions, fd.autoExpenses, inRangeIso]);
+
+  const groupedRecentTxns = useMemo(() => {
+    const map = new Map<ParentCat, MergedOverviewTxn[]>();
+    for (const cat of PARENT_ORDER) map.set(cat, []);
+    for (const t of mergedRecentTxns) {
+      map.get(t.parent)!.push(t);
+    }
+    for (const cat of PARENT_ORDER) {
+      const arr = map.get(cat)!;
+      arr.sort((a, b) => b.date.localeCompare(a.date));
+    }
+    return PARENT_ORDER.filter((cat) => (map.get(cat)?.length ?? 0) > 0).map((cat) => ({
+      cat,
+      title: isHe ? GROUP_SECTION_TITLES[cat].he : GROUP_SECTION_TITLES[cat].en,
+      items: map.get(cat)!,
+    }));
+  }, [mergedRecentTxns, isHe]);
 
   const pctDelta = useMemo(() => {
     if (spendPrev <= 0) return 0;
@@ -358,83 +542,70 @@ export function MinimalFinancialOverview({
   const netDisplayColor = netGap >= 0 ? BRAND_TURQUOISE : "#475569";
   const expensesAccent = "#f43f5e";
 
-  type ExpenseCatKey = "food" | "transport" | "rent" | "shopping" | "other";
-  const CAT_LABELS: Record<ExpenseCatKey, { en: string; he: string }> = {
-    food: { en: "Food", he: "מזון" },
-    transport: { en: "Transport", he: "תחבורה" },
-    rent: { en: "Rent", he: "שכירות" },
-    shopping: { en: "Shopping", he: "קניות" },
-    other: { en: "Other", he: "אחר" },
-  };
-  const CAT_SUBLABELS: Record<ExpenseCatKey, { en: string; he: string }> = {
-    food: {
-      en: "Restaurants, supermarkets, deliveries, groceries",
-      he: "מסעדות, סופרמרקטים, משלוחים, מכולת",
-    },
-    transport: {
-      en: "Fuel, parking, tolls, transit & vehicle upkeep",
-      he: "דלק, חניה, אגרות, תחבורה ותחזוקת רכב",
-    },
-    rent: {
-      en: "Lease & housing (prorated to selected range)",
-      he: "שכירות ודיור (יחסי לטווח שנבחר)",
-    },
-    shopping: {
-      en: "Retail, e‑commerce, electronics & general retail",
-      he: "קמעונאות, קניות מקוונות ואלקטרוניקה",
-    },
-    other: {
-      en: "Utilities, insurance, subscriptions & miscellaneous",
-      he: "חשמל, מים, ביטוחים, מנויים ושונות",
-    },
-  };
-
   const expenseCategoryBreakdown = useMemo(() => {
-    const inferFromMerchant = (merchant: string): ExpenseCatKey => {
-      const m = merchant.toLowerCase();
-      if (/supermarket|coffee|market|food|restaurant|cafe|grocery|bakery/.test(m)) return "food";
-      if (/fuel|parking|toll|highway|gas|uber|taxi|station/.test(m)) return "transport";
-      if (/rent/.test(m)) return "rent";
-      if (/electronic|online|shopping|mall|amazon|order/.test(m)) return "shopping";
-      return "other";
+    type Agg = { total: number; subSpend: Map<string, { en: string; he: string; amt: number }> };
+    const byParent = new Map<ParentCat, Agg>();
+    for (const p of PARENT_ORDER) byParent.set(p, { total: 0, subSpend: new Map() });
+
+    const add = (parent: ParentCat, subEn: string, subHe: string, amt: number) => {
+      const agg = byParent.get(parent)!;
+      agg.total += amt;
+      const key = `${subEn}||${subHe}`;
+      const prev = agg.subSpend.get(key);
+      if (prev) prev.amt += amt;
+      else agg.subSpend.set(key, { en: subEn, he: subHe, amt });
     };
-    const buckets: Record<ExpenseCatKey, number> = {
-      food: 0,
-      transport: 0,
-      rent: 0,
-      shopping: 0,
-      other: 0,
-    };
+
     fd.dailyTransactions.forEach((t) => {
       if (!inRangeIso(t.date)) return;
-      buckets[inferFromMerchant(t.merchant)] += t.amount;
+      const { parent, subEn, subHe } = classifyMerchant(t.merchant);
+      add(parent, subEn, subHe, t.amount);
     });
     fd.autoExpenses.forEach((e) => {
       if (!inRangeIso(e.date)) return;
-      if (e.type === "fuel" || e.type === "tolls" || e.type === "repair") buckets.transport += e.amount;
-      else buckets.other += e.amount;
+      const ps = autoExpenseParentSub(e.type);
+      add(ps.parent, ps.subEn, ps.subHe, e.amount);
     });
     const factor = rangeDays / 30;
+    const homeLabels: Record<HomeFixedType, { en: string; he: string }> = {
+      electricity: { en: "Electricity", he: "חשמל" },
+      water: { en: "Water", he: "מים" },
+      rent: { en: "Rent (fixed)", he: "שכירות (קבוע)" },
+      arnona: { en: "Arnona", he: "ארנונה" },
+    };
     fd.homeFixed.forEach((h) => {
       const amt = h.monthlyAmount * factor;
-      if (h.type === "rent") buckets.rent += amt;
-      else buckets.other += amt;
+      const lab = homeLabels[h.type];
+      if (h.type === "rent") add("rent", lab.en, lab.he, amt);
+      else add("other", lab.en, lab.he, amt);
     });
-    const order: ExpenseCatKey[] = ["food", "transport", "rent", "shopping", "other"];
-    const rows = order
-      .map((key) => ({
+
+    const rows = PARENT_ORDER.map((key) => {
+      const agg = byParent.get(key)!;
+      const subs = Array.from(agg.subSpend.values())
+        .filter((s) => s.amt > 0)
+        .sort((a, b) => b.amt - a.amt);
+      const top = subs.slice(0, 5);
+      const subLabel =
+        top.length === 0
+          ? isHe
+            ? "—"
+            : "—"
+          : top.map((s) => (isHe ? s.he : s.en)).join(", ");
+      return {
         key,
-        amount: buckets[key],
+        amount: agg.total,
         label: isHe ? CAT_LABELS[key].he : CAT_LABELS[key].en,
-        subLabel: isHe ? CAT_SUBLABELS[key].he : CAT_SUBLABELS[key].en,
-      }))
+        subLabel,
+      };
+    })
       .filter((r) => r.amount > 0)
       .sort((a, b) => b.amount - a.amount);
     const maxAmt = rows.length ? Math.max(...rows.map((r) => r.amount)) : 1;
     return { rows, maxAmt };
   }, [fd.dailyTransactions, fd.autoExpenses, fd.homeFixed, inRangeIso, rangeDays, isHe]);
 
-  const categoryIcon = (key: ExpenseCatKey) => {
+  const categoryIcon = (key: ParentCat) => {
     const cls = "w-4 h-4 text-slate-400 shrink-0";
     switch (key) {
       case "food":
@@ -498,16 +669,16 @@ export function MinimalFinancialOverview({
           </div>
         )}
 
-        {/* Big 3 — single row, sharp industrial frame */}
-        <div className="grid grid-cols-3 gap-2 sm:gap-3">
-          <div className="relative flex flex-col justify-center min-h-[104px] sm:min-h-[112px] rounded-lg border border-slate-200 bg-white px-2.5 py-3 sm:px-3.5 sm:py-3.5 overflow-hidden">
+        {/* Big 4 — single row, sharp frame, privacy blur on amounts */}
+        <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
+          <div className="relative flex flex-col justify-center min-h-[92px] sm:min-h-[104px] rounded-lg border border-slate-200 bg-white px-1.5 py-2.5 sm:px-2.5 sm:py-3 overflow-hidden min-w-0">
             <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-[#008080]" aria-hidden />
-            <div className="pl-2.5 flex flex-col items-center sm:items-start text-center sm:text-left">
-              <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                {isHe ? "הכנסה" : "Income"}
+            <div className="pl-2 flex flex-col items-center text-center min-w-0">
+              <div className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-wide text-slate-500 leading-tight">
+                {isHe ? "הכנסות" : "Income"}
               </div>
               <div
-                className={`text-lg sm:text-2xl font-semibold tabular-nums tracking-tight leading-tight mt-0.5 text-[#008080] ${amountBlur}`}
+                className={`text-sm sm:text-lg font-semibold tabular-nums tracking-tight leading-tight mt-0.5 text-[#008080] break-all ${amountBlur}`}
                 style={{ fontFeatureSettings: '"tnum" 1, "lnum" 1' }}
               >
                 {incomeText.toFixed(0)}₪
@@ -515,14 +686,14 @@ export function MinimalFinancialOverview({
             </div>
           </div>
 
-          <div className="relative flex flex-col justify-center min-h-[104px] sm:min-h-[112px] rounded-lg border border-slate-200 bg-white px-2.5 py-3 sm:px-3.5 sm:py-3.5 overflow-hidden">
+          <div className="relative flex flex-col justify-center min-h-[92px] sm:min-h-[104px] rounded-lg border border-slate-200 bg-white px-1.5 py-2.5 sm:px-2.5 sm:py-3 overflow-hidden min-w-0">
             <div className="absolute left-0 top-0 bottom-0 w-0.5" style={{ background: expensesAccent }} aria-hidden />
-            <div className="pl-2.5 flex flex-col items-center sm:items-start text-center sm:text-left">
-              <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            <div className="pl-2 flex flex-col items-center text-center min-w-0">
+              <div className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-wide text-slate-500 leading-tight">
                 {isHe ? "הוצאות" : "Expenses"}
               </div>
               <div
-                className={`text-lg sm:text-2xl font-semibold tabular-nums tracking-tight leading-tight mt-0.5 ${amountBlur}`}
+                className={`text-sm sm:text-lg font-semibold tabular-nums tracking-tight leading-tight mt-0.5 break-all ${amountBlur}`}
                 style={{ color: expensesAccent, fontFeatureSettings: '"tnum" 1, "lnum" 1' }}
               >
                 {expensesText.toFixed(0)}₪
@@ -530,21 +701,40 @@ export function MinimalFinancialOverview({
             </div>
           </div>
 
-          <div className="relative flex flex-col justify-center min-h-[104px] sm:min-h-[112px] rounded-lg border border-slate-200 bg-white px-2.5 py-3 sm:px-3.5 sm:py-3.5 overflow-hidden">
+          <div className="relative flex flex-col justify-center min-h-[92px] sm:min-h-[104px] rounded-lg border border-slate-200 bg-white px-1.5 py-2.5 sm:px-2.5 sm:py-3 overflow-hidden min-w-0">
             <div className="absolute left-0 top-0 bottom-0 w-0.5" style={{ background: netDisplayColor }} aria-hidden />
-            <div className="pl-2.5 flex flex-col items-center sm:items-start text-center sm:text-left min-w-0 w-full">
-              <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            <div className="pl-2 flex flex-col items-center text-center min-w-0 w-full">
+              <div className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-wide text-slate-500 leading-tight">
                 {isHe ? "פער נטו" : "Net Gap"}
               </div>
               <div
-                className={`text-base sm:text-xl font-semibold tabular-nums tracking-tight leading-tight mt-0.5 ${amountBlur}`}
+                className={`text-sm sm:text-base font-semibold tabular-nums tracking-tight leading-tight mt-0.5 break-all ${amountBlur}`}
                 style={{ color: netDisplayColor, fontFeatureSettings: '"tnum" 1, "lnum" 1' }}
               >
                 {netGap >= 0 ? "+" : ""}
                 {netGap.toFixed(0)}₪
               </div>
-              <div className={`mt-1 w-full flex justify-center sm:justify-start ${amountBlur}`}>
-                <SparklineMono data={netSeries7} color={netDisplayColor} w={88} h={18} />
+              <div className={`mt-0.5 w-full flex justify-center ${amountBlur}`}>
+                <SparklineMono data={netSeries7} color={netDisplayColor} w={64} h={16} />
+              </div>
+            </div>
+          </div>
+
+          <div className="relative flex flex-col justify-center min-h-[92px] sm:min-h-[104px] rounded-lg border border-slate-200 bg-white px-1.5 py-2.5 sm:px-2.5 sm:py-3 overflow-hidden min-w-0">
+            <div
+              className="absolute left-0 top-0 bottom-0 w-0.5"
+              style={{ background: totalBalanceColor }}
+              aria-hidden
+            />
+            <div className="pl-2 flex flex-col items-center text-center min-w-0">
+              <div className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-wide text-slate-500 leading-tight">
+                {isHe ? "יתרה בחשבון" : "Total Balance"}
+              </div>
+              <div
+                className={`text-sm sm:text-lg font-semibold tabular-nums tracking-tight leading-tight mt-0.5 break-all ${amountBlur}`}
+                style={{ color: totalBalanceColor, fontFeatureSettings: '"tnum" 1, "lnum" 1' }}
+              >
+                {totalBalance.toFixed(0)}₪
               </div>
             </div>
           </div>
