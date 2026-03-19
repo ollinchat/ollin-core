@@ -121,16 +121,16 @@ export function PaymentsPanel({ onOpenBoard, initialTab }: PaymentsPanelProps) {
   const [draggingTab, setDraggingTab] = useState<PaymentsTabId | null>(null);
   const tabLongPressTimerRef = useRef<number | null>(null);
 
-  const [privacyMode, setPrivacyMode] = useState(() => {
-    if (typeof window === "undefined") return false;
+  /** Blur amounts by default; sync from localStorage after mount to avoid SSR/client mismatch. */
+  const [privacyMode, setPrivacyMode] = useState(true);
+  useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_PRIVACY_KEY);
-      // Privacy is ON by default (first entry).
-      return raw === null ? true : raw === "1";
+      if (raw !== null) setPrivacyMode(raw === "1");
     } catch {
-      return true;
+      /* keep default true */
     }
-  });
+  }, []);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<BillCategory | "">("");

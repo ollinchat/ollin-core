@@ -224,7 +224,7 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
       layout
       initial={false}
       transition={{ type: "spring", stiffness: 400, damping: 35 }}
-      className={`rounded-[32px] shadow-lg border border-[var(--clean-border)] bg-white overflow-hidden flex ${selected ? "border-slate-900 ring-1 ring-slate-900/15" : ""} ${task.done ? "bg-gray-50/60" : ""}`}
+      className={`rounded-lg border border-slate-200 bg-white overflow-hidden flex ${selected ? "border-slate-900 ring-1 ring-slate-900/15" : ""} ${task.done ? "bg-gray-50/60" : ""}`}
     >
       {/* Short vertical pill (24px h, 4px w) */}
       <div className="flex-shrink-0 pl-3 pr-2 py-2.5 flex items-center" aria-hidden>

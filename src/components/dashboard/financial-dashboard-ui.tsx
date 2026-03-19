@@ -26,6 +26,8 @@ import {
   ChevronDown,
   ChevronUp,
   Receipt,
+  Utensils,
+  ShoppingBag,
 } from "lucide-react";
 import type {
   FinancialDashboardState,
@@ -38,6 +40,8 @@ import { newFinancialId } from "@/lib/financial-dashboard-storage";
 import type { BillEntry } from "@/contexts/BillsContext";
 
 const teal = "#0d9488";
+/** Ollin brand turquoise — income & positive net in overview */
+const BRAND_TURQUOISE = "#008080";
 const slateBlue = "#475569";
 const slateLight = "#64748b";
 
@@ -171,9 +175,7 @@ function FxCard({
   className?: string;
 }) {
   return (
-    <div
-      className={`rounded-[32px] bg-white shadow-[0_18px_40px_rgba(2,6,23,0.06)] border border-slate-200/40 transition-transform hover:scale-[1.01] will-change-transform ${className}`}
-    >
+    <div className={`rounded-xl bg-white border border-slate-200 ${className}`}>
       {children}
     </div>
   );
@@ -353,16 +355,107 @@ export function MinimalFinancialOverview({
   const incomeText = income;
   const expensesText = expenses;
 
-  const netAccent = "#1d4ed8";
-  const incomeAccent = "#10b981";
+  const netDisplayColor = netGap >= 0 ? BRAND_TURQUOISE : "#475569";
   const expensesAccent = "#f43f5e";
+
+  type ExpenseCatKey = "food" | "transport" | "rent" | "shopping" | "other";
+  const CAT_LABELS: Record<ExpenseCatKey, { en: string; he: string }> = {
+    food: { en: "Food", he: "מזון" },
+    transport: { en: "Transport", he: "תחבורה" },
+    rent: { en: "Rent", he: "שכירות" },
+    shopping: { en: "Shopping", he: "קניות" },
+    other: { en: "Other", he: "אחר" },
+  };
+  const CAT_SUBLABELS: Record<ExpenseCatKey, { en: string; he: string }> = {
+    food: {
+      en: "Restaurants, supermarkets, deliveries, groceries",
+      he: "מסעדות, סופרמרקטים, משלוחים, מכולת",
+    },
+    transport: {
+      en: "Fuel, parking, tolls, transit & vehicle upkeep",
+      he: "דלק, חניה, אגרות, תחבורה ותחזוקת רכב",
+    },
+    rent: {
+      en: "Lease & housing (prorated to selected range)",
+      he: "שכירות ודיור (יחסי לטווח שנבחר)",
+    },
+    shopping: {
+      en: "Retail, e‑commerce, electronics & general retail",
+      he: "קמעונאות, קניות מקוונות ואלקטרוניקה",
+    },
+    other: {
+      en: "Utilities, insurance, subscriptions & miscellaneous",
+      he: "חשמל, מים, ביטוחים, מנויים ושונות",
+    },
+  };
+
+  const expenseCategoryBreakdown = useMemo(() => {
+    const inferFromMerchant = (merchant: string): ExpenseCatKey => {
+      const m = merchant.toLowerCase();
+      if (/supermarket|coffee|market|food|restaurant|cafe|grocery|bakery/.test(m)) return "food";
+      if (/fuel|parking|toll|highway|gas|uber|taxi|station/.test(m)) return "transport";
+      if (/rent/.test(m)) return "rent";
+      if (/electronic|online|shopping|mall|amazon|order/.test(m)) return "shopping";
+      return "other";
+    };
+    const buckets: Record<ExpenseCatKey, number> = {
+      food: 0,
+      transport: 0,
+      rent: 0,
+      shopping: 0,
+      other: 0,
+    };
+    fd.dailyTransactions.forEach((t) => {
+      if (!inRangeIso(t.date)) return;
+      buckets[inferFromMerchant(t.merchant)] += t.amount;
+    });
+    fd.autoExpenses.forEach((e) => {
+      if (!inRangeIso(e.date)) return;
+      if (e.type === "fuel" || e.type === "tolls" || e.type === "repair") buckets.transport += e.amount;
+      else buckets.other += e.amount;
+    });
+    const factor = rangeDays / 30;
+    fd.homeFixed.forEach((h) => {
+      const amt = h.monthlyAmount * factor;
+      if (h.type === "rent") buckets.rent += amt;
+      else buckets.other += amt;
+    });
+    const order: ExpenseCatKey[] = ["food", "transport", "rent", "shopping", "other"];
+    const rows = order
+      .map((key) => ({
+        key,
+        amount: buckets[key],
+        label: isHe ? CAT_LABELS[key].he : CAT_LABELS[key].en,
+        subLabel: isHe ? CAT_SUBLABELS[key].he : CAT_SUBLABELS[key].en,
+      }))
+      .filter((r) => r.amount > 0)
+      .sort((a, b) => b.amount - a.amount);
+    const maxAmt = rows.length ? Math.max(...rows.map((r) => r.amount)) : 1;
+    return { rows, maxAmt };
+  }, [fd.dailyTransactions, fd.autoExpenses, fd.homeFixed, inRangeIso, rangeDays, isHe]);
+
+  const categoryIcon = (key: ExpenseCatKey) => {
+    const cls = "w-4 h-4 text-slate-400 shrink-0";
+    switch (key) {
+      case "food":
+        return <Utensils className={cls} strokeWidth={2} />;
+      case "transport":
+        return <Car className={cls} strokeWidth={2} />;
+      case "rent":
+        return <Home className={cls} strokeWidth={2} />;
+      case "shopping":
+        return <ShoppingBag className={cls} strokeWidth={2} />;
+      default:
+        return <LayoutGrid className={cls} strokeWidth={2} />;
+    }
+  };
 
   return (
     <div className={financeRoot}>
-      <div className="p-3 sm:p-4 max-w-4xl mx-auto space-y-3">
+      <div className="p-6 max-w-4xl mx-auto space-y-4">
         {/* Segmented time filters (text-only) */}
         <div className="flex items-center justify-center">
-          <div className="inline-flex p-1 rounded-full border border-slate-200 bg-slate-50">
+          <div className="inline-flex p-0.5 rounded-lg border border-slate-200 bg-slate-50">
             {(
               [
                 { key: "monthly", en: "Monthly", he: "חודשי" },
@@ -376,8 +469,8 @@ export function MinimalFinancialOverview({
                   key={opt.key}
                   type="button"
                   onClick={() => setRangeMode(opt.key)}
-                  className={`px-4 py-1.5 rounded-full text-[13px] font-medium transition-colors ${
-                    active ? "bg-white shadow-sm text-slate-900" : "text-slate-600 hover:text-slate-800"
+                  className={`px-4 py-1.5 rounded-md text-[13px] font-medium transition-colors ${
+                    active ? "bg-white border border-slate-200 text-slate-900" : "text-slate-600 hover:text-slate-800"
                   }`}
                 >
                   {isHe ? opt.he : opt.en}
@@ -393,59 +486,113 @@ export function MinimalFinancialOverview({
               type="date"
               value={customFrom}
               onChange={(e) => setCustomFrom(e.target.value)}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[13px]"
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px]"
             />
             <span className="text-slate-400">–</span>
             <input
               type="date"
               value={customTo}
               onChange={(e) => setCustomTo(e.target.value)}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[13px]"
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px]"
             />
           </div>
         )}
 
-        {/* Big 3 physical cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div
-            className="relative bg-white rounded-2xl shadow-lg border border-slate-100 px-6 py-5 min-h-[126px] flex flex-col justify-between overflow-hidden"
-          >
-            <div className="absolute left-0 top-0 bottom-0 w-[2px]" style={{ background: incomeAccent }} aria-hidden />
-            <div className="pl-4">
-              <div className="text-[13px] font-medium text-slate-700">{isHe ? "הכנסה" : "Income"}</div>
-              <div className={`text-[28px] font-black tabular-nums ${amountBlur}`} style={{ color: incomeAccent }}>
+        {/* Big 3 — single row, sharp industrial frame */}
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          <div className="relative flex flex-col justify-center min-h-[104px] sm:min-h-[112px] rounded-lg border border-slate-200 bg-white px-2.5 py-3 sm:px-3.5 sm:py-3.5 overflow-hidden">
+            <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-[#008080]" aria-hidden />
+            <div className="pl-2.5 flex flex-col items-center sm:items-start text-center sm:text-left">
+              <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                {isHe ? "הכנסה" : "Income"}
+              </div>
+              <div
+                className={`text-lg sm:text-2xl font-semibold tabular-nums tracking-tight leading-tight mt-0.5 text-[#008080] ${amountBlur}`}
+                style={{ fontFeatureSettings: '"tnum" 1, "lnum" 1' }}
+              >
                 {incomeText.toFixed(0)}₪
               </div>
             </div>
           </div>
 
-          <div
-            className="relative bg-white rounded-2xl shadow-lg border border-slate-100 px-6 py-5 min-h-[126px] flex flex-col justify-between overflow-hidden"
-          >
-            <div className="absolute left-0 top-0 bottom-0 w-[2px]" style={{ background: expensesAccent }} aria-hidden />
-            <div className="pl-4">
-              <div className="text-[13px] font-medium text-slate-700">{isHe ? "הוצאות" : "Expenses"}</div>
-              <div className={`text-[28px] font-black tabular-nums ${amountBlur}`} style={{ color: expensesAccent }}>
+          <div className="relative flex flex-col justify-center min-h-[104px] sm:min-h-[112px] rounded-lg border border-slate-200 bg-white px-2.5 py-3 sm:px-3.5 sm:py-3.5 overflow-hidden">
+            <div className="absolute left-0 top-0 bottom-0 w-0.5" style={{ background: expensesAccent }} aria-hidden />
+            <div className="pl-2.5 flex flex-col items-center sm:items-start text-center sm:text-left">
+              <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                {isHe ? "הוצאות" : "Expenses"}
+              </div>
+              <div
+                className={`text-lg sm:text-2xl font-semibold tabular-nums tracking-tight leading-tight mt-0.5 ${amountBlur}`}
+                style={{ color: expensesAccent, fontFeatureSettings: '"tnum" 1, "lnum" 1' }}
+              >
                 {expensesText.toFixed(0)}₪
               </div>
             </div>
           </div>
 
-          <div
-            className="relative bg-white rounded-2xl shadow-lg border border-slate-100 px-6 py-5 min-h-[126px] flex flex-col justify-between overflow-hidden"
-          >
-            <div className="absolute left-0 top-0 bottom-0 w-[2px]" style={{ background: netAccent }} aria-hidden />
-            <div className="pl-4">
-              <div className="text-[13px] font-medium text-slate-700">{isHe ? "פער נטו" : "Net Gap"}</div>
-              <div className={`text-[24px] font-black tabular-nums leading-tight ${amountBlur}`} style={{ color: netAccent }}>
+          <div className="relative flex flex-col justify-center min-h-[104px] sm:min-h-[112px] rounded-lg border border-slate-200 bg-white px-2.5 py-3 sm:px-3.5 sm:py-3.5 overflow-hidden">
+            <div className="absolute left-0 top-0 bottom-0 w-0.5" style={{ background: netDisplayColor }} aria-hidden />
+            <div className="pl-2.5 flex flex-col items-center sm:items-start text-center sm:text-left min-w-0 w-full">
+              <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                {isHe ? "פער נטו" : "Net Gap"}
+              </div>
+              <div
+                className={`text-base sm:text-xl font-semibold tabular-nums tracking-tight leading-tight mt-0.5 ${amountBlur}`}
+                style={{ color: netDisplayColor, fontFeatureSettings: '"tnum" 1, "lnum" 1' }}
+              >
                 {netGap >= 0 ? "+" : ""}
                 {netGap.toFixed(0)}₪
               </div>
-              <div className={`mt-2 ${amountBlur}`}>
-                <SparklineMono data={netSeries7} color={netAccent} w={110} h={22} />
+              <div className={`mt-1 w-full flex justify-center sm:justify-start ${amountBlur}`}>
+                <SparklineMono data={netSeries7} color={netDisplayColor} w={88} h={18} />
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Expense categories — share of top spending buckets */}
+        <div className="rounded-lg border border-slate-200 bg-white p-4 sm:p-5">
+          <h3 className="text-[13px] font-semibold text-slate-800 mb-3">
+            {isHe ? "קטגוריות הוצאות" : "Expense Categories"}
+          </h3>
+          {expenseCategoryBreakdown.rows.length === 0 ? (
+            <p className="text-[13px] text-slate-500 py-2">
+              {isHe ? "אין הוצאות בטווח שנבחר." : "No spending in the selected period."}
+            </p>
+          ) : (
+            <ul className="space-y-4">
+              {expenseCategoryBreakdown.rows.map((row) => {
+                const pct = expenseCategoryBreakdown.maxAmt > 0 ? (row.amount / expenseCategoryBreakdown.maxAmt) * 100 : 0;
+                return (
+                  <li key={row.key} className="flex items-start gap-3">
+                    {categoryIcon(row.key)}
+                    <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[13px] font-medium text-slate-800 leading-snug">{row.label}</p>
+                          <p className="text-[11px] text-slate-500 leading-snug mt-0.5">{row.subLabel}</p>
+                        </div>
+                        <div className="flex flex-col items-end shrink-0 gap-1.5">
+                          <span
+                            className={`text-[13px] font-semibold tabular-nums tracking-tight text-slate-900 text-right ${amountBlur}`}
+                            style={{ fontFeatureSettings: '"tnum" 1, "lnum" 1' }}
+                          >
+                            {row.amount.toFixed(0)}₪
+                          </span>
+                          <div className="h-1 w-[min(100%,140px)] rounded-sm bg-slate-200 overflow-hidden">
+                            <div
+                              className="h-full rounded-sm bg-slate-600 transition-all"
+                              style={{ width: `${Math.min(100, pct)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
 
         {/* Single-line quick summary */}
@@ -458,7 +605,7 @@ export function MinimalFinancialOverview({
         </div>
 
         {/* Recent transactions (no icons) */}
-        <div className="bg-white rounded-2xl shadow-lg border border-slate-100 overflow-hidden">
+        <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
             <p className="text-[13px] font-semibold text-slate-800">{isHe ? "עסקאות אחרונות" : "Recent Transactions"}</p>
             <p className="text-[11px] text-slate-400">{isHe ? "5 אחרונות" : "Last 5"}</p>
