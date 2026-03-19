@@ -85,7 +85,7 @@ export function ConversationsView({ locale, onSelectedContactChange }: Conversat
   const slideTransition = { type: "tween" as const, duration: 0.35, ease: [0.32, 0.72, 0, 1] };
 
   return (
-    <div className="h-full min-h-0 overflow-hidden rounded-2xl border border-gray-200 bg-[#fafafa] shadow-sm relative">
+    <div className="h-full min-h-0 overflow-hidden rounded-[32px] border border-slate-200 bg-[#fafafa] shadow-lg relative">
       {/* Slide 1: Light top-down — Ollin block (top) → Tools grid (middle) → Notes (bottom) */}
       <motion.div
         className="absolute inset-0 flex flex-col min-h-0 overflow-y-auto"
@@ -96,10 +96,10 @@ export function ConversationsView({ locale, onSelectedContactChange }: Conversat
       >
         {/* TOP: Large Ollin Command Center — dominant, welcoming textarea */}
         <div className="flex-shrink-0 p-4">
-          <div className="w-full flex gap-3 items-start rounded-2xl border-2 border-[#008080]/25 bg-[#fafdfd] px-4 py-4 shadow-md focus-within:border-[#008080]/50 focus-within:ring-2 focus-within:ring-[#008080]/15 transition-all min-h-[140px]">
+          <div className="w-full flex gap-3 items-start rounded-[32px] border border-slate-200 bg-white px-4 py-4 shadow-lg focus-within:border-slate-300 transition-all min-h-[140px]">
             <div className="flex items-center gap-2 shrink-0 pt-0.5">
               <div className="relative">
-                <motion.button type="button" onClick={() => setPlusMenuOpen((o) => !o)} className="w-12 h-12 rounded-xl bg-[#008080] text-white flex items-center justify-center hover:bg-[#006666] transition-colors shadow-sm" whileTap={{ scale: 0.95 }} aria-label="Add">
+                <motion.button type="button" onClick={() => setPlusMenuOpen((o) => !o)} className="w-12 h-12 rounded-xl bg-white border border-slate-200 text-slate-600 flex items-center justify-center hover:bg-slate-50 transition-colors shadow-sm" whileTap={{ scale: 0.95 }} aria-label="Add">
                   <Plus className="w-6 h-6" strokeWidth={2.5} />
                 </motion.button>
                 <AnimatePresence>
@@ -116,9 +116,9 @@ export function ConversationsView({ locale, onSelectedContactChange }: Conversat
                               else addFormMessage(action);
                               setPlusMenuOpen(false);
                             }}
-                            className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-[#008080]/10 rounded-lg"
+                            className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-slate-50 rounded-lg"
                           >
-                            <Icon className="w-4 h-4 text-[#008080]" strokeWidth={2} />
+                            <Icon className="w-4 h-4 text-slate-500" strokeWidth={2} />
                             {isHe ? labelHe : labelEn}
                           </button>
                         ))}
@@ -137,11 +137,11 @@ export function ConversationsView({ locale, onSelectedContactChange }: Conversat
               rows={3}
               className="flex-1 min-w-0 px-4 py-3 rounded-xl border-0 bg-white/90 text-gray-900 placeholder-gray-500 focus:ring-0 focus:bg-white outline-none text-base min-h-[100px] resize-none"
             />
-            <motion.button type="button" onClick={handleSend} className="w-12 h-12 rounded-xl bg-[#008080] text-white hover:bg-[#006666] transition-colors shrink-0 flex items-center justify-center shadow-sm mt-0.5" whileTap={{ scale: 0.95 }} aria-label="Send">
+            <motion.button type="button" onClick={handleSend} className="w-12 h-12 rounded-full bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors shrink-0 flex items-center justify-center shadow-sm mt-0.5" whileTap={{ scale: 0.95 }} aria-label="Send">
               <Send className="w-6 h-6" strokeWidth={2} />
             </motion.button>
           </div>
-          <button type="button" onClick={() => setSlideMode("chat")} className="mt-2 text-xs text-[#008080] hover:underline font-medium">
+          <button type="button" onClick={() => setSlideMode("chat")} className="mt-2 text-xs text-slate-600 hover:underline font-medium">
             {isHe ? "פתח צ'אט מלא" : "Open full chat"}
           </button>
         </div>
@@ -151,9 +151,9 @@ export function ConversationsView({ locale, onSelectedContactChange }: Conversat
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">{isHe ? "כלים" : "Tools"}</p>
           <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
             {TOOLS.map(({ key, href, labelEn, labelHe, icon: Icon }) => (
-              <Link key={key} href={href} className="flex flex-col items-center gap-2 py-3 px-2 rounded-xl border border-gray-200 bg-white hover:bg-[#008080]/08 hover:border-[#008080]/30 text-gray-700 hover:text-gray-900 transition-colors">
-                <div className="w-9 h-9 rounded-lg bg-[#008080]/10 flex items-center justify-center">
-                  <Icon className="w-4 h-4 text-[#008080]" strokeWidth={2} />
+              <Link key={key} href={href} className="flex flex-col items-center gap-2 py-3 px-2 rounded-[32px] border border-slate-200 bg-white hover:bg-slate-50 text-gray-700 hover:text-gray-900 transition-colors shadow-lg">
+                <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center">
+                  <Icon className="w-4 h-4 text-slate-500" strokeWidth={2} />
                 </div>
                 <span className="text-xs font-medium text-center leading-tight">{isHe ? labelHe : labelEn}</span>
               </Link>
@@ -171,13 +171,13 @@ export function ConversationsView({ locale, onSelectedContactChange }: Conversat
             {recentNotes.slice(0, 5).map((note) => (
               <li key={note.id}>
                 <Link href="/dashboard" className="flex items-center gap-2 py-2.5 px-3 rounded-xl hover:bg-white text-left border border-transparent hover:border-gray-200 transition-colors">
-                  <Pencil className="w-4 h-4 text-[#008080] shrink-0" strokeWidth={2} />
+                  <Pencil className="w-4 h-4 text-slate-500 shrink-0" strokeWidth={2} />
                   <span className="text-sm text-gray-700 truncate">{note.title || (isHe ? "ללא כותרת" : "Untitled")}</span>
                 </Link>
               </li>
             ))}
             <li>
-              <Link href="/dashboard" className="flex items-center gap-2 py-2.5 px-3 rounded-xl text-[#008080] hover:bg-[#008080]/10 text-sm font-medium">
+              <Link href="/dashboard" className="flex items-center gap-2 py-2.5 px-3 rounded-xl text-slate-600 hover:bg-slate-50 text-sm font-medium">
                 <Plus className="w-4 h-4" strokeWidth={2.5} /> {isHe ? "פתק חדש" : "New Note"}
               </Link>
             </li>
@@ -198,7 +198,7 @@ export function ConversationsView({ locale, onSelectedContactChange }: Conversat
             <ChevronLeft className="w-5 h-5" strokeWidth={2} />
           </button>
           <span className="text-base font-semibold text-gray-900 flex items-center gap-2">
-            <CircleCheck className="w-5 h-5 text-[#008080]" strokeWidth={2} />
+            <CircleCheck className="w-5 h-5 text-slate-500" strokeWidth={2} />
             {isHe ? "אולין AI" : "Ollin AI"}
           </span>
         </div>
@@ -207,13 +207,13 @@ export function ConversationsView({ locale, onSelectedContactChange }: Conversat
           {messages.map((m: { id: string; role?: string; content?: string; type?: string; taskTitle?: string }) =>
             "role" in m ? (
               <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${m.role === "user" ? "bg-[#008080] text-white" : "bg-white border border-gray-200 text-gray-900 shadow-sm"}`}>
+                <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${m.role === "user" ? "bg-slate-100 text-slate-800 border border-slate-200 shadow-sm" : "bg-white border border-gray-200 text-gray-900 shadow-sm"}`}>
                   {typeof m.content === "string" ? m.content : ""}
                 </div>
               </div>
             ) : "type" in m && m.type === "taskAdded" ? (
               <div key={m.id} className="flex justify-center">
-                <div className="inline-flex items-center gap-2 rounded-full bg-[#008080]/10 border border-[#008080]/30 text-[#008080] px-3 py-1.5 text-xs font-medium">
+                <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 border border-slate-200 text-slate-600 px-3 py-1.5 text-xs font-medium">
                   <ListTodo className="w-4 h-4 shrink-0" strokeWidth={2} />
                   {isHe ? "נוסף ללוח" : "Added to Board"}: <span className="font-semibold truncate max-w-[140px]">{m.taskTitle}</span>
                 </div>
@@ -227,7 +227,7 @@ export function ConversationsView({ locale, onSelectedContactChange }: Conversat
             <div className="flex flex-col gap-1 shrink-0">
               <div className="flex items-center gap-1">
                 <div className="relative">
-                  <motion.button type="button" onClick={() => setPlusMenuOpen((o) => !o)} className="w-11 h-11 rounded-xl bg-[#008080] text-white flex items-center justify-center hover:bg-[#006666] transition-colors" whileTap={{ scale: 0.95 }} aria-label="Add">
+                  <motion.button type="button" onClick={() => setPlusMenuOpen((o) => !o)} className="w-11 h-11 rounded-xl bg-white border border-slate-200 text-slate-600 flex items-center justify-center hover:bg-slate-50 transition-colors shadow-sm" whileTap={{ scale: 0.95 }} aria-label="Add">
                     <Plus className="w-5 h-5" strokeWidth={2.5} />
                   </motion.button>
                   <AnimatePresence>
@@ -236,8 +236,8 @@ export function ConversationsView({ locale, onSelectedContactChange }: Conversat
                         <div className="fixed inset-0 z-40" onClick={() => setPlusMenuOpen(false)} aria-hidden />
                         <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }} className="absolute bottom-full left-0 mb-2 rounded-xl bg-white border border-gray-200 py-2 z-50 min-w-[160px] shadow-lg">
                           {PLUS_ACTIONS.map(({ action, labelEn, labelHe, icon: Icon }) => (
-                            <button key={action} type="button" onClick={() => { addFormMessage(action); setPlusMenuOpen(false); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-[#008080]/10 rounded-lg">
-                              <Icon className="w-4 h-4 text-[#008080]" strokeWidth={2} />
+                            <button key={action} type="button" onClick={() => { addFormMessage(action); setPlusMenuOpen(false); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-slate-50 rounded-lg">
+                              <Icon className="w-4 h-4 text-slate-500" strokeWidth={2} />
                               {isHe ? labelHe : labelEn}
                             </button>
                           ))}
@@ -254,9 +254,9 @@ export function ConversationsView({ locale, onSelectedContactChange }: Conversat
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
               placeholder={isHe ? "הודעה לאולין..." : "Message Ollin..."}
-              className="flex-1 min-w-0 px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-[#008080]/20 focus:border-[#008080] outline-none text-sm min-h-[44px]"
+              className="flex-1 min-w-0 px-4 py-3 rounded-xl border border-slate-200 bg-gray-50 text-gray-900 placeholder-gray-500 focus:ring-0 focus:border-slate-300 outline-none text-sm min-h-[44px]"
             />
-            <motion.button type="button" onClick={handleSend} className="p-3 rounded-xl bg-[#008080] text-white hover:bg-[#006666] transition-colors shrink-0 min-h-[44px] flex items-center justify-center" whileTap={{ scale: 0.95 }} aria-label="Send">
+            <motion.button type="button" onClick={handleSend} className="p-3 rounded-full bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors shrink-0 min-h-[44px] flex items-center justify-center shadow-sm" whileTap={{ scale: 0.95 }} aria-label="Send">
               <Send className="w-5 h-5" strokeWidth={2} />
             </motion.button>
           </div>

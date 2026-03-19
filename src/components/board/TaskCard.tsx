@@ -197,7 +197,13 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
 
   const priority = task.priority ?? "low";
   const priorityBarColor =
-    priority === "high" ? "bg-red-500" : priority === "medium" ? "bg-amber-500" : "bg-[var(--clean-accent)]";
+    priority === "high" ? "bg-rose-400" : priority === "medium" ? "bg-amber-400" : "bg-emerald-400";
+  const priorityMeta =
+    priority === "high"
+      ? { label: locale === "he" ? "גבוה" : "High", dotClass: "bg-rose-400", textClass: "text-rose-700" }
+      : priority === "medium"
+        ? { label: locale === "he" ? "בינוני" : "Medium", dotClass: "bg-amber-400", textClass: "text-amber-700" }
+        : { label: locale === "he" ? "נמוך" : "Low", dotClass: "bg-emerald-400", textClass: "text-emerald-700" };
 
   const dueDateLabel =
     task.dueDate != null
@@ -260,18 +266,17 @@ export function TaskCard({ task, kind, selected, onToggleSelect, contacts = [] }
             onChange={(e) => canCheck && handleDoneChange(e.target.checked)}
             disabled={!canCheck}
             title={!canCheck ? (locale === "he" ? "רק המבצע יכול לסמן כהושלם" : "Only assignees can mark done") : undefined}
-            className="w-4 h-4 border border-[var(--clean-border)] text-[var(--clean-accent)] focus:ring-0 accent-[var(--clean-accent)] disabled:opacity-60 disabled:cursor-not-allowed"
+            className="w-4 h-4 border border-[var(--clean-border)] text-slate-700 focus:ring-0 accent-slate-700 disabled:opacity-60 disabled:cursor-not-allowed"
           />
         </motion.span>
         <div className="min-w-0 flex-1 flex items-center gap-2 flex-wrap">
           <span className={`font-medium text-[13px] tracking-wide truncate ${task.done ? "text-[var(--clean-text-secondary)] line-through" : "text-[var(--clean-text)]"}`}>
             {task.title || "Untitled task"}
           </span>
-          {priority !== "low" && (
-            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${priority === "high" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>
-              {priority === "high" ? (locale === "he" ? "גבוה" : "High") : (locale === "he" ? "בינוני" : "Medium")}
-            </span>
-          )}
+          <span className={`inline-flex items-center gap-1 text-[10px] font-medium ${priorityMeta.textClass}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${priorityMeta.dotClass}`} aria-hidden />
+            {priorityMeta.label}
+          </span>
           {dueDateLabel && (
             <span className="text-[10px] text-[var(--clean-text-secondary)] font-medium">
               {dueDateLabel}

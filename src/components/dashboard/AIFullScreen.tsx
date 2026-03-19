@@ -74,7 +74,7 @@ export function AIFullScreen({ onClose }: AIFullScreenProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-[#f8f9fa]">
-      <header className="flex-shrink-0 flex items-center gap-2 px-3 py-2 border-b border-gray-200 bg-white shadow-sm">
+      <header className="flex-shrink-0 flex items-center gap-2 px-3 py-2 border-b border-slate-200 bg-white shadow-sm">
         <button
           type="button"
           onClick={onClose}
@@ -85,7 +85,7 @@ export function AIFullScreen({ onClose }: AIFullScreenProps) {
           <span className="text-sm font-medium">{isHe ? "חזרה" : "Back"}</span>
         </button>
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <CircleCheck className="w-6 h-6 text-[#008080] shrink-0" strokeWidth={2} />
+          <CircleCheck className="w-6 h-6 text-slate-500 shrink-0" strokeWidth={2} />
           <span className="text-sm font-semibold text-gray-900 truncate">{isHe ? "שיחה עם אולין" : "Chat with Ollin"}</span>
         </div>
       </header>
@@ -100,15 +100,15 @@ export function AIFullScreen({ onClose }: AIFullScreenProps) {
             className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
           >
             <div
-              className={`max-w-[85%] rounded-2xl px-4 py-3 ${
+              className={`max-w-[85%] rounded-[32px] px-4 py-3 shadow-lg ${
                 m.role === "user"
-                  ? "bg-[#008080] text-white"
-                  : "bg-white border border-gray-200 text-gray-900 shadow-sm"
+                  ? "bg-slate-100 text-slate-800 border border-slate-200"
+                  : "bg-white border border-slate-200 text-gray-900"
               }`}
             >
               {m.role === "assistant" && (
                 <div className="flex items-center gap-1.5 mb-1">
-                  <CircleCheck className="w-4 h-4 text-[#008080]" strokeWidth={2} />
+                  <CircleCheck className="w-4 h-4 text-slate-500" strokeWidth={2} />
                   <span className="text-xs font-medium text-gray-500">Ollin</span>
                 </div>
               )}
@@ -124,15 +124,15 @@ export function AIFullScreen({ onClose }: AIFullScreenProps) {
           <>
             <div className="fixed inset-0 z-40" aria-hidden onClick={() => setPlusMenuOpen(false)} />
             <div className="relative z-50 mb-2 px-1">
-              <div className="flex flex-wrap gap-2 p-3 rounded-xl bg-gray-50 border border-gray-200">
+              <div className="flex flex-wrap gap-2 p-3 rounded-[32px] bg-gray-50 border border-slate-200 shadow-lg">
                 {PLUS_ACTIONS.map(({ id, labelEn, labelHe, icon: Icon }) => (
                   <button
                     key={id}
                     type="button"
                     onClick={() => handlePlusAction(id)}
-                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-gray-200 hover:bg-[#008080]/08 hover:border-[#008080]/20 text-sm text-gray-700"
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-sm text-gray-700 shadow-sm"
                   >
-                    <Icon className="w-4 h-4 text-[#008080]" strokeWidth={2} />
+                    <Icon className="w-4 h-4 text-slate-500" strokeWidth={2} />
                     {isHe ? labelHe : labelEn}
                   </button>
                 ))}
@@ -148,7 +148,7 @@ export function AIFullScreen({ onClose }: AIFullScreenProps) {
                 <button
                   type="button"
                   onClick={() => setIntegrationsOpen((o) => !o)}
-                  className="p-2.5 rounded-xl border border-gray-200 bg-[#f8f9fa] text-[#008080] hover:bg-[#008080]/10 transition-colors"
+                  className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors shadow-sm"
                   title={isHe ? "מודל / כלי AI" : "AI model or tool"}
                   aria-label={isHe ? "הגדרות מודל" : "AI model settings"}
                   aria-expanded={integrationsOpen}
@@ -158,7 +158,7 @@ export function AIFullScreen({ onClose }: AIFullScreenProps) {
                 {integrationsOpen && (
                   <>
                     <div className="fixed inset-0 z-40" aria-hidden onClick={() => setIntegrationsOpen(false)} />
-                    <div className="absolute left-0 bottom-full mb-1 z-50 w-52 py-2 rounded-xl bg-white border border-gray-200 shadow-lg">
+                    <div className="absolute left-0 bottom-full mb-1 z-50 w-52 py-2 rounded-[32px] bg-white border border-slate-200 shadow-lg">
                       <div className="px-3 py-1.5 border-b border-gray-100">
                         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{isHe ? "מודל / כלי" : "Model / Tool"}</p>
                       </div>
@@ -167,7 +167,7 @@ export function AIFullScreen({ onClose }: AIFullScreenProps) {
                           key={opt.id}
                           type="button"
                           onClick={() => { setSelectedAI(opt.id); setIntegrationsOpen(false); }}
-                          className={`w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm ${selectedAI === opt.id ? "bg-[#008080]/10 text-[#008080] font-medium" : "text-gray-700 hover:bg-gray-50"}`}
+                          className={`w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm ${selectedAI === opt.id ? "bg-slate-100 text-slate-700 font-medium" : "text-gray-700 hover:bg-gray-50"}`}
                         >
                           {isHe ? opt.labelHe : opt.labelEn}
                         </button>
@@ -179,7 +179,7 @@ export function AIFullScreen({ onClose }: AIFullScreenProps) {
               <button
                 type="button"
                 onClick={() => setPlusMenuOpen((o) => !o)}
-                className="p-2.5 rounded-xl border border-gray-200 bg-[#f8f9fa] text-[#008080] hover:bg-[#008080]/10 transition-colors"
+                className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors shadow-sm"
                 aria-label={isHe ? "פעולות" : "Actions"}
                 aria-expanded={plusMenuOpen}
               >
@@ -193,12 +193,12 @@ export function AIFullScreen({ onClose }: AIFullScreenProps) {
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
             placeholder={isHe ? "שאל את אולין..." : "Talk to Ollin..."}
             rows={3}
-            className="flex-1 min-h-[80px] max-h-[160px] px-4 py-3 rounded-2xl border border-gray-200 bg-[#f8f9fa] text-base text-gray-900 placeholder-gray-500 resize-none focus:ring-2 focus:ring-[#008080]/30 focus:border-[#008080] outline-none"
+            className="flex-1 min-h-[80px] max-h-[160px] px-4 py-3 rounded-[32px] border border-slate-200 bg-[#f8f9fa] text-base text-gray-900 placeholder-gray-500 resize-none focus:ring-0 focus:border-slate-300 outline-none"
           />
           <button
             type="button"
             onClick={handleSend}
-            className="p-3 rounded-2xl bg-[#008080] text-white hover:bg-[#006666] transition-colors shrink-0"
+            className="p-3 rounded-full bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors shrink-0 shadow-sm"
             aria-label={isHe ? "שלח" : "Send"}
           >
             <Send className="w-5 h-5" strokeWidth={2} />
