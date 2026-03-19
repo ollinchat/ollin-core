@@ -361,6 +361,59 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
     ...activeEvents.map((e) => ({ ...e, type: "event" as const })),
   ].sort((a, b) => a.startAt - b.startAt);
 
+  /** Red / Amber / Ollin turquoise — minimalist rings, must tap before Send */
+  const renderQuickAddPriorityRow = () => (
+    <div
+      className="flex flex-wrap items-center gap-4 px-4 py-3 border-t border-[var(--clean-border)] bg-white"
+      role="group"
+      aria-label={locale === "he" ? "עדיפות משימה" : "Task priority"}
+    >
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 shrink-0">
+        {locale === "he" ? "עדיפות" : "Priority"}
+      </span>
+      <div className="flex items-center gap-5">
+        {(
+          [
+            { id: "high" as const, border: "border-red-500", fill: "bg-red-500" },
+            { id: "medium" as const, border: "border-amber-400", fill: "bg-amber-400" },
+            { id: "low" as const, border: "border-[#008080]", fill: "bg-[#008080]" },
+          ] as const
+        ).map((p) => {
+          const selected = quickAddPriority === p.id;
+          return (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => setQuickAddPriority(p.id)}
+              aria-pressed={selected}
+              title={
+                p.id === "high"
+                  ? locale === "he"
+                    ? "גבוהה"
+                    : "High"
+                  : p.id === "medium"
+                    ? locale === "he"
+                      ? "בינונית"
+                      : "Medium"
+                    : locale === "he"
+                      ? "נמוכה"
+                      : "Low"
+              }
+              className="p-1 rounded-full transition-transform outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 hover:scale-105"
+            >
+              <span
+                className={`block h-7 w-7 rounded-full border-2 ${p.border} ${p.fill} shadow-sm ${
+                  selected ? "ring-2 ring-offset-2 ring-slate-900" : "opacity-90 hover:opacity-100"
+                }`}
+                aria-hidden
+              />
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   if (boardLoading) return <SkeletonBoard />;
 
   const boardHeader = (
@@ -386,8 +439,12 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
   );
 
   return (
-    <PanelWrapper header={boardHeader} className="clean-app w-full bg-white min-h-full">
-      <div className="p-3 min-h-full bg-white">
+    <PanelWrapper header={boardHeader} fillParent className="clean-app w-full bg-white min-h-0 flex-1">
+      {/*
+        Scrollable body: PanelWrapper’s inner wrapper uses overflow-hidden + flex; this child must be
+        flex-1 min-h-0 overflow-y-auto so the task list scrolls inside the dashboard panel (no h-screen trap).
+      */}
+      <div className="flex flex-1 flex-col min-h-0 min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain p-3 bg-white [touch-action:pan-y]">
         {mainTab === "tasks" && (
           <>
             {/* Task sub-tabs: GIVEN | RECEIVED | CHECKLISTS (text only) */}
@@ -473,7 +530,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                     <button
                       type="button"
                       onClick={() => { setQuickAddChecklistMode(false); setQuickAddChecklistItems([""]); }}
-                      className="text-[12px] font-medium text-[var(--clean-accent)] hover:underline"
+                      className="text-[12px] font-medium text-slate-700 hover:underline"
                     >
                       {locale === "he" ? "← משימה בודדת" : "← Single task"}
                     </button>
@@ -505,11 +562,12 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                     <button
                       type="button"
                       onClick={() => setQuickAddChecklistItems((prev) => [...prev, ""])}
-                      className="w-full py-2 text-[12px] font-medium text-[var(--clean-accent)] border border-dashed border-[var(--clean-border)] rounded hover:bg-[var(--clean-accent)]/5"
+                      className="w-full py-2 text-[12px] font-medium text-slate-600 border border-dashed border-[var(--clean-border)] rounded hover:bg-slate-50"
                     >
                       + {locale === "he" ? "הוסף פריט" : "Add item"}
                     </button>
                   </div>
+                  {renderQuickAddPriorityRow()}
                 </div>
               ) : (
                 <>
@@ -527,11 +585,12 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                     rows={3}
                     className="w-full min-h-[56px] max-h-32 px-4 py-3 bg-transparent text-[var(--clean-text)] placeholder-[var(--clean-text-secondary)] text-[13px] font-medium resize-none border-0 focus:ring-0 focus:outline-none tracking-wide"
                   />
+                  {renderQuickAddPriorityRow()}
                   <div className="px-4 pb-2">
                     <button
                       type="button"
                       onClick={() => setQuickAddChecklistMode(true)}
-                      className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[var(--clean-text-secondary)] hover:text-[var(--clean-accent)] transition-colors"
+                      className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[var(--clean-text-secondary)] hover:text-slate-900 transition-colors"
                     >
                       <ClipboardList className="w-3.5 h-3.5" strokeWidth={1.75} />
                       {locale === "he" ? "רשימת משימות" : "Checklist"}
@@ -546,7 +605,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                     type="button"
                     onClick={() => { setQuickAddAttachMenuOpen((o) => !o); setQuickAddUserPickerOpen(false); setQuickAddDuePickerOpen(false); }}
                     className={`p-2 rounded border border-[var(--clean-border)] transition-all duration-150 flex items-center justify-center ${
-                      quickAddAttachments.length > 0 ? "text-[var(--clean-accent)] bg-[var(--clean-accent)]/10 border-[var(--clean-accent)]/40" : "text-[var(--clean-text-secondary)] hover:text-[var(--clean-accent)] hover:border-[#E2E8F0] bg-white"
+                      quickAddAttachments.length > 0 ? "text-slate-800 bg-slate-100 border-slate-300" : "text-[var(--clean-text-secondary)] hover:text-slate-900 hover:border-[#E2E8F0] bg-white"
                     }`}
                     aria-expanded={quickAddAttachMenuOpen}
                     aria-label={locale === "he" ? "צרף" : "Attach"}
@@ -578,7 +637,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                       onClick={() => { setQuickAddUserPickerOpen((o) => !o); setQuickAddAttachMenuOpen(false); setQuickAddDuePickerOpen(false); }}
                       className={`inline-flex items-center gap-1.5 px-2.5 py-2 rounded border text-[12px] font-medium transition-all duration-150 ${
                         quickAddAssigneeIds.length > 0
-                          ? "border-[var(--clean-accent)]/50 text-[var(--clean-accent)] bg-[var(--clean-accent)]/5"
+                          ? "border-slate-400 text-slate-800 bg-slate-50"
                           : "border-[var(--clean-border)] text-[var(--clean-text-secondary)] hover:text-[var(--clean-text)] hover:border-[#E2E8F0] bg-white"
                       }`}
                       aria-expanded={quickAddUserPickerOpen}
@@ -616,7 +675,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                           locale={locale}
                           placeholder={locale === "he" ? "בחר צוות" : "Select team members"}
                         />
-                        <button type="button" onClick={() => setQuickAddUserPickerOpen(false)} className="mt-2 w-full py-1.5 text-[12px] font-medium text-[var(--clean-accent)] border border-[var(--clean-border)] rounded">
+                        <button type="button" onClick={() => setQuickAddUserPickerOpen(false)} className="mt-2 w-full py-1.5 text-[12px] font-medium text-slate-800 border border-[var(--clean-border)] rounded">
                           {locale === "he" ? "סגור" : "Done"}
                         </button>
                       </div>
@@ -677,7 +736,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                   className={`p-2 rounded border transition-all duration-150 flex items-center justify-center ${
                     quickAddNoComments
                       ? "bg-red-600 text-white border-red-600 ring-2 ring-red-500/50"
-                      : "border-[var(--clean-border)] text-[var(--clean-text-secondary)] hover:text-[var(--clean-accent)] hover:border-[#E2E8F0] bg-white"
+                      : "border-[var(--clean-border)] text-[var(--clean-text-secondary)] hover:text-slate-900 hover:border-[#E2E8F0] bg-white"
                   }`}
                   title={locale === "he" ? "ביטול הודעות — תגובות נעולות" : "Disable comments — comments locked"}
                   aria-label={locale === "he" ? "ביטול הודעות" : "Disable comments"}
@@ -688,10 +747,10 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                 <button
                   type="button"
                   onClick={() => handleQuickAdd(taskSubTab)}
-                  className="p-2 bg-[var(--clean-accent)] text-white hover:bg-[var(--clean-accent-hover)] transition-all duration-150 flex items-center justify-center border-0 rounded"
+                  className="p-2 rounded border border-slate-200 bg-white hover:bg-slate-50 transition-all duration-150 flex items-center justify-center shadow-sm"
                   aria-label={locale === "he" ? "שלח משימה" : "Add task"}
                 >
-                  <Send className="w-4 h-4" strokeWidth={2.5} />
+                  <Send className="w-4 h-4 text-[#008080]" strokeWidth={2.5} />
                 </button>
               </div>
                   </>
@@ -756,7 +815,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
               <button
                 type="button"
                 onClick={() => setMeetingEventModal("meeting")}
-                className="px-4 py-2.5 rounded-sm border border-gray-100 bg-[#008080] text-white text-sm font-semibold flex items-center gap-1"
+                className="px-4 py-2.5 rounded-sm border border-gray-200 bg-slate-900 text-white text-sm font-semibold flex items-center gap-1"
               >
                 <Plus className="w-4 h-4" />
                 {locale === "he" ? "פגישה חדשה" : "New Meeting"}
@@ -1045,7 +1104,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
                             <span className="tabular-nums">{score}%</span>
                             <div className="w-32 h-1.5 bg-gray-100 rounded-sm">
                               <div
-                                className="h-full bg-[#008080]"
+                                className="h-full bg-slate-700"
                                 style={{ width: `${score}%` }}
                               />
                             </div>
@@ -1083,7 +1142,7 @@ export function StrategicBoard({ locale, onBack, initialMainTab }: StrategicBoar
               <button
                 type="button"
                 onClick={() => setMeetingEventModal("event")}
-                className="px-4 py-2.5 rounded-sm border border-gray-100 bg-[#008080] text-white text-sm font-semibold flex items-center gap-1"
+                className="px-4 py-2.5 rounded-sm border border-gray-200 bg-slate-900 text-white text-sm font-semibold flex items-center gap-1"
               >
                 <Plus className="w-4 h-4" />
                 {locale === "he" ? "אירוע חדש" : "New Event"}

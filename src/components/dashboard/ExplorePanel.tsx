@@ -38,9 +38,8 @@ import { analyzeLocalSignals } from "@/lib/explore/local-signals";
 import { getCurrentPosition, haversineMeters, HAIFA_CENTER } from "@/lib/explore/geolocation";
 import { getExploreModules } from "@/lib/explore/modules";
 import { useArchitect } from "@/contexts/ArchitectContext";
-import { PanelWrapper } from "@/components/dashboard/PanelWrapper";
-
-const TEAL = "#475569";
+/** Ollin brand turquoise — use for match %, active tabs, key accents only */
+const BRAND_TEAL = "#008080";
 const MY_LOCATION_LABEL = "My Location"; // Simulated; in production from geolocation
 
 function formatDistance(meters: number): string {
@@ -740,7 +739,7 @@ function getExploreCardVisual(post: ExplorePost): {
 } {
   const t = `${post.title} ${post.description} ${post.aiSummary ?? ""}`.toLowerCase();
   if (/real estate|property|rent|mortgage|apartment|housing|נדל|דירה|נכס/.test(t)) {
-    return { gradient: "from-slate-800 via-emerald-900/90 to-slate-900", Icon: Home, iconClass: "text-emerald-200/90" };
+    return { gradient: "from-slate-800 via-cyan-900/85 to-slate-900", Icon: Home, iconClass: "text-cyan-200/90" };
   }
   if (/tech|software|ai |startup|developer|engineer|data |cyber|saas|fintech/.test(t)) {
     return { gradient: "from-violet-800 via-indigo-900 to-slate-900", Icon: Code, iconClass: "text-violet-200/90" };
@@ -797,7 +796,14 @@ function SmartContentCard({
           </div>
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/45 to-transparent pointer-events-none" />
-        <span className="absolute top-2 end-2 inline-flex items-center px-2 py-0.5 rounded-full bg-slate-900/5 text-slate-700 text-[10px] font-bold border border-slate-200 shadow-sm backdrop-blur-md">
+        <span
+          className="absolute top-2 end-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border shadow-sm backdrop-blur-md"
+          style={{
+            backgroundColor: "rgba(0, 128, 128, 0.12)",
+            color: BRAND_TEAL,
+            borderColor: "rgba(0, 128, 128, 0.35)",
+          }}
+        >
           {score}% {isHe ? "התאמה" : "match"}
         </span>
       </div>
@@ -1064,7 +1070,10 @@ function PostCard({
         </div>
         {/* Prominent distance badge (teal) — top-right: "100m from you" */}
         {distanceDisplay && (
-          <div className="absolute top-2 right-2 rounded-lg bg-slate-700 text-white px-2.5 py-1.5 text-sm font-bold shadow-lg whitespace-nowrap">
+          <div
+            className="absolute top-2 right-2 rounded-lg text-white px-2.5 py-1.5 text-sm font-bold shadow-lg whitespace-nowrap"
+            style={{ backgroundColor: BRAND_TEAL }}
+          >
             {distanceDisplay} {isHe ? "ממך" : "from you"}
           </div>
         )}
@@ -2016,7 +2025,7 @@ export function ExplorePanel() {
                 onPointerUp={onTabPointerUp}
                 onPointerCancel={onTabPointerUp}
                 onClick={() => handleTabActivate(tab.id)}
-                className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-colors truncate ${tabsEditMode && tab.id !== "all" ? "pe-9" : ""} ${activeFeedTab === tab.id ? "bg-slate-100 text-slate-700" : "text-gray-600 hover:bg-gray-200"} ${tabsEditMode ? "ring-1 ring-slate-300" : ""}`}
+                className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-colors truncate ${tabsEditMode && tab.id !== "all" ? "pe-9" : ""} ${activeFeedTab === tab.id ? "bg-[#008080]/12 text-[#008080] font-semibold" : "text-gray-600 hover:bg-gray-200"} ${tabsEditMode ? "ring-1 ring-slate-300" : ""}`}
               >
                 {isHe ? tab.labelHe : tab.labelEn}
               </button>
@@ -2042,7 +2051,7 @@ export function ExplorePanel() {
         </nav>
       </aside>
 
-      {/* Main: header + tabs + feed via shared PanelWrapper — min-h-0 so scroll chain works */}
+      {/* Main: header → tabs → search → feed; single overflow-y-auto column for reliable scroll */}
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
       {/* Location popover: only when clicking "Set location" */}
       {locationPillOpen && (
@@ -2081,24 +2090,22 @@ export function ExplorePanel() {
         </>
       )}
 
-        <PanelWrapper
-          fillParent
-          className="min-w-0 flex-1 min-h-0"
-        >
+        {/* Single scroll column: PanelWrapper body used overflow-hidden and blocked touch scroll */}
+        <div className="flex flex-col flex-1 min-w-0 min-h-0">
             <div
               ref={feedScrollRef}
               onScroll={handleFeedScroll}
-              className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden h-full"
+              className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain [touch-action:pan-y]"
               style={{ WebkitOverflowScrolling: "touch" }}
             >
             <header className="px-3 py-2.5 lg:px-6 flex flex-wrap items-center gap-2">
-              <Compass className="w-5 h-5 text-slate-500 shrink-0" strokeWidth={2} />
+              <Compass className="w-5 h-5 shrink-0 text-[#008080]" strokeWidth={2} />
               <h2 className="text-lg font-semibold text-gray-900 shrink-0 lg:hidden">{isHe ? "גילוי" : "Explore"}</h2>
               <button type="button" onClick={() => setDevModeOpen((o) => !o)} className="p-1.5 rounded-xl hover:bg-gray-100 text-gray-400 hover:text-slate-600" title={isHe ? "מצב מפתח (Ctrl+Shift+D)" : "Developer mode (Ctrl+Shift+D)"} aria-label="Dev mode">
                 <Code className="w-4 h-4" strokeWidth={2} />
               </button>
             </header>
-            <div className="lg:hidden flex flex-col gap-1 border-b border-gray-200 p-2 overflow-hidden">
+            <div className="lg:hidden flex flex-col gap-1 border-b border-gray-200 p-2 shrink-0">
               {tabsEditMode && (
                 <p className="text-[10px] text-slate-600 font-medium px-1">{isHe ? "לחץ מחוץ לטאבים או Esc לסיום" : "Tap outside tabs or Esc to exit"}</p>
               )}
@@ -2127,7 +2134,7 @@ export function ExplorePanel() {
                         tabsEditMode && tab.id !== "all" ? "pe-9" : ""
                       } ${
                         activeFeedTab === tab.id
-                          ? "bg-white text-gray-900 border-slate-300 shadow-md"
+                          ? "bg-white text-[#008080] border-[#008080]/50 shadow-md ring-1 ring-[#008080]/20"
                           : "text-gray-600 bg-white border-gray-200/80 shadow-sm hover:bg-gray-50"
                       } ${tabsEditMode ? "ring-2 ring-slate-300" : ""}`}
                     >
@@ -2175,7 +2182,7 @@ export function ExplorePanel() {
                   type="button"
                   onClick={() => setLocationPillOpen((o) => !o)}
                   className={`flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${
-                    locationPillOpen ? "bg-slate-100 text-slate-700 border-slate-200" : "bg-transparent border-gray-200 text-slate-400 hover:bg-gray-100/80 hover:text-slate-600"
+                    locationPillOpen ? "bg-[#008080]/10 text-[#008080] border-[#008080]/35" : "bg-transparent border-gray-200 text-slate-400 hover:bg-gray-100/80 hover:text-slate-600"
                   }`}
                   title={isHe ? "הגדר מיקום ורדיוס" : "Set location and radius"}
                   aria-label={isHe ? "הגדר מיקום" : "Set location"}
@@ -2258,21 +2265,21 @@ export function ExplorePanel() {
             )}
 
             {/* Scan Area: Ollin is scanning local signals — pulse/radar + real-time ingestion */}
-            <div className="explore-scan-radar relative flex items-center gap-2 px-3 py-2.5 rounded-2xl bg-white/70 backdrop-blur-md border border-slate-200 shadow-sm mb-2">
+            <div className="explore-scan-radar relative flex items-center gap-2 px-3 py-2.5 rounded-2xl bg-white/70 backdrop-blur-md border border-[#008080]/25 shadow-sm mb-2">
               <span className="relative flex h-8 w-8 shrink-0 items-center justify-center">
-                <span className="absolute inset-0 rounded-full border border-slate-300" aria-hidden />
-                <span className="absolute inset-[2px] rounded-full border-t border-slate-500 border-r-transparent border-b-transparent animate-spin" aria-hidden />
-                <span className="absolute inset-[3px] rounded-full bg-slate-100 blur-sm opacity-70" aria-hidden />
-                <ScanLine className="relative h-4 w-4 text-slate-500" strokeWidth={2} />
+                <span className="absolute inset-0 rounded-full border border-[#008080]/30" aria-hidden />
+                <span className="absolute inset-[2px] rounded-full border-t border-[#008080] border-r-transparent border-b-transparent animate-spin" aria-hidden />
+                <span className="absolute inset-[3px] rounded-full bg-[#008080]/10 blur-sm opacity-70" aria-hidden />
+                <ScanLine className="relative h-4 w-4 text-[#008080]" strokeWidth={2} />
               </span>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-slate-600">{isHe ? "אולין סורקת אותות מקומיים..." : "Ollin is scanning local signals..."}</p>
+                <p className="text-xs font-semibold text-[#006666]">{isHe ? "אולין סורקת אותות מקומיים..." : "Ollin is scanning local signals..."}</p>
                 <p className="text-[10px] text-gray-500">{liveSignalsSource ? `${isHe ? "מקור" : "Source"}: ${liveSignalsSource}` : (isHe ? "מעדכן תוכן בזמן אמת" : "Real-time data ingestion")}</p>
               </div>
               <span className="flex gap-0.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-pulse" style={{ animationDelay: "0ms" }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-pulse" style={{ animationDelay: "160ms" }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-pulse" style={{ animationDelay: "320ms" }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#008080]/70 animate-pulse" style={{ animationDelay: "0ms" }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#008080]/70 animate-pulse" style={{ animationDelay: "160ms" }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#008080]/70 animate-pulse" style={{ animationDelay: "320ms" }} />
               </span>
             </div>
             {/* Detail view: full card when one is selected (like email detail) — fast, no lag */}
@@ -2343,7 +2350,7 @@ export function ExplorePanel() {
             </div>
             </div>
             </div>
-        </PanelWrapper>
+        </div>
 
           {showFloatingSearch && (
             <button

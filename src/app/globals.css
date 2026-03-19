@@ -29,8 +29,8 @@
   --clean-text: #1E293B;
   --clean-text-secondary: #64748B;
   --clean-border: #F1F5F9;
-  --clean-accent: #475569;
-  --clean-accent-hover: #334155;
+  --clean-accent: #008080;
+  --clean-accent-hover: #006666;
 }
 
 /* Clean card: white, 1px border, no shadow, sharp */
