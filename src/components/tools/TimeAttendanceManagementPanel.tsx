@@ -6,6 +6,8 @@ import { useLocale } from "@/contexts/LocaleContext";
 import { useTimeClock } from "@/contexts/TimeClockContext";
 import { useContacts } from "@/contexts/ContactsContext";
 import { t } from "@/lib/translations";
+import { getCurrentAreaLabel } from "@/lib/timeclock-geo";
+import { generateUUID } from "@/lib/uuid";
 import {
   MapPin,
   ChevronLeft,
@@ -15,8 +17,8 @@ import {
   Pencil,
   Check,
   User,
-  LogIn,
-  LogOut,
+  Loader2,
+  Plus,
 } from "lucide-react";
 import type { TimeClockEntry } from "@/lib/timeclock-types";
 
@@ -117,13 +119,12 @@ export function TimeAttendanceManagementPanel({
   const [currency, setCurrency] = useState<"ILS" | "USD" | "EUR">("ILS");
   const [contactSearch, setContactSearch] = useState<Record<string, string>>({});
   const summaryBlockRef = useRef<HTMLDivElement>(null);
-  const [note, setNote] = useState("");
+  const [timerBusy, setTimerBusy] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [clockOutSummary, setClockOutSummary] = useState<{
     totalMs: number;
     startAddress: string;
     endAddress: string;
-    note: string;
     outEntryId: string | null;
   } | null>(null);
   const [clockOutPopupNotes, setClockOutPopupNotes] = useState("");
@@ -134,6 +135,7 @@ export function TimeAttendanceManagementPanel({
   const latest = entries[0];
   const isClockedIn = latest?.type === "in";
   const clockInTime = isClockedIn ? latest.timestamp : 0;
+  const isHe = locale === "he";
 
   useEffect(() => {
     if (!isClockedIn || !clockInTime) return;
@@ -143,25 +145,36 @@ export function TimeAttendanceManagementPanel({
     return () => clearInterval(id);
   }, [isClockedIn, clockInTime]);
 
-  const handlePanelClockToggle = async () => {
-    const noteVal = note.trim() || undefined;
-    if (isClockedIn) {
+  /** Main timer block: start (READY) / stop → summary modal (no separate Clock In / note row). */
+  const handleMainTimerClick = async () => {
+    if (timerBusy) return;
+    if (!isClockedIn) {
+      setTimerBusy(true);
+      try {
+        const area = (await getCurrentAreaLabel()).trim();
+        await clockIn(undefined, area || undefined);
+      } finally {
+        setTimerBusy(false);
+      }
+      return;
+    }
+    setTimerBusy(true);
+    try {
       const inEntry = entries.find((e) => e.type === "in");
-      const startAddress = inEntry?.address || inEntry?.label || "—";
-      const totalMs = inEntry ? Date.now() - inEntry.timestamp : 0;
-      await clockOut(noteVal);
-      setNote("");
+      if (!inEntry) return;
+      const totalMs = Date.now() - inEntry.timestamp;
+      const startAddress = inEntry.address || inEntry.label || (isHe ? "לא ידוע" : "Unknown");
+      const exitArea = (await getCurrentAreaLabel()).trim();
+      await clockOut(undefined, exitArea || undefined);
       setClockOutSummary({
         totalMs,
         startAddress,
-        endAddress: "—",
-        note: noteVal ?? "",
+        endAddress: exitArea || "—",
         outEntryId: null,
       });
-      setClockOutPopupNotes(noteVal ?? "");
-    } else {
-      await clockIn(noteVal);
-      setNote("");
+      setClockOutPopupNotes("");
+    } finally {
+      setTimerBusy(false);
     }
   };
 
@@ -187,6 +200,23 @@ export function TimeAttendanceManagementPanel({
     try {
       localStorage.setItem("ollin_gps_board_locations", JSON.stringify(next));
     } catch (_) {}
+  };
+
+  const addNewBoard = () => {
+    const id = generateUUID();
+    const next: BoardLocation[] = [
+      ...boardLocations,
+      {
+        boardId: id,
+        name: isHe ? `לוח ${boardLocations.length + 1}` : `Board ${boardLocations.length + 1}`,
+        address: "",
+        radiusMeters: 500,
+        restrictLocation: false,
+        assignedUserIds: [],
+      },
+    ];
+    saveBoardLocations(next);
+    setAdminOpen(true);
   };
 
   const updateBoardLocation = (boardId: string, field: keyof BoardLocation, value: string | number | boolean | string[]) => {
@@ -292,7 +322,7 @@ export function TimeAttendanceManagementPanel({
           `<tr><td>${new Date(e.timestamp).toLocaleString(locale === "he" ? "he-IL" : "en-US")}</td><td>${e.type}</td><td>${e.note ?? ""}</td><td>${e.label ?? (e.lat != null ? `${e.lat}, ${e.lng}` : "")}</td></tr>`
       )
       .join("");
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Time Clock Log</title><style>body{font-family:system-ui,sans-serif;padding:24px;} table{border-collapse:collapse;width:100%;} th,td{border:1px solid #ddd;padding:8px 12px;text-align:left;} th{background:#0d9488;color:#fff;}</style></head><body><h1>Time Clock Log</h1><p>Exported ${new Date().toLocaleString()}</p><table><thead><tr><th>Date</th><th>Type</th><th>Note</th><th>Location</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Time Clock Log</title><style>body{font-family:system-ui,sans-serif;padding:24px;} table{border-collapse:collapse;width:100%;} th,td{border:1px solid #ddd;padding:8px 12px;text-align:left;} th{background:#008080;color:#fff;}</style></head><body><h1>Time Clock Log</h1><p>Exported ${new Date().toLocaleString()}</p><table><thead><tr><th>Date</th><th>Type</th><th>Note</th><th>Location</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
     const w = window.open("", "_blank");
     if (!w) return;
     w.document.write(html);
@@ -369,31 +399,38 @@ export function TimeAttendanceManagementPanel({
           >
             <h3 className="text-sm font-semibold text-slate-900">{t(locale, "tools.clockOutSummary")}</h3>
             <div className="space-y-2 text-sm">
-              <p className="tabular-nums font-medium text-slate-900">{formatClock(clockOutSummary.totalMs)}</p>
-              <p className="text-slate-700">
-                {t(locale, "tools.totalHours")}: {formatHoursMinutes(clockOutSummary.totalMs)}
-                {rateNumSummary > 0 && shiftPay != null && (
-                  <>
-                    {" "}
-                    × {t(locale, "tools.hourlyRate")} = {t(locale, "tools.totalPay")}: {currencySymbol}
-                    {shiftPay.toFixed(2)}
-                  </>
-                )}
+              <p className="text-lg font-mono font-semibold tabular-nums text-slate-900">
+                {isHe ? "סה״כ: " : "Total: "}
+                {formatClock(clockOutSummary.totalMs)}
               </p>
-              <div>
-                <span className="text-xs font-medium text-slate-500 block">{t(locale, "tools.entryLocation")}</span>
-                <p className="text-slate-900 font-medium">{clockOutSummary.startAddress || "—"}</p>
+              {rateNumSummary > 0 && shiftPay != null && (
+                <p className="text-slate-700 text-sm">
+                  {t(locale, "tools.totalPay")}: {currencySymbol}
+                  {shiftPay.toFixed(2)}
+                </p>
+              )}
+              <div className="flex gap-3 rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2.5">
+                <MapPin className="w-4 h-4 text-[#008080] shrink-0 mt-0.5" strokeWidth={2} aria-hidden />
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{t(locale, "tools.entryLocation")}</p>
+                  <p className="text-slate-800 font-medium break-words">{clockOutSummary.startAddress || "—"}</p>
+                </div>
+              </div>
+              <div className="flex gap-3 rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2.5">
+                <MapPin className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" strokeWidth={2} aria-hidden />
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{t(locale, "tools.exitLocation")}</p>
+                  <p className="text-slate-800 font-medium break-words">{clockOutSummary.endAddress || "—"}</p>
+                </div>
               </div>
               <div>
-                <span className="text-xs font-medium text-slate-500 block">{t(locale, "tools.exitLocation")}</span>
-                <p className="text-slate-900 font-medium">{clockOutSummary.endAddress || "—"}</p>
-              </div>
-              <div>
-                <label className="text-xs text-slate-500 block mb-1">Notes</label>
+                <label className="text-xs font-medium text-slate-600 block mb-1">
+                  {isHe ? "על מה עבדת?" : "What did you work on?"}
+                </label>
                 <textarea
                   value={clockOutPopupNotes}
                   onChange={(e) => setClockOutPopupNotes(e.target.value)}
-                  placeholder="Add notes for this shift…"
+                  placeholder={isHe ? "הוסף הערות למשמרת…" : "Add notes for this shift…"}
                   rows={3}
                   className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 resize-none"
                 />
@@ -411,7 +448,7 @@ export function TimeAttendanceManagementPanel({
               className="w-full rounded-lg py-3 text-sm font-semibold text-white transition-opacity hover:opacity-95"
               style={{ backgroundColor: OLLIN_TURQUOISE }}
             >
-              {locale === "he" ? "אשר ושמור" : "Confirm & Save"}
+              {isHe ? "אשר ושמור" : "Confirm"}
             </button>
           </div>
         </div>
@@ -425,122 +462,97 @@ export function TimeAttendanceManagementPanel({
           ? "h-full md:max-h-[min(92vh,820px)] md:rounded-lg md:border md:border-slate-200 md:shadow-xl"
           : "h-full max-h-[90vh] rounded-lg border border-slate-200 shadow-lg"
       }`}
-      style={
-        layout === "embedded" && isClockedIn
-          ? { boxShadow: "0 0 0 2px rgba(239,68,68,0.2), 0 12px 40px rgba(0,0,0,0.08)" }
-          : undefined
-      }
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="flex-shrink-0 flex items-center gap-3 px-4 py-3 border-b border-slate-200 bg-white">
-        <button
-          type="button"
-          onClick={onClose}
-          className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors"
-          aria-label="Back"
-        >
-          <ChevronLeft className="w-5 h-5" />
-        </button>
-        <h2 id="time-attendance-panel-title" className="flex-1 text-center text-base font-semibold text-slate-900">
-          {t(locale, "dashboard.gpsClock")}
-        </h2>
-        <div className="w-9" />
+      <div className="flex-shrink-0 z-20 bg-white border-b border-slate-200">
+        <div className="flex items-center gap-3 px-4 py-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+            aria-label="Back"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <h2 id="time-attendance-panel-title" className="flex-1 text-center text-base font-semibold text-slate-900">
+            {t(locale, "dashboard.gpsClock")}
+          </h2>
+          <div className="w-9" />
+        </div>
+        <div className="flex flex-row flex-wrap items-end gap-3 px-4 pb-3">
+          <div className="flex-1 min-w-[140px]">
+            <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1.5">
+              {isHe ? "חודש / שנה" : "Month / Year"}
+            </label>
+            <input
+              type="month"
+              value={monthFilter}
+              onChange={(e) => setMonthFilter(e.target.value)}
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm"
+            />
+          </div>
+          <div className="flex-1 min-w-[140px]">
+            <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1.5">
+              {isHe ? "לוחות" : "Boards"}
+            </label>
+            <select
+              value={boardFilter}
+              onChange={(e) => setBoardFilter(e.target.value)}
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm"
+            >
+              <option value="">{isHe ? "כל הלוחות" : "All boards"}</option>
+              {boardLocations.map((b) => (
+                <option key={b.boardId} value={b.boardId}>
+                  {b.name || b.boardId}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto min-h-0 px-4 py-5 space-y-5">
-          {isClockedIn && (
-            <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-900">
-              {locale === "he"
-                ? "משמרת פעילה — עצירה מאריח מעקב הזמן בשקופית או ״יציאה״ למטה."
-                : "Shift in progress — stop from the Time Tracker tile on the slide, or Clock out below."}
-            </div>
-          )}
-
-          {/* Live session + optional note + clock in/out (restored full controls) */}
-          <div className="rounded-lg bg-white border border-slate-200 p-5 flex flex-col items-center justify-center min-h-[120px]">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">
-              {isClockedIn ? (locale === "he" ? "זמן שחלף" : "Elapsed") : locale === "he" ? "מוכן" : "Ready"}
-            </p>
-            <motion.span
-              key={isClockedIn ? "on" : "off"}
-              initial={{ scale: 0.98 }}
-              animate={{ scale: 1 }}
-              className="text-3xl font-mono font-semibold tabular-nums text-slate-900"
-            >
-              {isClockedIn ? formatClock(elapsed) : "00:00:00"}
-            </motion.span>
-            {isClockedIn && (
-              <p className="text-xs text-slate-500 mt-2 tabular-nums">
-                {locale === "he" ? "מאז" : "Since"}{" "}
-                {new Date(clockInTime).toLocaleTimeString(locale === "he" ? "he-IL" : "en-US", { timeStyle: "short" })}
-              </p>
-            )}
-          </div>
-          <div>
-            <label className="text-xs font-medium text-slate-600 uppercase tracking-wider block mb-2">
-              {locale === "he" ? "הערה (אופציונלי)" : "Note (optional)"}
-            </label>
-            <input
-              type="text"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder={
-                isClockedIn
-                  ? locale === "he"
-                    ? "הערה ליציאה…"
-                    : "Add a note for clock-out…"
-                  : locale === "he"
-                    ? "הערה לכניסה…"
-                    : "Add a note for clock-in…"
-              }
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400"
-            />
-          </div>
-          <motion.button
+          <button
             type="button"
-            onClick={() => void handlePanelClockToggle()}
-            className={`w-full flex items-center justify-center gap-2 rounded-lg px-4 py-3.5 text-sm font-semibold text-white shadow-sm transition-colors ${
-              isClockedIn ? "bg-red-600 hover:bg-red-700" : "bg-emerald-600 hover:bg-emerald-700"
+            onClick={() => void handleMainTimerClick()}
+            disabled={timerBusy}
+            className={`w-full rounded-lg border-2 min-h-[196px] flex flex-col items-center justify-center gap-3 px-5 py-8 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008080] focus-visible:ring-offset-2 disabled:opacity-70 ${
+              isClockedIn
+                ? "border-rose-200 bg-rose-50 text-rose-900"
+                : "border-slate-200 bg-white hover:bg-slate-50 text-slate-800"
             }`}
           >
-            {isClockedIn ? (
-              <>
-                <LogOut className="w-5 h-5" />
-                {t(locale, "tools.clockOut")}
-              </>
+            {timerBusy ? (
+              <Loader2 className="w-12 h-12 animate-spin text-slate-400" aria-hidden />
             ) : (
               <>
-                <LogIn className="w-5 h-5" />
-                {t(locale, "tools.clockIn")}
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-[0.2em]">
+                  {isClockedIn ? (isHe ? "זמן שחלף" : "Elapsed") : isHe ? "מוכן" : "Ready"}
+                </p>
+                <motion.span
+                  key={isClockedIn ? "on" : "off"}
+                  initial={{ scale: 0.98 }}
+                  animate={{ scale: 1 }}
+                  className={`text-4xl sm:text-5xl font-mono font-bold tabular-nums tracking-tight ${
+                    isClockedIn ? "text-rose-900" : "text-slate-900"
+                  }`}
+                >
+                  {isClockedIn ? formatClock(elapsed) : isHe ? "מוכן" : "READY"}
+                </motion.span>
+                {isClockedIn && (
+                  <p className="text-xs text-slate-600 tabular-nums">
+                    {isHe ? "מאז" : "Since"}{" "}
+                    {new Date(clockInTime).toLocaleTimeString(isHe ? "he-IL" : "en-US", { timeStyle: "short" })}
+                  </p>
+                )}
+                {!isClockedIn && (
+                  <p className="text-sm font-medium text-slate-500">
+                    {isHe ? "לחץ להתחלת שעון" : "Tap to start"}
+                  </p>
+                )}
               </>
             )}
-          </motion.button>
-
-          {/* Month / Year + Board in one row (flex-row) */}
-          <div className="flex flex-row flex-wrap items-end gap-3">
-            <div className="flex-1 min-w-[140px]">
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wider block mb-2">Month / Year</label>
-              <input
-                type="month"
-                value={monthFilter}
-                onChange={(e) => setMonthFilter(e.target.value)}
-                className="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm"
-              />
-            </div>
-            <div className="flex-1 min-w-[140px]">
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wider block mb-2">Board</label>
-              <select
-                value={boardFilter}
-                onChange={(e) => setBoardFilter(e.target.value)}
-                className="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm"
-              >
-                <option value="">All boards</option>
-                {boardLocations.map((b) => (
-                  <option key={b.boardId} value={b.boardId}>{b.name || b.boardId}</option>
-                ))}
-              </select>
-            </div>
-          </div>
+          </button>
 
           {/* Admin — single "Assign location to board" block */}
           <div className="rounded-lg border border-gray-200 bg-gray-50 overflow-hidden">
@@ -554,6 +566,14 @@ export function TimeAttendanceManagementPanel({
             </button>
             {adminOpen && (
               <div className="px-5 pb-5 pt-1 space-y-4 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={addNewBoard}
+                  className="w-full flex items-center justify-center gap-2 rounded-lg border-2 border-dashed border-[#008080]/40 bg-white py-3 text-sm font-semibold text-[#008080] hover:bg-teal-50/80 transition-colors"
+                >
+                  <Plus className="w-4 h-4 shrink-0" strokeWidth={2.5} />
+                  {isHe ? "הוסף לוח חדש" : "Add new board"}
+                </button>
                 <h3 className="text-sm font-semibold text-gray-800">Assign location to board</h3>
                 <p className="text-xs text-gray-500">Set an address and radius for each board. Clock entries can be associated with a board when within range.</p>
                 {boardLocations.map((b) => {
@@ -602,7 +622,7 @@ export function TimeAttendanceManagementPanel({
                           type="checkbox"
                           checked={b.restrictLocation}
                           onChange={(e) => updateBoardLocation(b.boardId, "restrictLocation", e.target.checked)}
-                          className="rounded border-gray-300 text-[#0d9488] focus:ring-[#0d9488]"
+                          className="rounded border-gray-300 text-[#008080] focus:ring-[#008080]"
                         />
                         <span className="text-xs font-medium text-gray-700">{t(locale, "tools.restrictLocation")}</span>
                       </label>
@@ -630,7 +650,7 @@ export function TimeAttendanceManagementPanel({
                                   type="checkbox"
                                   checked={selected}
                                   onChange={() => toggleBoardContact(b.boardId, c.id)}
-                                  className="rounded border-gray-300 text-[#0d9488] focus:ring-[#0d9488]"
+                                  className="rounded border-gray-300 text-[#008080] focus:ring-[#008080]"
                                 />
                                 <span className="text-sm text-gray-900 truncate">{c.name || c.email}</span>
                               </label>
@@ -704,7 +724,7 @@ export function TimeAttendanceManagementPanel({
                       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
                         <div>
                           <span className="text-gray-500 block text-xs">{locale === "he" ? "כניסה" : "Check-in"}</span>
-                          <span className="text-accent font-medium tabular-nums">{inTime}</span>
+                          <span className="font-medium tabular-nums text-[#008080]">{inTime}</span>
                         </div>
                         <div>
                           <span className="text-gray-500 block text-xs">{locale === "he" ? "יציאה" : "Check-out"}</span>
@@ -723,7 +743,12 @@ export function TimeAttendanceManagementPanel({
                                 className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900"
                                 autoFocus
                               />
-                              <button type="button" onClick={saveEditNote} className="p-2 rounded-lg bg-accent text-white shrink-0">
+                              <button
+                                type="button"
+                                onClick={saveEditNote}
+                                className="p-2 rounded-lg text-white shrink-0"
+                                style={{ backgroundColor: OLLIN_TURQUOISE }}
+                              >
                                 <Check className="w-4 h-4" />
                               </button>
                             </div>
@@ -780,7 +805,7 @@ export function TimeAttendanceManagementPanel({
                   />
                 </div>
               </div>
-              <div className="tabular-nums text-lg font-semibold text-[#0d9488]">
+              <div className="tabular-nums text-lg font-semibold text-[#008080]">
                 = {rateNum > 0 ? `${CURRENCIES.find((c) => c.id === currency)?.symbol ?? ""}${totalPay.toFixed(2)}` : "—"}
               </div>
             </div>
