@@ -786,7 +786,7 @@ function SmartContentCard({
       className="group rounded-lg border border-slate-200 bg-white overflow-hidden transition-colors hover:border-slate-300 cursor-pointer text-left flex flex-col min-h-[220px]"
     >
       <div
-        className={`relative aspect-square shrink-0 overflow-hidden rounded-t-[32px] ${hasPhoto ? "bg-gray-100" : `bg-gradient-to-br ${gradient}`}`}
+        className={`relative aspect-square shrink-0 overflow-hidden rounded-t-lg ${hasPhoto ? "bg-gray-100" : `bg-gradient-to-br ${gradient}`}`}
       >
         {hasPhoto ? (
           <img src={post.imageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
@@ -797,7 +797,7 @@ function SmartContentCard({
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/45 to-transparent pointer-events-none" />
         <span
-          className="absolute top-2 end-2 inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border backdrop-blur-md"
+          className="absolute top-2 end-2 inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold border backdrop-blur-md"
           style={{
             backgroundColor: "rgba(0, 128, 128, 0.12)",
             color: BRAND_TEAL,
@@ -816,7 +816,7 @@ function SmartContentCard({
         </ul>
         <div className="flex justify-end mt-2 pt-1">
           <span
-            className="inline-flex items-center justify-center w-8 h-8 rounded-md bg-gray-900/95 text-white border border-slate-700 group-hover:bg-gray-900 transition-colors"
+            className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gray-900/95 text-white border border-slate-700 group-hover:bg-gray-900 transition-colors"
             aria-hidden
           >
             <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.5} />
@@ -859,10 +859,10 @@ function DirectionsModal({
         <p className="text-xs text-gray-500 mb-1">{isHe ? "אל" : "To"}: {destinationTitle || destinationAddress}</p>
         <p className="text-sm text-gray-800 mb-4 break-words">{destinationAddress}</p>
         <div className="flex gap-2">
-          <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50">
+          <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50">
             {isHe ? "ביטול" : "Cancel"}
           </button>
-          <button type="button" onClick={openMaps} className="flex-1 py-2.5 rounded-xl text-slate-600 text-sm font-medium bg-white border border-slate-200 hover:bg-slate-50 shadow-sm flex items-center justify-center gap-2">
+          <button type="button" onClick={openMaps} className="flex-1 py-2.5 rounded-lg text-slate-600 text-sm font-medium bg-white border border-slate-200 hover:bg-slate-50 shadow-sm flex items-center justify-center gap-2">
             <MapPin className="w-4 h-4" strokeWidth={2} />
             {isHe ? "פתח במפות" : "Open in Maps"}
           </button>
@@ -1071,7 +1071,7 @@ function PostCard({
         {/* Prominent distance badge (teal) — top-right: "100m from you" */}
         {distanceDisplay && (
           <div
-            className="absolute top-2 right-2 rounded-md text-white px-2.5 py-1.5 text-sm font-bold border border-white/20 whitespace-nowrap"
+            className="absolute top-2 right-2 rounded-lg text-white px-2.5 py-1.5 text-sm font-bold border border-white/20 whitespace-nowrap"
             style={{ backgroundColor: BRAND_TEAL }}
           >
             {distanceDisplay} {isHe ? "ממך" : "from you"}
@@ -1079,7 +1079,7 @@ function PostCard({
         )}
         {/* Status pill — top-left */}
         {post.statusPill && (
-          <div className="absolute top-2 left-2 rounded-md px-2.5 py-1 text-xs font-bold uppercase tracking-wide bg-white/95 text-gray-900 border border-slate-200">
+          <div className="absolute top-2 left-2 rounded-lg px-2.5 py-1 text-xs font-bold uppercase tracking-wide bg-white/95 text-gray-900 border border-slate-200">
             {post.statusPill === "Hot Deal" && (isHe ? "דיל חם" : "Hot Deal")}
             {post.statusPill === "Urgent Hiring" && (isHe ? "מגייסים עכשיו" : "Urgent Hiring")}
             {post.statusPill === "Trending Now" && (isHe ? "טרנדי עכשיו" : "Trending Now")}
@@ -1094,8 +1094,8 @@ function PostCard({
         <div className="flex-1 min-w-0">
           {/* Header: Avatar, Name, Timestamp + AI badge — desktop: slightly larger */}
           <div className="flex items-center gap-3 px-3 py-2.5 lg:px-4 lg:py-3 border-b border-gray-100">
-            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-semibold text-slate-600 shrink-0">
-              {post.authorAvatar ? <img src={post.authorAvatar} alt="" className="w-full h-full rounded-full object-cover" /> : getInitial(post.authorName)}
+            <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-xs font-semibold text-slate-600 shrink-0">
+              {post.authorAvatar ? <img src={post.authorAvatar} alt="" className="w-full h-full rounded-lg object-cover" /> : getInitial(post.authorName)}
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-medium text-gray-900 text-xs truncate">{post.authorName}</p>
@@ -1176,7 +1176,7 @@ function PostCard({
               <button
                 type="button"
                 onClick={() => onApplyClick?.(post)}
-                className="flex-1 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm font-bold hover:bg-slate-50 shadow-sm flex items-center justify-center gap-2"
+                className="flex-1 py-2.5 rounded-lg bg-white border border-slate-200 text-slate-600 text-sm font-bold hover:bg-slate-50 shadow-sm flex items-center justify-center gap-2"
               >
                 {isHe ? "הגש מועמדות באולין" : "Ollin Apply"}
                 {distanceDisplay && <span className="opacity-90 text-xs font-medium">— {distanceDisplay} {isHe ? "מכאן" : "from here"}</span>}
@@ -1262,7 +1262,7 @@ function PostCard({
         <button
           type="button"
           onClick={() => onLike(post.id)}
-          className={`flex items-center gap-1.5 text-xs font-medium lg:text-sm min-w-[44px] min-h-[44px] justify-center rounded-xl active:bg-gray-100 ${liked.has(post.id) ? "text-red-500" : "hover:text-slate-600"}`}
+          className={`flex items-center gap-1.5 text-xs font-medium lg:text-sm min-w-[44px] min-h-[44px] justify-center rounded-lg active:bg-gray-100 ${liked.has(post.id) ? "text-red-500" : "hover:text-slate-600"}`}
         >
           <Heart className={`w-4 h-4 lg:w-5 lg:h-5 ${liked.has(post.id) ? "fill-red-500" : ""}`} strokeWidth={2} />
           {post.likes + (liked.has(post.id) ? 1 : 0)}
@@ -1279,7 +1279,7 @@ function PostCard({
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); handleCopy(); }}
-          className={`flex items-center gap-1.5 min-w-[44px] min-h-[44px] justify-center rounded-xl active:bg-gray-100 transition-colors ${justCopied ? "text-slate-600" : "text-gray-500 hover:text-slate-600"}`}
+          className={`flex items-center gap-1.5 min-w-[44px] min-h-[44px] justify-center rounded-lg active:bg-gray-100 transition-colors ${justCopied ? "text-slate-600" : "text-gray-500 hover:text-slate-600"}`}
           aria-label={isHe ? "העתק" : "Copy"}
           title={isHe ? "העתק כותרת ותקציר" : "Copy title and summary"}
         >
@@ -1299,7 +1299,7 @@ function PostCard({
           {post.commentsList.map((comment) => (
             <div key={comment.id} className="mb-2">
               <div className="flex gap-2">
-                <div className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-medium text-gray-600 shrink-0">
+                <div className="w-7 h-7 rounded-lg bg-gray-200 flex items-center justify-center text-[10px] font-medium text-gray-600 shrink-0">
                   {getInitial(comment.authorName)}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -1346,11 +1346,11 @@ function PostCard({
           {/* Action buttons: viral loop — Credit Reward icon on Share/Apply; Source Link for jobs; Contact via Ollin for pros */}
       {post.category === "deals" && (
         <div className="px-4 pb-4 flex flex-col gap-2">
-          <button type="button" className="w-full py-2.5 rounded-xl text-slate-600 text-sm font-medium bg-white border border-slate-200 hover:bg-slate-50 shadow-sm flex items-center justify-center gap-2">
+          <button type="button" className="w-full py-2.5 rounded-lg text-slate-600 text-sm font-medium bg-white border border-slate-200 hover:bg-slate-50 shadow-sm flex items-center justify-center gap-2">
             <Coins className="w-4 h-4" strokeWidth={2} />
             {post.generatedByAI ? (isHe ? "צפה במבצע — הרווח קרדיטים" : "View Deal — Earn Credits") : (isHe ? "פרטים" : "Details")}
           </button>
-          <button type="button" className="w-full py-2 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 flex items-center justify-center gap-2">
+          <button type="button" className="w-full py-2 rounded-lg border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 flex items-center justify-center gap-2">
             <Share2 className="w-4 h-4" strokeWidth={2} />
             <Coins className="w-3.5 h-3.5" strokeWidth={2} />
             {isHe ? "שתף וקבל קרדיטים" : "Share for Credits"}
@@ -1359,7 +1359,7 @@ function PostCard({
       )}
       {post.category === "gossip" && (
         <div className="px-4 pb-4">
-          <button type="button" className="w-full py-2.5 rounded-xl text-slate-600 text-sm font-medium bg-white border border-slate-200 hover:bg-slate-50 shadow-sm flex items-center justify-center gap-2">
+          <button type="button" className="w-full py-2.5 rounded-lg text-slate-600 text-sm font-medium bg-white border border-slate-200 hover:bg-slate-50 shadow-sm flex items-center justify-center gap-2">
             <Share2 className="w-4 h-4" strokeWidth={2} />
             <Coins className="w-4 h-4" strokeWidth={2} />
             {isHe ? "שתף וקבל קרדיטים" : "Share for Credits"}
@@ -1368,7 +1368,7 @@ function PostCard({
       )}
       {post.category === "news" && (
         <div className="px-4 pb-4">
-          <button type="button" className="w-full py-2.5 rounded-xl text-slate-600 text-sm font-medium bg-white border border-slate-200 hover:bg-slate-50 shadow-sm flex items-center justify-center gap-2">
+          <button type="button" className="w-full py-2.5 rounded-lg text-slate-600 text-sm font-medium bg-white border border-slate-200 hover:bg-slate-50 shadow-sm flex items-center justify-center gap-2">
             <ExternalLink className="w-4 h-4" strokeWidth={2} />
             {isHe ? "קרא עוד" : "Read more"}
           </button>
@@ -1382,13 +1382,13 @@ function PostCard({
               target="_blank"
               rel="noopener noreferrer"
               onClick={handleSourceClick}
-              className="flex items-center justify-center gap-2 w-full py-2 rounded-xl border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50"
+              className="flex items-center justify-center gap-2 w-full py-2 rounded-lg border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50"
             >
               <ExternalLink className="w-4 h-4" strokeWidth={2} />
               {isHe ? "מקור" : "Source"}: {post.sourceName}
             </a>
           )}
-          <button type="button" onClick={() => onApplyClick?.(post)} className="w-full py-2.5 rounded-xl text-slate-600 text-sm font-medium bg-white border border-slate-200 hover:bg-slate-50 shadow-sm flex flex-col items-center gap-1">
+          <button type="button" onClick={() => onApplyClick?.(post)} className="w-full py-2.5 rounded-lg text-slate-600 text-sm font-medium bg-white border border-slate-200 hover:bg-slate-50 shadow-sm flex flex-col items-center gap-1">
             <span className="flex items-center gap-2">
               <Coins className="w-4 h-4" strokeWidth={2} />
               Ollin Quick Apply
@@ -1400,7 +1400,7 @@ function PostCard({
       {post.category === "pros" && (
         <div className="px-4 pb-4">
           <p className="text-[10px] text-gray-500 mb-1.5 px-0.5">{isHe ? "הודעה/שיחה תתחיל ב: \"הי, מצאתי אותך דרך Ollin...\"" : "Message/call will start with: \"Hi, I found you through Ollin...\""}</p>
-          <button type="button" className="w-full py-2.5 rounded-xl text-slate-600 text-sm font-medium bg-white border border-slate-200 hover:bg-slate-50 shadow-sm flex items-center justify-center gap-2">
+          <button type="button" className="w-full py-2.5 rounded-lg text-slate-600 text-sm font-medium bg-white border border-slate-200 hover:bg-slate-50 shadow-sm flex items-center justify-center gap-2">
             <Phone className="w-4 h-4" strokeWidth={2} />
             {isHe ? "צור קשר דרך Ollin" : "Contact via Ollin"}
           </button>
@@ -1846,7 +1846,7 @@ export function ExplorePanel() {
               <button
                 type="button"
                 onClick={() => setNewTopicModalOpen(false)}
-                className="p-2 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors shrink-0"
+                className="p-2 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors shrink-0"
                 aria-label={isHe ? "סגור" : "Close"}
               >
                 <X className="w-5 h-5" strokeWidth={2} />
@@ -1866,7 +1866,7 @@ export function ExplorePanel() {
                   }
                 }}
                 placeholder={isHe ? "מה אתה מחפש היום?" : "What are you looking for today?"}
-                className="w-full ps-10 pe-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-900 placeholder:text-gray-400 bg-gray-50/50 focus:bg-white focus:ring-0 focus:border-slate-300 outline-none transition-all"
+                className="w-full ps-10 pe-4 py-3 rounded-lg border border-gray-200 text-sm text-gray-900 placeholder:text-gray-400 bg-gray-50/50 focus:bg-white focus:ring-0 focus:border-slate-300 outline-none transition-all"
               />
             </div>
             <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2.5">
@@ -1881,7 +1881,7 @@ export function ExplorePanel() {
                   onClick={() =>
                     addCustomTopicTab(chip.labelEn, { labelEn: chip.labelEn, labelHe: chip.labelHe })
                   }
-                  className="px-3 py-2.5 rounded-xl text-sm font-medium text-left border border-gray-200 bg-white text-gray-800 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-600 transition-all disabled:opacity-50 shadow-sm"
+                  className="px-3 py-2.5 rounded-lg text-sm font-medium text-left border border-gray-200 bg-white text-gray-800 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-600 transition-all disabled:opacity-50 shadow-sm"
                 >
                   {isHe ? chip.labelHe : chip.labelEn}
                 </button>
@@ -1924,7 +1924,7 @@ export function ExplorePanel() {
               <button
                 type="button"
                 onClick={() => setTabRemoveConfirm(null)}
-                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                className="flex-1 py-2.5 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
               >
                 {isHe ? "ביטול" : "Cancel"}
               </button>
@@ -1934,7 +1934,7 @@ export function ExplorePanel() {
                   removeFeedTab(tabRemoveConfirm.id);
                   setTabRemoveConfirm(null);
                 }}
-                className="flex-1 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 transition-colors"
+                className="flex-1 py-2.5 rounded-lg bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 transition-colors"
               >
                 {isHe ? "הסר" : "Remove"}
               </button>
@@ -2017,7 +2017,7 @@ export function ExplorePanel() {
                 reorderTabs(draggedTabIndex, index);
                 setDraggedTabIndex(index);
               }}
-              className={`relative flex-shrink-0 w-full rounded-xl ${tabsEditMode ? "animate-wiggle cursor-grab active:cursor-grabbing" : ""}`}
+              className={`relative flex-shrink-0 w-full rounded-lg ${tabsEditMode ? "animate-wiggle cursor-grab active:cursor-grabbing" : ""}`}
             >
               <button
                 type="button"
@@ -2025,7 +2025,7 @@ export function ExplorePanel() {
                 onPointerUp={onTabPointerUp}
                 onPointerCancel={onTabPointerUp}
                 onClick={() => handleTabActivate(tab.id)}
-                className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-colors truncate ${tabsEditMode && tab.id !== "all" ? "pe-9" : ""} ${activeFeedTab === tab.id ? "bg-[#008080]/12 text-[#008080] font-semibold" : "text-gray-600 hover:bg-gray-200"} ${tabsEditMode ? "ring-1 ring-slate-300" : ""}`}
+                className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-colors truncate ${tabsEditMode && tab.id !== "all" ? "pe-9" : ""} ${activeFeedTab === tab.id ? "bg-[#008080]/12 text-[#008080] font-semibold" : "text-gray-600 hover:bg-gray-200"} ${tabsEditMode ? "ring-1 ring-slate-300" : ""}`}
               >
                 {isHe ? tab.labelHe : tab.labelEn}
               </button>
@@ -2037,7 +2037,7 @@ export function ExplorePanel() {
                     e.stopPropagation();
                     setTabRemoveConfirm({ id: tab.id, label: isHe ? tab.labelHe : tab.labelEn });
                   }}
-                  className="absolute top-1.5 end-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full border border-white/40 bg-black/55 text-white shadow-md hover:bg-red-600 hover:border-red-500 transition-colors"
+                  className="absolute top-1.5 end-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-lg border border-white/40 bg-black/55 text-white shadow-md hover:bg-red-600 hover:border-red-500 transition-colors"
                   aria-label={isHe ? "הסר" : "Remove"}
                 >
                   <X className="w-2.5 h-2.5" strokeWidth={3} />
@@ -2057,7 +2057,7 @@ export function ExplorePanel() {
       {locationPillOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setLocationPillOpen(false)} aria-hidden />
-          <div className="absolute right-3 top-14 z-50 w-64 rounded-xl bg-white border border-gray-200 shadow-xl p-4">
+          <div className="absolute right-3 top-14 z-50 w-64 rounded-lg bg-white border border-gray-200 shadow-xl p-4">
             <p className="text-xs font-semibold text-gray-700 mb-2">{isHe ? "מיקום" : "Location"}</p>
             <p className="px-0.5 py-1 text-[10px] font-semibold text-gray-500 uppercase">{isHe ? "רדיוס (ק״מ)" : "Radius (km)"}</p>
             <div className="flex flex-wrap gap-1.5 mb-3">
@@ -2066,7 +2066,7 @@ export function ExplorePanel() {
                   key={km}
                   type="button"
                   onClick={() => setRadiusKm(km)}
-                  className={`px-2.5 py-1.5 rounded-xl text-xs font-medium ${radiusKm === km ? "bg-slate-100 text-slate-700" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-medium ${radiusKm === km ? "bg-slate-100 text-slate-700" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
                 >
                   {km} km
                 </button>
@@ -2080,10 +2080,10 @@ export function ExplorePanel() {
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
                 placeholder={isHe ? "הזן עיר או כתובת" : "Enter city or address"}
-                className="flex-1 min-w-0 rounded-xl border border-gray-200 px-2.5 py-2 text-sm"
+                className="flex-1 min-w-0 rounded-lg border border-gray-200 px-2.5 py-2 text-sm"
               />
             </div>
-            <button type="button" onClick={() => setLocationPillOpen(false)} className="mt-4 w-full py-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 shadow-sm">
+            <button type="button" onClick={() => setLocationPillOpen(false)} className="mt-4 w-full py-2.5 rounded-lg bg-white border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 shadow-sm">
               {isHe ? "סיום" : "Done"}
             </button>
           </div>
@@ -2101,7 +2101,7 @@ export function ExplorePanel() {
             <header className="px-3 py-2.5 lg:px-6 flex flex-wrap items-center gap-2">
               <Compass className="w-5 h-5 shrink-0 text-[#008080]" strokeWidth={2} />
               <h2 className="text-lg font-semibold text-gray-900 shrink-0 lg:hidden">{isHe ? "גילוי" : "Explore"}</h2>
-              <button type="button" onClick={() => setDevModeOpen((o) => !o)} className="p-1.5 rounded-xl hover:bg-gray-100 text-gray-400 hover:text-slate-600" title={isHe ? "מצב מפתח (Ctrl+Shift+D)" : "Developer mode (Ctrl+Shift+D)"} aria-label="Dev mode">
+              <button type="button" onClick={() => setDevModeOpen((o) => !o)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-slate-600" title={isHe ? "מצב מפתח (Ctrl+Shift+D)" : "Developer mode (Ctrl+Shift+D)"} aria-label="Dev mode">
                 <Code className="w-4 h-4" strokeWidth={2} />
               </button>
             </header>
@@ -2130,7 +2130,7 @@ export function ExplorePanel() {
                       onPointerUp={onTabPointerUp}
                       onPointerCancel={onTabPointerUp}
                       onClick={() => handleTabActivate(tab.id)}
-                      className={`flex-shrink-0 px-4 py-2.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors transition-transform hover:scale-[1.03] max-w-[200px] truncate border ${
+                      className={`flex-shrink-0 px-4 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors transition-transform hover:scale-[1.03] max-w-[200px] truncate border ${
                         tabsEditMode && tab.id !== "all" ? "pe-9" : ""
                       } ${
                         activeFeedTab === tab.id
@@ -2148,7 +2148,7 @@ export function ExplorePanel() {
                           e.stopPropagation();
                           setTabRemoveConfirm({ id: tab.id, label: isHe ? tab.labelHe : tab.labelEn });
                         }}
-                        className="absolute top-0.5 end-1 z-10 flex h-[18px] w-[18px] items-center justify-center rounded-full border border-white/50 bg-black/60 text-white shadow-sm hover:bg-red-600 hover:border-red-400 transition-colors"
+                        className="absolute top-0.5 end-1 z-10 flex h-[18px] w-[18px] items-center justify-center rounded-lg border border-white/50 bg-black/60 text-white shadow-sm hover:bg-red-600 hover:border-red-400 transition-colors"
                         aria-label={isHe ? "הסר" : "Remove"}
                       >
                         <X className="w-2 h-2" strokeWidth={3} />
@@ -2167,7 +2167,7 @@ export function ExplorePanel() {
               </div>
             </div>
             <div className="px-3 py-2.5 lg:px-6 border-b border-gray-200">
-              <div className="flex-1 min-w-0 min-w-[200px] flex items-center gap-2 rounded-xl border border-gray-200 bg-white/60 backdrop-blur-md pl-2.5 pr-2 py-1.5 lg:max-w-xl">
+              <div className="flex-1 min-w-0 min-w-[200px] flex items-center gap-2 rounded-lg border border-gray-200 bg-white/60 backdrop-blur-md pl-2.5 pr-2 py-1.5 lg:max-w-xl">
                 <Search className="w-4 h-4 text-gray-400 shrink-0" strokeWidth={2} />
                 <input
                   ref={searchInputRef}
@@ -2207,9 +2207,9 @@ export function ExplorePanel() {
                     value={prosSearch}
                     onChange={(e) => setProsSearch(e.target.value)}
                     placeholder={isHe ? "תחום או מקצוע" : "Category or trade"}
-                    className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                    className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm"
                   />
-                  <button type="button" className="p-2 rounded-xl bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 shadow-sm">
+                  <button type="button" className="p-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 shadow-sm">
                     <Search className="w-5 h-5" strokeWidth={2} />
                   </button>
                 </div>
@@ -2225,39 +2225,39 @@ export function ExplorePanel() {
                     value={jobsSearch}
                     onChange={(e) => setJobsSearch(e.target.value)}
                     placeholder={isHe ? "תפקיד או חברה" : "Role or company"}
-                    className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                    className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm"
                   />
-                  <button type="button" className="p-2 rounded-xl bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 shadow-sm">
+                  <button type="button" className="p-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 shadow-sm">
                     <Search className="w-5 h-5" strokeWidth={2} />
                   </button>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowTenderForm((o) => !o)}
-                  className="w-full flex items-center justify-center gap-2 py-4 rounded-xl border border-slate-200 text-slate-700 font-medium text-sm hover:bg-slate-50 mb-4 transition-colors"
+                  className="w-full flex items-center justify-center gap-2 py-4 rounded-lg border border-slate-200 text-slate-700 font-medium text-sm hover:bg-slate-50 mb-4 transition-colors"
                 >
                   <Plus className="w-5 h-5" strokeWidth={2} />
                   {isHe ? "פרסום מכרז אישי (משרה למקצוענים)" : "Post Personal Tender"}
                 </button>
                 {showTenderForm && (
-                  <div className="rounded-xl border border-gray-200 p-6 space-y-3 mb-4">
+                  <div className="rounded-lg border border-gray-200 p-6 space-y-3 mb-4">
                     <input
                       type="text"
                       value={tenderTitle}
                       onChange={(e) => setTenderTitle(e.target.value)}
                       placeholder={isHe ? "כותרת המכרז" : "Tender title"}
-                      className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
                     />
                     <textarea
                       value={tenderDescription}
                       onChange={(e) => setTenderDescription(e.target.value)}
                       placeholder={isHe ? "תיאור — מקצוענים יוכלו להגיש הצעות" : "Description — pros can submit bids"}
                       rows={3}
-                      className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm resize-none"
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm resize-none"
                     />
                     <div className="flex gap-2">
-                      <button type="button" onClick={() => setShowTenderForm(false)} className="flex-1 py-2.5 rounded-xl border border-gray-300 text-sm">{isHe ? "ביטול" : "Cancel"}</button>
-                      <button type="button" className="flex-1 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm hover:bg-slate-50 shadow-sm">{isHe ? "פרסם מכרז" : "Post Tender"}</button>
+                      <button type="button" onClick={() => setShowTenderForm(false)} className="flex-1 py-2.5 rounded-lg border border-gray-300 text-sm">{isHe ? "ביטול" : "Cancel"}</button>
+                      <button type="button" className="flex-1 py-2.5 rounded-lg bg-white border border-slate-200 text-slate-600 text-sm hover:bg-slate-50 shadow-sm">{isHe ? "פרסם מכרז" : "Post Tender"}</button>
                     </div>
                   </div>
                 )}
@@ -2267,9 +2267,9 @@ export function ExplorePanel() {
             {/* Scan Area: Ollin is scanning local signals — pulse/radar + real-time ingestion */}
             <div className="explore-scan-radar relative flex items-center gap-2 px-3 py-2.5 rounded-lg bg-white/70 backdrop-blur-md border border-[#008080]/25 mb-2">
               <span className="relative flex h-8 w-8 shrink-0 items-center justify-center">
-                <span className="absolute inset-0 rounded-full border border-[#008080]/30" aria-hidden />
-                <span className="absolute inset-[2px] rounded-full border-t border-[#008080] border-r-transparent border-b-transparent animate-spin" aria-hidden />
-                <span className="absolute inset-[3px] rounded-full bg-[#008080]/10 blur-sm opacity-70" aria-hidden />
+                <span className="absolute inset-0 rounded-lg border border-[#008080]/30" aria-hidden />
+                <span className="absolute inset-[2px] rounded-lg border-t border-[#008080] border-r-transparent border-b-transparent animate-spin" aria-hidden />
+                <span className="absolute inset-[3px] rounded-lg bg-[#008080]/10 blur-sm opacity-70" aria-hidden />
                 <ScanLine className="relative h-4 w-4 text-[#008080]" strokeWidth={2} />
               </span>
               <div className="flex-1 min-w-0">
@@ -2277,9 +2277,9 @@ export function ExplorePanel() {
                 <p className="text-[10px] text-gray-500">{liveSignalsSource ? `${isHe ? "מקור" : "Source"}: ${liveSignalsSource}` : (isHe ? "מעדכן תוכן בזמן אמת" : "Real-time data ingestion")}</p>
               </div>
               <span className="flex gap-0.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#008080]/70 animate-pulse" style={{ animationDelay: "0ms" }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-[#008080]/70 animate-pulse" style={{ animationDelay: "160ms" }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-[#008080]/70 animate-pulse" style={{ animationDelay: "320ms" }} />
+                <span className="w-1.5 h-1.5 rounded-lg bg-[#008080]/70 animate-pulse" style={{ animationDelay: "0ms" }} />
+                <span className="w-1.5 h-1.5 rounded-lg bg-[#008080]/70 animate-pulse" style={{ animationDelay: "160ms" }} />
+                <span className="w-1.5 h-1.5 rounded-lg bg-[#008080]/70 animate-pulse" style={{ animationDelay: "320ms" }} />
               </span>
             </div>
             {/* Detail view: full card when one is selected (like email detail) — fast, no lag */}
@@ -2289,7 +2289,7 @@ export function ExplorePanel() {
               return (
                 <div className="animate-in fade-in duration-150 slide-in-from-right-2">
                   <div className="flex items-center gap-2 mb-4">
-                    <button type="button" onClick={() => setSelectedPostId(null)} className="p-2 rounded-xl hover:bg-gray-100 text-gray-700 flex items-center gap-1.5" aria-label={isHe ? "חזרה" : "Back"}>
+                    <button type="button" onClick={() => setSelectedPostId(null)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-700 flex items-center gap-1.5" aria-label={isHe ? "חזרה" : "Back"}>
                       <ChevronLeft className="w-5 h-5" strokeWidth={2} />
                       <span className="text-sm font-medium">{isHe ? "חזרה" : "Back"}</span>
                     </button>
@@ -2303,7 +2303,7 @@ export function ExplorePanel() {
                 <div className="space-y-8">
                   {architectState.exploreSortByDistance && (
                     <div className="flex items-center gap-2 mb-3 px-1">
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 text-xs font-semibold">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-xs font-semibold">
                         {isHe ? "קרוב אליי קודם" : "Near me first"}
                       </span>
                       <button type="button" onClick={() => setExploreSortByDistance(false)} className="text-xs text-gray-500 hover:text-gray-700 underline">
@@ -2321,7 +2321,7 @@ export function ExplorePanel() {
                         <SkeletonFeed count={4} />
                       </div>
                     ) : (
-                      <div className="rounded-xl border border-gray-200 p-8 text-center text-sm text-gray-500">
+                      <div className="rounded-lg border border-gray-200 p-8 text-center text-sm text-gray-500">
                         {location.trim()
                           ? (isHe ? "אין פוסטים התואמים את המיקום שנבחר." : "No posts match the selected location.")
                           : (isHe ? "אין פוסטים להצגה." : "No posts to show.")}
@@ -2356,7 +2356,7 @@ export function ExplorePanel() {
             <button
               type="button"
               onClick={handleFloatingSearchClick}
-              className="fixed bottom-36 right-4 z-30 w-12 h-12 rounded-full bg-white/90 backdrop-blur-sm border border-slate-100 text-slate-400 shadow-md hover:bg-white/80 flex items-center justify-center lg:w-14 lg:h-14 lg:bottom-24 lg:right-6"
+              className="fixed bottom-36 right-4 z-30 w-12 h-12 rounded-lg bg-white/90 backdrop-blur-sm border border-slate-100 text-slate-400 shadow-md hover:bg-white/80 flex items-center justify-center lg:w-14 lg:h-14 lg:bottom-24 lg:right-6"
               aria-label={isHe ? "חיפוש" : "Search"}
             >
               <Search className="w-5 h-5 lg:w-6 lg:h-6 text-slate-400" strokeWidth={2} />
@@ -2367,7 +2367,7 @@ export function ExplorePanel() {
           <button
             type="button"
             onClick={() => setMapOpen((o) => !o)}
-            className="fixed bottom-20 right-4 z-30 w-12 h-12 rounded-full bg-white/90 backdrop-blur-sm border border-slate-100 text-slate-400 shadow-md hover:bg-white/80 flex items-center justify-center lg:w-14 lg:h-14 lg:bottom-6 lg:right-6"
+            className="fixed bottom-20 right-4 z-30 w-12 h-12 rounded-lg bg-white/90 backdrop-blur-sm border border-slate-100 text-slate-400 shadow-md hover:bg-white/80 flex items-center justify-center lg:w-14 lg:h-14 lg:bottom-6 lg:right-6"
             aria-label={isHe ? "הצג מפה" : "Show map"}
           >
             <MapPin className="w-5 h-5 lg:w-6 lg:h-6 text-slate-400" strokeWidth={2} />
