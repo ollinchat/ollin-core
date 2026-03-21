@@ -103,4 +103,26 @@ export function buildLiveWorkerChips(
   return list;
 }
 
+/**
+ * Map an assigned contact to a live chip (by display name, or "You"/את/ה when session email matches).
+ * If no chip exists for this person, they are treated as offline (not in the live simulation).
+ */
+export function contactPresenceOnBoard(
+  contact: { name: string; email: string },
+  chips: LiveWorkerChip[],
+  isHe: boolean,
+  sessionEmail?: string | null
+): { state: "online" | "offline" } {
+  const label = (contact.name || contact.email || "").trim();
+  const selfLabel = isHe ? "את/ה" : "You";
+  const emailMatch =
+    sessionEmail &&
+    contact.email &&
+    contact.email.trim().toLowerCase() === sessionEmail.trim().toLowerCase();
+  const chip =
+    chips.find((ch) => ch.label === label) ?? (emailMatch ? chips.find((ch) => ch.label === selfLabel) : undefined);
+  if (!chip) return { state: "offline" };
+  return { state: chip.onSite ? "online" : "offline" };
+}
+
 export const BOARDS_STORAGE_KEY = "ollin_gps_board_locations";
