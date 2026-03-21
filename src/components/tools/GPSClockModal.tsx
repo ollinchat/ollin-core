@@ -1,15 +1,12 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { motion } from "framer-motion";
 import { useLocale } from "@/contexts/LocaleContext";
 import { useTimeClock } from "@/contexts/TimeClockContext";
 import { useContacts } from "@/contexts/ContactsContext";
 import { t } from "@/lib/translations";
 import {
   MapPin,
-  LogIn,
-  LogOut,
   ChevronLeft,
   Settings,
   Share2,
@@ -56,14 +53,6 @@ const DEFAULT_BOARDS: BoardLocation[] = [
   { boardId: "board2", name: "Board 2", address: "", radiusMeters: 500, restrictLocation: false, assignedUserIds: [] },
 ];
 
-function formatClock(ms: number): string {
-  const totalSec = Math.floor(ms / 1000);
-  const h = Math.floor(totalSec / 3600);
-  const m = Math.floor((totalSec % 3600) / 60);
-  const s = totalSec % 60;
-  return [h, m, s].map((n) => n.toString().padStart(2, "0")).join(":");
-}
-
 function formatHoursMinutes(ms: number): string {
   const totalMins = Math.floor(ms / (1000 * 60));
   const h = Math.floor(totalMins / 60);
@@ -82,15 +71,13 @@ const CURRENCIES = [
 export function GPSClockModal({ onClose, defaultScrollToSummary }: Props) {
   const { locale } = useLocale();
   const { contacts } = useContacts();
-  const { entries, clockIn, clockOut, updateEntryNote } = useTimeClock();
+  const { entries, updateEntryNote } = useTimeClock();
   const [adminOpen, setAdminOpen] = useState(false);
   const [boardFilter, setBoardFilter] = useState<string>("");
   const [monthFilter, setMonthFilter] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   });
-  const [note, setNote] = useState("");
-  const [elapsed, setElapsed] = useState(0);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingNoteValue, setEditingNoteValue] = useState("");
   const [boardLocations, setBoardLocations] = useState<BoardLocation[]>(() => {
@@ -108,29 +95,12 @@ export function GPSClockModal({ onClose, defaultScrollToSummary }: Props) {
   const [currency, setCurrency] = useState<"ILS" | "USD" | "EUR">("ILS");
   const [contactSearch, setContactSearch] = useState<Record<string, string>>({});
   const summaryBlockRef = useRef<HTMLDivElement>(null);
-  const [clockOutSummary, setClockOutSummary] = useState<{
-    totalMs: number;
-    startAddress: string;
-    endAddress: string;
-    note: string;
-    outEntryId: string | null;
-  } | null>(null);
-  const [clockOutPopupNotes, setClockOutPopupNotes] = useState("");
   const [placesScriptReady, setPlacesScriptReady] = useState(false);
   const addressInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const autocompleteAttached = useRef<Set<string>>(new Set());
 
   const latest = entries[0];
   const isClockedIn = latest?.type === "in";
-  const clockInTime = isClockedIn ? latest.timestamp : 0;
-
-  useEffect(() => {
-    if (!isClockedIn || !clockInTime) return;
-    const tick = () => setElapsed(Date.now() - clockInTime);
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [isClockedIn, clockInTime]);
 
   useEffect(() => {
     if (!defaultScrollToSummary || !summaryBlockRef.current) return;
@@ -139,37 +109,6 @@ export function GPSClockModal({ onClose, defaultScrollToSummary }: Props) {
     }, 300);
     return () => clearTimeout(t);
   }, [defaultScrollToSummary]);
-
-  const handleToggle = async () => {
-    const noteVal = note.trim() || undefined;
-    if (isClockedIn) {
-      const inEntry = entries.find((e) => e.type === "in");
-      const startAddress = inEntry?.address || inEntry?.label || "—";
-      const totalMs = inEntry ? Date.now() - inEntry.timestamp : 0;
-      await clockOut(noteVal);
-      setNote("");
-      setClockOutSummary({
-        totalMs,
-        startAddress,
-        endAddress: "—",
-        note: noteVal ?? "",
-        outEntryId: null,
-      });
-      setClockOutPopupNotes(noteVal ?? "");
-    } else {
-      await clockIn(noteVal);
-      setNote("");
-    }
-  };
-
-  useEffect(() => {
-    if (!clockOutSummary || (clockOutSummary.endAddress !== "—" && clockOutSummary.outEntryId != null)) return;
-    const outEntry = entries[0];
-    if (outEntry?.type === "out") {
-      const endAddr = outEntry.address || outEntry.label || "—";
-      setClockOutSummary((prev) => prev ? { ...prev, endAddress: endAddr, outEntryId: outEntry.id } : null);
-    }
-  }, [clockOutSummary, entries]);
 
   const saveBoardLocations = (next: BoardLocation[]) => {
     setBoardLocations(next);
@@ -370,6 +309,14 @@ export function GPSClockModal({ onClose, defaultScrollToSummary }: Props) {
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-6 space-y-6">
+          {isClockedIn && (
+            <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-900">
+              {locale === "he"
+                ? "משמרת פעילה — עצור ושמור מהשקופית (Ollin Slide)."
+                : "Shift in progress — stop and save from the Ollin Slide clock."}
+            </div>
+          )}
+
           {/* Month / Year + Board in one row (flex-row) */}
           <div className="flex flex-row flex-wrap items-end gap-3">
             <div className="flex-1 min-w-[140px]">
@@ -395,63 +342,6 @@ export function GPSClockModal({ onClose, defaultScrollToSummary }: Props) {
               </select>
             </div>
           </div>
-
-          {/* Elapsed / status card - solid white */}
-          <div className="rounded-2xl bg-white border border-gray-200 shadow-md p-8 flex flex-col items-center justify-center min-h-[140px]">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">
-              {isClockedIn ? "Elapsed" : "Ready"}
-            </p>
-            <motion.span
-              key={isClockedIn ? "on" : "off"}
-              initial={{ scale: 0.96 }}
-              animate={{ scale: 1 }}
-              className="text-4xl font-mono font-semibold tabular-nums text-gray-900"
-            >
-              {isClockedIn ? formatClock(elapsed) : "00:00:00"}
-            </motion.span>
-            {isClockedIn && (
-              <p className="text-xs text-gray-500 mt-3">
-                Since {new Date(clockInTime).toLocaleTimeString(locale === "he" ? "he-IL" : "en-US", { timeStyle: "short" })}
-              </p>
-            )}
-          </div>
-
-          {/* Optional note */}
-          <div>
-            <label className="text-xs font-medium text-gray-500 uppercase tracking-wider block mb-2">
-              Note (optional)
-            </label>
-            <input
-              type="text"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder={isClockedIn ? "Add a note for clock-out…" : "Add a note for clock-in…"}
-              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm"
-            />
-          </div>
-
-          {/* Clock In: solid green. Clock Out: solid red — clearly different. */}
-          <motion.button
-            type="button"
-            onClick={handleToggle}
-            className={`w-full flex items-center justify-center gap-3 rounded-2xl px-6 py-4 text-base font-semibold text-white shadow-md transition-colors ${
-              isClockedIn
-                ? "bg-red-600 hover:bg-red-700"
-                : "bg-green-600 hover:bg-green-700"
-            }`}
-          >
-            {isClockedIn ? (
-              <>
-                <LogOut className="w-5 h-5" />
-                {t(locale, "tools.clockOut")}
-              </>
-            ) : (
-              <>
-                <LogIn className="w-5 h-5" />
-                {t(locale, "tools.clockIn")}
-              </>
-            )}
-          </motion.button>
 
           {/* Admin — single "Assign location to board" block */}
           <div className="rounded-2xl border border-gray-200 bg-gray-50 overflow-hidden">
@@ -719,73 +609,6 @@ export function GPSClockModal({ onClose, defaultScrollToSummary }: Props) {
         </div>
       </div>
 
-      {/* Clock-out summary modal: Total time, total hours × rate = pay, Entry/Exit address, Notes, Confirm */}
-      {clockOutSummary && (() => {
-        const shiftHours = clockOutSummary.totalMs / (1000 * 60 * 60);
-        const rateNum = parseFloat(hourlyRate.replace(/,/g, ".")) || 0;
-        const shiftPay = rateNum > 0 ? shiftHours * rateNum : null;
-        const currencySymbol = CURRENCIES.find((c) => c.id === currency)?.symbol ?? "";
-        const summaryLine = (clockOutSummary.startAddress || clockOutSummary.endAddress) ? true : false;
-        return (
-          <div
-            className="absolute inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
-            onClick={() => setClockOutSummary(null)}
-          >
-            <div
-              className="w-full max-w-sm rounded-2xl bg-white shadow-xl border border-gray-200 p-5 space-y-4"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h3 className="text-sm font-semibold text-gray-900">{t(locale, "tools.clockOutSummary")}</h3>
-              <div className="space-y-2 text-sm">
-                <p className="tabular-nums font-medium text-gray-900">
-                  {formatClock(clockOutSummary.totalMs)}
-                </p>
-                <p className="text-gray-700">
-                  {t(locale, "tools.totalHours")}: {formatHoursMinutes(clockOutSummary.totalMs)}
-                  {rateNum > 0 && shiftPay != null && (
-                    <> × {t(locale, "tools.hourlyRate")} = {t(locale, "tools.totalPay")}: {currencySymbol}{shiftPay.toFixed(2)}</>
-                  )}
-                </p>
-                <div>
-                  <span className="text-xs font-medium text-gray-500 block">{t(locale, "tools.entryLocation")}</span>
-                  <p className="text-gray-900 font-medium">{clockOutSummary.startAddress || "—"}</p>
-                </div>
-                <div>
-                  <span className="text-xs font-medium text-gray-500 block">{t(locale, "tools.exitLocation")}</span>
-                  <p className="text-gray-900 font-medium">{clockOutSummary.endAddress || "—"}</p>
-                </div>
-                {summaryLine && (
-                  <div className="rounded-lg bg-gray-50 px-3 py-2">
-                    <p className="text-gray-600 text-xs">{clockOutSummary.startAddress} → {clockOutSummary.endAddress}</p>
-                  </div>
-                )}
-                <div>
-                  <label className="text-xs text-gray-500 block mb-1">Notes</label>
-                  <textarea
-                    value={clockOutPopupNotes}
-                    onChange={(e) => setClockOutPopupNotes(e.target.value)}
-                    placeholder="Add notes for this shift…"
-                    rows={3}
-                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 resize-none"
-                  />
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  if (clockOutSummary.outEntryId) {
-                    updateEntryNote(clockOutSummary.outEntryId, clockOutPopupNotes.trim());
-                  }
-                  setClockOutSummary(null);
-                }}
-                className="w-full rounded-xl py-3 text-sm font-medium bg-[#0d9488] text-white hover:bg-[#0f766e] transition-colors"
-              >
-                Confirm
-              </button>
-            </div>
-          </div>
-        );
-      })()}
     </div>
   );
 }

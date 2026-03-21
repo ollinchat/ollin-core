@@ -35,7 +35,6 @@ import type {
   HomeFixedType,
   AutoExpenseType,
   InvestmentKind,
-  DailyTransaction,
 } from "@/lib/financial-dashboard-storage";
 import { newFinancialId } from "@/lib/financial-dashboard-storage";
 import type { BillEntry } from "@/contexts/BillsContext";
@@ -124,8 +123,8 @@ function ProgressMicro({
 }) {
   const pct = cap > 0 ? Math.min(100, (value / cap) * 100) : 0;
   return (
-    <div className="h-1 w-full rounded-full bg-slate-100 overflow-hidden mt-1">
-      <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: color }} />
+    <div className="h-1 w-full rounded-lg bg-slate-100 overflow-hidden mt-1">
+      <div className="h-full rounded-lg transition-all" style={{ width: `${pct}%`, background: color }} />
     </div>
   );
 }
@@ -176,7 +175,7 @@ function FxCard({
   className?: string;
 }) {
   return (
-    <div className={`rounded-xl bg-white border border-slate-200 ${className}`}>
+    <div className={`rounded-lg bg-white border border-slate-200 ${className}`}>
       {children}
     </div>
   );
@@ -242,6 +241,15 @@ function classifyMerchant(merchant: string): { parent: ParentCat; subEn: string;
   let parent: ParentCat = "other";
   let subEn = "General";
   let subHe = "כללי";
+
+  // Known merchants → explicit sub-categories (before broad rules)
+  if (/\bwolt\b/.test(m)) return { parent: "food", subEn: "Delivery", subHe: "משלוחים" };
+  if (/super[\s-]?pharm|superpharm|סופר[\s-]?פארם/.test(m))
+    return { parent: "shopping", subEn: "Pharmacy", subHe: "בית מרקחת" };
+  if (/shufersal|victory|rami[\s-]?levy|ketzoet|יינות ביתן/.test(m))
+    return { parent: "food", subEn: "Supermarket", subHe: "סופרמרקט" };
+  if (/mcdonald|burger|pizza hut|domino|סושי|מסעדת/.test(m))
+    return { parent: "food", subEn: "Restaurant", subHe: "מסעדה" };
 
   if (
     /supermarket|grocery|market|food|restaurant|cafe|coffee|bakery|dining|delivery|wolt|uber\s*eats|pizza|sushi|bistro|grill/.test(
@@ -323,6 +331,9 @@ type MergedOverviewTxn = {
   date: string;
   amount: number;
   parent: ParentCat;
+  /** Specific sub-category label (e.g. Delivery, Pharmacy) */
+  subEn: string;
+  subHe: string;
   kind: "daily" | "auto";
   channel: SpendChannel;
   autoType?: AutoExpenseType;
@@ -345,10 +356,21 @@ function TransactionRowIcon({
       </span>
     );
   }
-  if (autoType === "fuel") return <Fuel className={cls} strokeWidth={2} />;
-  if (autoType === "tolls") return <Milestone className={cls} strokeWidth={2} />;
-  if (autoType === "repair") return <Wrench className={cls} strokeWidth={2} />;
-  return <Shield className={cls} strokeWidth={2} />;
+  const autoIcon =
+    autoType === "fuel" ? (
+      <Fuel className={cls} strokeWidth={2} />
+    ) : autoType === "tolls" ? (
+      <Milestone className={cls} strokeWidth={2} />
+    ) : autoType === "repair" ? (
+      <Wrench className={cls} strokeWidth={2} />
+    ) : (
+      <Shield className={cls} strokeWidth={2} />
+    );
+  return (
+    <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg border border-slate-200 bg-slate-50">
+      {autoIcon}
+    </span>
+  );
 }
 
 export function MinimalFinancialOverview({
@@ -360,6 +382,7 @@ export function MinimalFinancialOverview({
   fd: FinancialDashboardState;
   privacyMode: boolean;
 }) {
+  const [txnListMode, setTxnListMode] = useState<"category" | "time">("category");
   const [rangeMode, setRangeMode] = useState<"monthly" | "yearly" | "custom">("monthly");
   const [customFrom, setCustomFrom] = useState(() => {
     const d = new Date();
@@ -460,7 +483,7 @@ export function MinimalFinancialOverview({
     return out;
   }, [fd.dailyTransactions, fd.autoExpenses, income, investmentLossAsExpense]);
 
-  /** Portfolio / holdings total as “account balance” proxy (no bank field in model). */
+  /** Real-time sum of held assets (investment position values). */
   const totalBalance = useMemo(
     () => fd.investments.reduce((s, x) => s + x.value, 0),
     [fd.investments]
@@ -470,15 +493,20 @@ export function MinimalFinancialOverview({
   const mergedRecentTxns = useMemo((): MergedOverviewTxn[] => {
     const daily: MergedOverviewTxn[] = fd.dailyTransactions
       .filter((t) => inRangeIso(t.date))
-      .map((t) => ({
-        id: t.id,
-        merchant: t.merchant,
-        date: t.date,
-        amount: t.amount,
-        parent: classifyMerchant(t.merchant).parent,
-        kind: "daily" as const,
-        channel: t.channel,
-      }));
+      .map((t) => {
+        const c = classifyMerchant(t.merchant);
+        return {
+          id: t.id,
+          merchant: t.merchant,
+          date: t.date,
+          amount: t.amount,
+          parent: c.parent,
+          subEn: c.subEn,
+          subHe: c.subHe,
+          kind: "daily" as const,
+          channel: t.channel,
+        };
+      });
     const auto: MergedOverviewTxn[] = fd.autoExpenses
       .filter((e) => inRangeIso(e.date))
       .map((e) => {
@@ -489,6 +517,8 @@ export function MinimalFinancialOverview({
           date: e.date,
           amount: e.amount,
           parent: ps.parent,
+          subEn: ps.subEn,
+          subHe: ps.subHe,
           kind: "auto" as const,
           channel: "bank" as SpendChannel,
           autoType: e.type,
@@ -556,13 +586,12 @@ export function MinimalFinancialOverview({
       else agg.subSpend.set(key, { en: subEn, he: subHe, amt });
     };
 
+    // All-time daily + auto so categories reflect every merchant ever logged (sub-labels stay dynamic).
     fd.dailyTransactions.forEach((t) => {
-      if (!inRangeIso(t.date)) return;
       const { parent, subEn, subHe } = classifyMerchant(t.merchant);
       add(parent, subEn, subHe, t.amount);
     });
     fd.autoExpenses.forEach((e) => {
-      if (!inRangeIso(e.date)) return;
       const ps = autoExpenseParentSub(e.type);
       add(ps.parent, ps.subEn, ps.subHe, e.amount);
     });
@@ -587,11 +616,7 @@ export function MinimalFinancialOverview({
         .sort((a, b) => b.amt - a.amt);
       const top = subs.slice(0, 5);
       const subLabel =
-        top.length === 0
-          ? isHe
-            ? "—"
-            : "—"
-          : top.map((s) => (isHe ? s.he : s.en)).join(", ");
+        top.length === 0 ? (isHe ? "כללי" : "General") : top.map((s) => (isHe ? s.he : s.en)).join(", ");
       return {
         key,
         amount: agg.total,
@@ -603,7 +628,7 @@ export function MinimalFinancialOverview({
       .sort((a, b) => b.amount - a.amount);
     const maxAmt = rows.length ? Math.max(...rows.map((r) => r.amount)) : 1;
     return { rows, maxAmt };
-  }, [fd.dailyTransactions, fd.autoExpenses, fd.homeFixed, inRangeIso, rangeDays, isHe]);
+  }, [fd.dailyTransactions, fd.autoExpenses, fd.homeFixed, rangeDays, isHe]);
 
   const categoryIcon = (key: ParentCat) => {
     const cls = "w-4 h-4 text-slate-400 shrink-0";
@@ -640,7 +665,7 @@ export function MinimalFinancialOverview({
                   key={opt.key}
                   type="button"
                   onClick={() => setRangeMode(opt.key)}
-                  className={`px-4 py-1.5 rounded-md text-[13px] font-medium transition-colors ${
+                  className={`px-4 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${
                     active ? "bg-white border border-slate-200 text-slate-900" : "text-slate-600 hover:text-slate-800"
                   }`}
                 >
@@ -769,9 +794,9 @@ export function MinimalFinancialOverview({
                           >
                             {row.amount.toFixed(0)}₪
                           </span>
-                          <div className="h-1 w-[min(100%,140px)] rounded-sm bg-slate-200 overflow-hidden">
+                          <div className="h-1 w-[min(100%,140px)] rounded-lg bg-slate-200 overflow-hidden">
                             <div
-                              className="h-full rounded-sm bg-slate-600 transition-all"
+                              className="h-full rounded-lg bg-slate-600 transition-all"
                               style={{ width: `${Math.min(100, pct)}%` }}
                             />
                           </div>
@@ -794,30 +819,91 @@ export function MinimalFinancialOverview({
           )}
         </div>
 
-        {/* Recent transactions (no icons) */}
+        {/* Recent transactions — category (H2 groups) vs time (flat chronological) */}
         <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-            <p className="text-[13px] font-semibold text-slate-800">{isHe ? "עסקאות אחרונות" : "Recent Transactions"}</p>
-            <p className="text-[11px] text-slate-400">{isHe ? "5 אחרונות" : "Last 5"}</p>
+          <div className="px-3 py-3 sm:px-4 border-b border-slate-200 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[13px] font-semibold text-slate-800">
+                {isHe ? "פעולות אחרונות" : "Recent Transactions"}
+              </p>
+            </div>
+            <div className="inline-flex p-0.5 rounded-lg border border-slate-200 bg-slate-50 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={() => setTxnListMode("category")}
+                className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${
+                  txnListMode === "category"
+                    ? "bg-white border border-slate-200 text-slate-900"
+                    : "text-slate-600 hover:text-slate-800"
+                }`}
+              >
+                {isHe ? "לפי קטגוריה" : "By category"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setTxnListMode("time")}
+                className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${
+                  txnListMode === "time"
+                    ? "bg-white border border-slate-200 text-slate-900"
+                    : "text-slate-600 hover:text-slate-800"
+                }`}
+              >
+                {isHe ? "לפי זמן" : "By time"}
+              </button>
+            </div>
           </div>
-          <ul>
-            {recentTxns.slice(0, 5).map((t) => (
-              <li key={t.id} className="px-4 py-3 border-b border-slate-50 last:border-b-0 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-[13px] font-medium text-slate-800 truncate">{t.merchant}</p>
-                  <p className="text-[11px] text-slate-400">{t.date}</p>
-                </div>
-                <div className={`text-[13px] font-semibold tabular-nums text-slate-900 ${privacyMode ? "blur-[3px] select-none" : ""}`}>
-                  {t.amount.toFixed(0)}₪
-                </div>
-              </li>
-            ))}
-            {recentTxns.length === 0 && (
-              <li className="px-4 py-5 text-center text-[13px] text-slate-500">
-                {isHe ? "אין עסקאות לתצוגה" : "No transactions to show"}
-              </li>
+          <div className="px-2 py-2 sm:px-3">
+            {mergedRecentTxns.length === 0 ? (
+              <p className="px-2 py-5 text-center text-[13px] text-slate-500">
+                {isHe ? "אין פעולות בטווח שנבחר." : "No transactions in the selected period."}
+              </p>
+            ) : txnListMode === "time" ? (
+              <ul className="divide-y divide-slate-100">
+                {mergedRecentTxns.map((t) => (
+                  <li key={t.id} className="flex items-center gap-3 px-2 py-2.5">
+                    <TransactionRowIcon kind={t.kind} channel={t.channel} autoType={t.autoType} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] font-medium text-slate-800 truncate">{t.merchant}</p>
+                      <p className="text-[11px] text-slate-500 truncate">{isHe ? t.subHe : t.subEn}</p>
+                      <p className="text-[11px] text-slate-400">{t.date}</p>
+                    </div>
+                    <div
+                      className={`text-[13px] font-semibold tabular-nums text-slate-900 shrink-0 ${amountBlur}`}
+                      style={{ fontFeatureSettings: '"tnum" 1, "lnum" 1' }}
+                    >
+                      {t.amount.toFixed(0)}₪
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              groupedRecentTxns.map(({ cat, title, items }) => (
+                <section key={cat} className="mb-4 last:mb-0">
+                  <h2 className="text-[13px] font-bold text-slate-600 px-2 py-2 border-b border-slate-200">
+                    {title}
+                  </h2>
+                  <ul className="divide-y divide-slate-100">
+                    {items.map((t) => (
+                      <li key={t.id} className="flex items-center gap-3 px-2 py-2.5">
+                        <TransactionRowIcon kind={t.kind} channel={t.channel} autoType={t.autoType} />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[13px] font-medium text-slate-800 truncate">{t.merchant}</p>
+                          <p className="text-[11px] text-slate-500 truncate">{isHe ? t.subHe : t.subEn}</p>
+                          <p className="text-[11px] text-slate-400">{t.date}</p>
+                        </div>
+                        <div
+                          className={`text-[13px] font-semibold tabular-nums text-slate-900 shrink-0 ${amountBlur}`}
+                          style={{ fontFeatureSettings: '"tnum" 1, "lnum" 1' }}
+                        >
+                          {t.amount.toFixed(0)}₪
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ))
             )}
-          </ul>
+          </div>
         </div>
       </div>
     </div>
@@ -944,12 +1030,12 @@ export function FinancialOverview({
         {/* Cockpit: donut + spark + legend */}
         <FxCard className="p-2 flex flex-wrap items-center gap-3">
           <div
-            className="relative w-[52px] h-[52px] rounded-full shrink-0"
+            className="relative w-[52px] h-[52px] rounded-lg shrink-0"
             style={{
               background: `conic-gradient(${gradient})`,
             }}
           >
-            <div className="absolute inset-[10px] rounded-full bg-white flex items-center justify-center shadow-inner">
+            <div className="absolute inset-[10px] rounded-lg bg-white flex items-center justify-center shadow-inner">
               <span className="text-[9px] font-bold text-slate-600">{isHe ? "ערוצים" : "Mix"}</span>
             </div>
           </div>
@@ -959,7 +1045,7 @@ export function FinancialOverview({
               const pct = Math.round((v / total7) * 100);
               return (
                 <div key={key} className="flex items-center gap-2 text-[11px]">
-                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: hex }} />
+                  <span className="w-2 h-2 rounded-lg shrink-0" style={{ background: hex }} />
                   <span className="text-slate-600 truncate flex-1">{isHe ? labelHe : labelEn}</span>
                   <span className="tabular-nums font-semibold text-slate-800">{v.toFixed(0)}₪</span>
                   <span className="text-slate-400 w-7 text-end">{pct}%</span>
@@ -1196,7 +1282,7 @@ export function AppsSubscriptionsTab({
               <button
                 type="button"
                 onClick={() => setFd((st) => ({ ...st, subscriptions: st.subscriptions.filter((x) => x.id !== s.id) }))}
-                className="text-[9px] font-medium text-slate-500 border border-transparent rounded-md py-0.5 hover:text-red-600 hover:bg-red-50 transition-colors hover:border-red-200"
+                className="text-[9px] font-medium text-slate-500 border border-transparent rounded-lg py-0.5 hover:text-red-600 hover:bg-red-50 transition-colors hover:border-red-200"
               >
                 {isHe ? "בטל" : "Cancel"}
               </button>
@@ -1421,7 +1507,7 @@ export function HomeFixedTab({
                       homeFixed: s.homeFixed.map((x) => (x.id === h.id ? { ...x, monthlyAmount: v } : x)),
                     }));
                   }}
-                  className="w-full text-[13px] font-bold tabular-nums text-teal-800 border border-slate-200 rounded-md px-1.5 py-0.5 mt-0.5"
+                  className="w-full text-[13px] font-bold tabular-nums text-teal-800 border border-slate-200 rounded-lg px-1.5 py-0.5 mt-0.5"
                 />
               </div>
             </FxCard>
@@ -1666,10 +1752,10 @@ export function InvestmentsTab({
               >
                 <div className="flex items-center gap-1 min-w-0">
                   <span
-                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${pos ? "bg-emerald-500" : "bg-red-500"}`}
+                    className={`w-1.5 h-1.5 rounded-lg shrink-0 ${pos ? "bg-emerald-500" : "bg-red-500"}`}
                     aria-hidden
                   />
-                  <span className="w-6 h-6 rounded-md bg-slate-800 text-white flex items-center justify-center shrink-0">
+                  <span className="w-6 h-6 rounded-lg bg-slate-800 text-white flex items-center justify-center shrink-0">
                     {INV_ICON[inv.kind]}
                   </span>
                   <span className="text-[10px] font-semibold truncate text-slate-800">{inv.name}</span>

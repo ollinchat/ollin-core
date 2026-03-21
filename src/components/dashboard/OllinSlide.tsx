@@ -9,6 +9,7 @@ import { useNotes } from "@/contexts/NotesContext";
 import { useChat, useInternalMessages } from "@/contexts/ChatEngineContext";
 import { useContacts } from "@/contexts/ContactsContext";
 import { useBoard } from "@/contexts/BoardContext";
+import { useTimeClock } from "@/contexts/TimeClockContext";
 import {
   CircleCheck,
   ScanLine,
@@ -32,6 +33,8 @@ import {
   X,
   GripVertical,
   Brain,
+  MapPin,
+  Loader2,
 } from "lucide-react";
 import { t } from "@/lib/translations";
 import { PollCreator } from "@/components/board/PollCreator";
@@ -41,6 +44,68 @@ import { generateUUID } from "@/lib/uuid";
 
 const EASE_SMOOTH = [0.32, 0.72, 0, 1];
 const TRANSITION_MS = 300;
+const OLLIN_TURQUOISE = "#008080";
+
+function formatClockMs(ms: number): string {
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  return [h, m, s].map((n) => n.toString().padStart(2, "0")).join(":");
+}
+
+function formatCoordsShort(lat: number, lng: number): string {
+  return `${lat.toFixed(3)}, ${lng.toFixed(3)}`;
+}
+
+/** City / area label for attendance log (Google if key present, else short coordinates). */
+async function reverseGeocodeArea(lat: number, lng: number): Promise<string> {
+  const key = (process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "").trim();
+  if (key) {
+    try {
+      const res = await fetch(
+        `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${encodeURIComponent(key)}`
+      );
+      const data = (await res.json()) as {
+        results?: Array<{ formatted_address?: string; address_components?: Array<{ long_name: string; types: string[] }> }>;
+      };
+      const first = data.results?.[0];
+      const comp = first?.address_components;
+      if (comp?.length) {
+        const neighborhood =
+          comp.find((c) => c.types.includes("neighborhood"))?.long_name ||
+          comp.find((c) => c.types.includes("sublocality"))?.long_name;
+        const locality = comp.find((c) => c.types.includes("locality"))?.long_name;
+        const admin = comp.find((c) => c.types.includes("administrative_area_level_1"))?.long_name;
+        const country = comp.find((c) => c.types.includes("country"))?.long_name;
+        const parts = [neighborhood, locality, admin, country].filter(Boolean);
+        if (parts.length) return parts.join(", ");
+      }
+      if (first?.formatted_address) return first.formatted_address;
+    } catch {
+      /* fall through */
+    }
+  }
+  return formatCoordsShort(lat, lng);
+}
+
+function getCurrentAreaLabel(): Promise<string> {
+  return new Promise((resolve) => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      resolve("");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        const label = await reverseGeocodeArea(latitude, longitude);
+        resolve(label);
+      },
+      () => resolve(""),
+      { timeout: 12000, maximumAge: 30000 }
+    );
+  });
+}
 
 const OLLIN_SLIDE_TOOLS_KEY = "ollin_slide_tools";
 
@@ -262,6 +327,7 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
   const { sendText, currentUserId } = useInternalMessages();
   const { contacts } = useContacts();
   const { addMeeting } = useBoard();
+  const { entries: timeEntries, clockIn, clockOut, updateEntryNote } = useTimeClock();
   const [meetingModalOpen, setMeetingModalOpen] = useState(false);
   const defaultFolderId = folders[0]?.id ?? "default";
   const recentNotes = (defaultFolderId ? getNotesInFolder(defaultFolderId) : []).slice(0, 8);
@@ -289,6 +355,95 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
   const topInputRef = useRef<HTMLTextAreaElement>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const dashboardScrollRef = useRef<HTMLDivElement>(null);
+
+  /** Slide-only time clock: READY → live timer; stop opens summary modal (locations + note). */
+  const [clockBusy, setClockBusy] = useState(false);
+  const [clockElapsed, setClockElapsed] = useState(0);
+  const [clockSummary, setClockSummary] = useState<{
+    totalMs: number;
+    startAddress: string;
+    endAddress: string;
+    outEntryId: string | null;
+    noteDraft: string;
+  } | null>(null);
+
+  const latestTimeEntry = timeEntries[0];
+  const isTimeClockIn = latestTimeEntry?.type === "in";
+  const slideClockInTime = isTimeClockIn ? latestTimeEntry.timestamp : 0;
+
+  useEffect(() => {
+    if (!isTimeClockIn || !slideClockInTime) return;
+    const tick = () => setClockElapsed(Date.now() - slideClockInTime);
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [isTimeClockIn, slideClockInTime]);
+
+  useEffect(() => {
+    if (!clockSummary || clockSummary.outEntryId != null) return;
+    const outEntry = timeEntries[0];
+    if (outEntry?.type === "out") {
+      const endAddr = outEntry.address || outEntry.label || clockSummary.endAddress;
+      setClockSummary((prev) => (prev ? { ...prev, endAddress: endAddr || prev.endAddress, outEntryId: outEntry.id } : null));
+    }
+  }, [clockSummary, timeEntries]);
+
+  const handleSlideTimeClockClick = useCallback(async () => {
+    if (clockBusy) return;
+    if (!isTimeClockIn) {
+      setClockBusy(true);
+      try {
+        const area = await getCurrentAreaLabel();
+        await clockIn(undefined, area.trim() || undefined);
+      } finally {
+        setClockBusy(false);
+      }
+      return;
+    }
+    setClockBusy(true);
+    try {
+      const inEntry = timeEntries.find((e) => e.type === "in");
+      if (!inEntry) return;
+      const totalMs = Date.now() - inEntry.timestamp;
+      const startAddress = inEntry.address || inEntry.label || (isHe ? "לא ידוע" : "Unknown");
+      const exitArea = (await getCurrentAreaLabel()).trim();
+      await clockOut(undefined, exitArea || undefined);
+      setClockSummary({
+        totalMs,
+        startAddress,
+        endAddress: exitArea || (isHe ? "—" : "—"),
+        outEntryId: null,
+        noteDraft: "",
+      });
+    } finally {
+      setClockBusy(false);
+    }
+  }, [clockBusy, isTimeClockIn, timeEntries, clockIn, clockOut, isHe]);
+
+  const renderSlideTimeClockCompactButton = () => (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        void handleSlideTimeClockClick();
+      }}
+      disabled={clockBusy}
+      className={`flex items-center justify-center min-w-[2.75rem] h-10 px-1.5 rounded-lg border transition-colors shadow-sm disabled:opacity-60 ${
+        isTimeClockIn
+          ? "bg-rose-50 border-rose-200 text-rose-900"
+          : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+      }`}
+      aria-label={isHe ? "שעון נוכחות" : "Attendance clock"}
+    >
+      {clockBusy ? (
+        <Loader2 className="w-4 h-4 animate-spin text-slate-500 shrink-0" aria-hidden />
+      ) : isTimeClockIn ? (
+        <span className="text-[11px] font-mono font-semibold tabular-nums leading-none">{formatClockMs(clockElapsed)}</span>
+      ) : (
+        <span className="text-[9px] font-bold tracking-wide text-slate-500">READY</span>
+      )}
+    </button>
+  );
 
   // Grid: exactly 2 rows x 3 blocks (6 total).
   // If localStorage order misses core blocks, we auto-heal from defaults (without touching saved order too aggressively).
@@ -494,15 +649,8 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
           <Brain className="w-5 h-5" strokeWidth={2} />
         </button>
 
-        {/* Clock */}
-        <button
-          type="button"
-          onClick={() => setGpsOpen(true)}
-          className="w-10 h-10 rounded-[16px] border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 flex items-center justify-center transition-colors shadow-sm"
-          aria-label={t(locale, "dashboard.gpsClock")}
-        >
-          <Clock className="w-5 h-5" strokeWidth={2} />
-        </button>
+        {/* Attendance clock — same control as dashboard (compact) */}
+        {renderSlideTimeClockCompactButton()}
       </div>
       <input
         type="text"
@@ -757,9 +905,9 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
 
                     {/* Brain: internal expanded chat only (not in dashboard view). */}
 
-                    <button type="button" onClick={(e) => { e.stopPropagation(); setGpsOpen(true); }} className="w-11 h-11 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 flex items-center justify-center transition-colors shadow-sm" aria-label={t(locale, "dashboard.gpsClock")}>
-                      <Clock className="w-5 h-5" strokeWidth={2} />
-                    </button>
+                    <span onClick={(e) => e.stopPropagation()} className="inline-flex">
+                      {renderSlideTimeClockCompactButton()}
+                    </span>
                   </div>
                   <motion.button type="button" onClick={(e) => { e.stopPropagation(); handleSend(); }} className="w-11 h-11 rounded-xl bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors flex items-center justify-center shadow-sm" whileTap={{ scale: 0.95 }} aria-label="Send">
                     <Send className="w-5 h-5" strokeWidth={2} />
@@ -777,6 +925,51 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
         style={{ pointerEvents: expanded ? "none" : "auto" }}
       >
           <div className="flex-shrink-0 pb-2 pt-1">
+            {/* Interactive attendance clock — sole start/stop control for shift */}
+            <button
+              type="button"
+              onClick={() => void handleSlideTimeClockClick()}
+              disabled={clockBusy}
+              className={`w-full mb-3 rounded-lg border px-4 py-4 text-center transition-colors disabled:opacity-60 ${
+                isTimeClockIn
+                  ? "bg-rose-50 border-rose-200 shadow-sm"
+                  : "bg-slate-50/90 border-slate-200 hover:bg-slate-50"
+              }`}
+            >
+              <div className="flex flex-col items-center justify-center gap-1">
+                <div className="flex items-center gap-2">
+                  <Clock
+                    className={`w-5 h-5 shrink-0 ${isTimeClockIn ? "text-rose-700" : "text-slate-500"}`}
+                    strokeWidth={2}
+                  />
+                  {clockBusy ? (
+                    <Loader2 className="w-6 h-6 animate-spin text-slate-500" aria-hidden />
+                  ) : isTimeClockIn ? (
+                    <span className="text-2xl font-mono font-semibold tabular-nums text-rose-900 tracking-tight">
+                      {formatClockMs(clockElapsed)}
+                    </span>
+                  ) : (
+                    <span className="text-lg font-bold tracking-wide text-slate-600">READY</span>
+                  )}
+                </div>
+                <p className="text-[10px] font-medium text-slate-500">
+                  {isTimeClockIn
+                    ? isHe
+                      ? "לחץ לעצירה ושמירה"
+                      : "Tap to stop & save"
+                    : isHe
+                      ? "לחץ להתחלת משמרת"
+                      : "Tap to start shift"}
+                </p>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setGpsOpen(true)}
+              className="w-full mb-3 py-2 text-[11px] font-medium text-slate-500 hover:text-[#008080] rounded-lg border border-transparent hover:border-slate-200 hover:bg-slate-50 transition-colors"
+            >
+              {isHe ? "יומן נוכחות, מיקומים וייצוא" : "Attendance log, locations & export"}
+            </button>
             <div className="grid grid-cols-3 sm:grid-cols-3 gap-1">
               {toolItems.map((item, index) => {
                 const { key, href, action, labelEn, labelHe, icon: Icon } = item;
@@ -1149,6 +1342,93 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
         )}
       </AnimatePresence>
       {gpsOpen && <GPSClockModal onClose={() => setGpsOpen(false)} defaultScrollToSummary />}
+
+      {typeof document !== "undefined" &&
+        clockSummary &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="slide-clock-summary-title"
+            onClick={() => setClockSummary(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.2 }}
+              className="w-full max-w-md rounded-lg border border-slate-200 bg-white shadow-xl p-5 sm:p-6 space-y-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+                <div className="flex items-start justify-between gap-3">
+                  <h2 id="slide-clock-summary-title" className="text-base font-semibold text-slate-900">
+                    {isHe ? "סיכום משמרת" : "Shift summary"}
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => setClockSummary(null)}
+                    className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors shrink-0"
+                    aria-label={isHe ? "סגור" : "Close"}
+                  >
+                    <X className="w-4 h-4" strokeWidth={2.5} />
+                  </button>
+                </div>
+                <p className="text-lg font-mono font-semibold tabular-nums text-slate-900">
+                  {isHe ? "סה״כ: " : "Total: "}
+                  {formatClockMs(clockSummary.totalMs)}
+                </p>
+                <div className="space-y-3 text-sm">
+                  <div className="flex gap-3 rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2.5">
+                    <MapPin className="w-4 h-4 text-[#008080] shrink-0 mt-0.5" strokeWidth={2} aria-hidden />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                        {isHe ? "כניסה" : "Entry"}
+                      </p>
+                      <p className="text-slate-800 font-medium break-words">{clockSummary.startAddress}</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3 rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2.5">
+                    <MapPin className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" strokeWidth={2} aria-hidden />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                        {isHe ? "יציאה" : "Exit"}
+                      </p>
+                      <p className="text-slate-800 font-medium break-words">{clockSummary.endAddress}</p>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <label htmlFor="slide-clock-work-note" className="text-xs font-semibold text-slate-600 block mb-1.5">
+                    {isHe ? "על מה עבדת?" : "What did you work on?"}
+                  </label>
+                  <textarea
+                    id="slide-clock-work-note"
+                    value={clockSummary.noteDraft}
+                    onChange={(e) => setClockSummary((s) => (s ? { ...s, noteDraft: e.target.value } : null))}
+                    rows={3}
+                    placeholder={isHe ? "הוסף הערות למשמרת…" : "Add notes for this shift…"}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 resize-none focus:outline-none focus:ring-0 focus:border-slate-300"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!clockSummary) return;
+                    const outId =
+                      clockSummary.outEntryId ??
+                      (timeEntries[0]?.type === "out" ? timeEntries[0].id : null);
+                    if (outId) updateEntryNote(outId, clockSummary.noteDraft.trim());
+                    setClockSummary(null);
+                  }}
+                  className="w-full rounded-lg py-3 text-sm font-semibold text-white transition-opacity hover:opacity-95 shadow-sm"
+                  style={{ backgroundColor: OLLIN_TURQUOISE }}
+                >
+                  {isHe ? "אשר ושמור" : "Confirm & Save"}
+                </button>
+              </motion.div>
+          </div>,
+          document.body
+        )}
 
       {meetingModalOpen && (
         <MeetingEventFormModal
