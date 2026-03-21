@@ -35,11 +35,13 @@ import {
   Brain,
   MapPin,
   Loader2,
+  PanelRight,
 } from "lucide-react";
 import { t } from "@/lib/translations";
 import { PollCreator } from "@/components/board/PollCreator";
 import { MeetingEventFormModal } from "@/components/board/MeetingEventFormModal";
 import { GPSClockModal } from "@/components/tools/GPSClockModal";
+import { TimeAttendanceManagementPanel } from "@/components/tools/TimeAttendanceManagementPanel";
 import { generateUUID } from "@/lib/uuid";
 
 const EASE_SMOOTH = [0.32, 0.72, 0, 1];
@@ -115,10 +117,11 @@ type FeatureItem = {
   labelHe: string;
   icon: typeof ScanLine;
   href?: string;
-  action?: "scanner" | "converter" | "poll" | "task" | "event";
+  action?: "scanner" | "converter" | "poll" | "task" | "event" | "timetracker";
 };
 
-const DEFAULT_TOOL_KEYS = ["scanner", "invoices", "files", "sign", "poll", "converter"];
+/** Time Tracker replaces File Converter in the default 6; converter stays in the tool library. */
+const DEFAULT_TOOL_KEYS = ["scanner", "invoices", "files", "sign", "poll", "timetracker"];
 
 /** Full tool library: grid tools + addable tools (Calculator, Meter, Currency, Task, Event) */
 const TOOL_LIBRARY: FeatureItem[] = [
@@ -128,6 +131,7 @@ const TOOL_LIBRARY: FeatureItem[] = [
   { key: "files", labelEn: "Files", labelHe: "קבצים", icon: FileStack, href: "/dashboard/folders" },
   { key: "sign", labelEn: "Sign Docs", labelHe: "חתימת מסמכים", icon: PenLine, href: "/dashboard/documents/sign" },
   { key: "poll", labelEn: "Create Poll", labelHe: "סקרים", icon: BarChart2, action: "poll" },
+  { key: "timetracker", labelEn: "Time Tracker", labelHe: "מעקב זמן", icon: Clock, action: "timetracker" },
   { key: "converter", labelEn: "File Converter", labelHe: "המרת קבצים", icon: FileOutput, action: "converter" },
   { key: "calculator", labelEn: "Smart Calculator", labelHe: "מחשבון חכם", icon: Calculator, href: "/dashboard/convert" },
   { key: "meter", labelEn: "Measure", labelHe: "מדידה", icon: Ruler, href: "/dashboard" },
@@ -144,7 +148,8 @@ function loadToolKeys(): string[] {
     if (!raw) return DEFAULT_TOOL_KEYS;
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_TOOL_KEYS;
-    return parsed.filter((k): k is string => typeof k === "string");
+    const strings = parsed.filter((k): k is string => typeof k === "string").map((k) => (k === "converter" ? "timetracker" : k));
+    return Array.from(new Set(strings));
   } catch {
     return DEFAULT_TOOL_KEYS;
   }
@@ -341,6 +346,7 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
   const [activeBrainModel, setActiveBrainModel] = useState<string>("ollin-private");
   const [pollModalOpen, setPollModalOpen] = useState(false);
   const [gpsOpen, setGpsOpen] = useState(false);
+  const [timeAttendancePanelOpen, setTimeAttendancePanelOpen] = useState(false);
   const [placeholderDots, setPlaceholderDots] = useState("");
   const [topicsSidebarOpen, setTopicsSidebarOpen] = useState(false);
   const [topics, setTopics] = useState<{ id: string; title: string }[]>([]);
@@ -419,31 +425,6 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
       setClockBusy(false);
     }
   }, [clockBusy, isTimeClockIn, timeEntries, clockIn, clockOut, isHe]);
-
-  const renderSlideTimeClockCompactButton = () => (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation();
-        void handleSlideTimeClockClick();
-      }}
-      disabled={clockBusy}
-      className={`flex items-center justify-center min-w-[2.75rem] h-10 px-1.5 rounded-lg border transition-colors shadow-sm disabled:opacity-60 ${
-        isTimeClockIn
-          ? "bg-rose-50 border-rose-200 text-rose-900"
-          : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-      }`}
-      aria-label={isHe ? "שעון נוכחות" : "Attendance clock"}
-    >
-      {clockBusy ? (
-        <Loader2 className="w-4 h-4 animate-spin text-slate-500 shrink-0" aria-hidden />
-      ) : isTimeClockIn ? (
-        <span className="text-[11px] font-mono font-semibold tabular-nums leading-none">{formatClockMs(clockElapsed)}</span>
-      ) : (
-        <span className="text-[9px] font-bold tracking-wide text-slate-500">READY</span>
-      )}
-    </button>
-  );
 
   // Grid: exactly 2 rows x 3 blocks (6 total).
   // If localStorage order misses core blocks, we auto-heal from defaults (without touching saved order too aggressively).
@@ -604,6 +585,32 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
                       );
                     })}
                   </div>
+                  <div className="px-3 pt-2 space-y-2">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setGpsOpen(true);
+                        setPlusMenuOpen(false);
+                      }}
+                      className="w-full py-2.5 text-[11px] font-medium text-slate-600 hover:bg-slate-50 rounded-lg border border-slate-200 transition-colors"
+                    >
+                      {isHe ? "יומן נוכחות וייצוא" : "Attendance log & export"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setBrainMenuOpen(true);
+                        setBrainInfoOpenKey(null);
+                        setPlusMenuOpen(false);
+                      }}
+                      className="w-full py-2.5 text-[11px] font-medium text-slate-600 hover:bg-slate-50 rounded-lg border border-slate-200 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Brain className="w-4 h-4 text-slate-500 shrink-0" strokeWidth={2} />
+                      Brain
+                    </button>
+                  </div>
                   <div className="px-4 pt-2 border-t border-slate-100">
                     <p className="text-[10px] text-slate-500">{isHe ? "פעולות מהירות (טפסים בצ'אט)" : "Quick actions (chat forms)"}</p>
                   </div>
@@ -634,23 +641,6 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
             )}
           </AnimatePresence>
         </div>
-
-        {/* Brain (expanded/internal chat only): between + and Clock */}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setBrainMenuOpen((o) => !o);
-            setBrainInfoOpenKey(null);
-          }}
-          className="w-10 h-10 rounded-[16px] border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 flex items-center justify-center transition-colors shadow-sm"
-          aria-label="Brain"
-        >
-          <Brain className="w-5 h-5" strokeWidth={2} />
-        </button>
-
-        {/* Attendance clock — same control as dashboard (compact) */}
-        {renderSlideTimeClockCompactButton()}
       </div>
       <input
         type="text"
@@ -897,17 +887,24 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
                                   );
                                 })}
                               </div>
+                              <div className="px-3 pt-2">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setGpsOpen(true);
+                                    setPlusMenuOpen(false);
+                                  }}
+                                  className="w-full py-2.5 text-[11px] font-medium text-slate-600 hover:bg-slate-50 rounded-lg border border-slate-200 transition-colors"
+                                >
+                                  {isHe ? "יומן נוכחות וייצוא" : "Attendance log & export"}
+                                </button>
+                              </div>
                             </motion.div>
                           </>
                         )}
                       </AnimatePresence>
                     </div>
-
-                    {/* Brain: internal expanded chat only (not in dashboard view). */}
-
-                    <span onClick={(e) => e.stopPropagation()} className="inline-flex">
-                      {renderSlideTimeClockCompactButton()}
-                    </span>
                   </div>
                   <motion.button type="button" onClick={(e) => { e.stopPropagation(); handleSend(); }} className="w-11 h-11 rounded-xl bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors flex items-center justify-center shadow-sm" whileTap={{ scale: 0.95 }} aria-label="Send">
                     <Send className="w-5 h-5" strokeWidth={2} />
@@ -925,51 +922,6 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
         style={{ pointerEvents: expanded ? "none" : "auto" }}
       >
           <div className="flex-shrink-0 pb-2 pt-1">
-            {/* Interactive attendance clock — sole start/stop control for shift */}
-            <button
-              type="button"
-              onClick={() => void handleSlideTimeClockClick()}
-              disabled={clockBusy}
-              className={`w-full mb-3 rounded-lg border px-4 py-4 text-center transition-colors disabled:opacity-60 ${
-                isTimeClockIn
-                  ? "bg-rose-50 border-rose-200 shadow-sm"
-                  : "bg-slate-50/90 border-slate-200 hover:bg-slate-50"
-              }`}
-            >
-              <div className="flex flex-col items-center justify-center gap-1">
-                <div className="flex items-center gap-2">
-                  <Clock
-                    className={`w-5 h-5 shrink-0 ${isTimeClockIn ? "text-rose-700" : "text-slate-500"}`}
-                    strokeWidth={2}
-                  />
-                  {clockBusy ? (
-                    <Loader2 className="w-6 h-6 animate-spin text-slate-500" aria-hidden />
-                  ) : isTimeClockIn ? (
-                    <span className="text-2xl font-mono font-semibold tabular-nums text-rose-900 tracking-tight">
-                      {formatClockMs(clockElapsed)}
-                    </span>
-                  ) : (
-                    <span className="text-lg font-bold tracking-wide text-slate-600">READY</span>
-                  )}
-                </div>
-                <p className="text-[10px] font-medium text-slate-500">
-                  {isTimeClockIn
-                    ? isHe
-                      ? "לחץ לעצירה ושמירה"
-                      : "Tap to stop & save"
-                    : isHe
-                      ? "לחץ להתחלת משמרת"
-                      : "Tap to start shift"}
-                </p>
-              </div>
-            </button>
-            <button
-              type="button"
-              onClick={() => setGpsOpen(true)}
-              className="w-full mb-3 py-2 text-[11px] font-medium text-slate-500 hover:text-[#008080] rounded-lg border border-transparent hover:border-slate-200 hover:bg-slate-50 transition-colors"
-            >
-              {isHe ? "יומן נוכחות, מיקומים וייצוא" : "Attendance log, locations & export"}
-            </button>
             <div className="grid grid-cols-3 sm:grid-cols-3 gap-1">
               {toolItems.map((item, index) => {
                 const { key, href, action, labelEn, labelHe, icon: Icon } = item;
@@ -1023,6 +975,102 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
                     setDraggedToolIndex(index);
                   },
                 } : {};
+
+                if (key === "timetracker") {
+                  const timeTileBase =
+                    "w-full h-[92px] flex flex-col rounded-lg border transition-all shadow-lg hover:shadow-xl hover:scale-[1.01] relative overflow-hidden";
+                  const timeTileIdle = `${timeTileBase} bg-white border-slate-200/80 hover:bg-slate-50 text-gray-700`;
+                  const timeTileActive = `${timeTileBase} bg-rose-50 border-rose-200 text-rose-900 shadow-[0_8px_24px_rgba(244,63,94,0.1)]`;
+                  const timeTileClass = toolsEditMode
+                    ? `${isTimeClockIn ? timeTileActive : timeTileIdle} animate-wiggle cursor-grab active:cursor-grabbing`
+                    : isTimeClockIn
+                      ? timeTileActive
+                      : timeTileIdle;
+
+                  return (
+                    <div
+                      key={key}
+                      onContextMenu={handleContextMenu}
+                      onTouchStart={handleTouchStart}
+                      onTouchEnd={handleTouchEnd}
+                      onTouchCancel={cancelLongPress}
+                      className={timeTileClass}
+                      {...(toolsEditMode ? dragProps : {})}
+                    >
+                      {toolsEditMode && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); removeTool(key); }}
+                          className="absolute -top-1 -right-1 z-10 w-5 h-5 rounded-lg bg-white text-red-600 border border-red-200 flex items-center justify-center shadow-[0_1px_6px_rgba(239,68,68,0.10)] hover:bg-red-50"
+                          aria-label={isHe ? "הסר" : "Remove"}
+                        >
+                          <X className="w-3 h-3" strokeWidth={2.5} />
+                        </button>
+                      )}
+                      {toolsEditMode && (
+                        <span className="absolute left-1 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden>
+                          <GripVertical className="w-4 h-4" strokeWidth={2} />
+                        </span>
+                      )}
+                      {toolsEditMode ? (
+                        <div className="w-full h-full flex flex-col items-center justify-center gap-1 px-1">
+                          <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center">
+                            <Clock className="w-4 h-4 text-slate-500" strokeWidth={2} />
+                          </div>
+                          <span className="text-[10px] font-medium text-center leading-tight text-gray-700 px-1 line-clamp-2">
+                            {isHe ? labelHe : labelEn}
+                          </span>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex justify-end w-full pr-1 pt-1 shrink-0">
+                            <button
+                              type="button"
+                              className="w-7 h-7 rounded-lg border border-slate-200 bg-white/95 text-slate-600 hover:bg-slate-50 flex items-center justify-center shadow-sm"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setTimeAttendancePanelOpen(true);
+                              }}
+                              aria-label={isHe ? "ניהול נוכחות והיסטוריה" : "Attendance log & management"}
+                            >
+                              <PanelRight className="w-3.5 h-3.5" strokeWidth={2} />
+                            </button>
+                          </div>
+                          <button
+                            type="button"
+                            className="flex-1 flex flex-col items-center justify-center gap-1 min-h-0 w-full pb-2 -mt-1"
+                            disabled={clockBusy}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              void handleSlideTimeClockClick();
+                            }}
+                            aria-label={isHe ? "מעקב זמן" : "Time tracker"}
+                          >
+                            {clockBusy ? (
+                              <Loader2 className="w-6 h-6 animate-spin text-slate-500" aria-hidden />
+                            ) : (
+                              <>
+                                <Clock
+                                  className={`w-4 h-4 shrink-0 ${isTimeClockIn ? "text-rose-700" : "text-slate-500"}`}
+                                  strokeWidth={2}
+                                />
+                                {isTimeClockIn ? (
+                                  <span className="text-[10px] font-mono font-semibold tabular-nums leading-tight text-rose-900">
+                                    {formatClockMs(clockElapsed)}
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-bold tracking-wide text-slate-600">READY</span>
+                                )}
+                              </>
+                            )}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  );
+                }
 
                 if (key === "files") {
                   return (
@@ -1342,6 +1390,17 @@ export function OllinSlide({ onOpenNote, onNewNote, onOpenBoard, onOpenScanner }
         )}
       </AnimatePresence>
       {gpsOpen && <GPSClockModal onClose={() => setGpsOpen(false)} defaultScrollToSummary />}
+
+      {typeof document !== "undefined" &&
+        timeAttendancePanelOpen &&
+        createPortal(
+          <TimeAttendanceManagementPanel
+            layout="fullscreen"
+            onClose={() => setTimeAttendancePanelOpen(false)}
+            defaultScrollToSummary
+          />,
+          document.body
+        )}
 
       {typeof document !== "undefined" &&
         clockSummary &&
